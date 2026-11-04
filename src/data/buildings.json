@@ -1,0 +1,74 @@
+[
+  {
+    "building_id": "bld_hut",
+    "name": "오두막",
+    "hp": 60,
+    "fall_speed": 0.1,
+    "weight": 1,
+    "debris_reward": 60,
+    "is_boss": false
+  },
+  {
+    "building_id": "bld_house",
+    "name": "주택",
+    "hp": 80,
+    "fall_speed": 0.1,
+    "weight": 1,
+    "debris_reward": 80,
+    "is_boss": false
+  },
+  {
+    "building_id": "bld_villa",
+    "name": "빌라",
+    "hp": 100,
+    "fall_speed": 0.11,
+    "weight": 1,
+    "debris_reward": 100,
+    "is_boss": false
+  },
+  {
+    "building_id": "bld_shop",
+    "name": "상가",
+    "hp": 130,
+    "fall_speed": 0.11,
+    "weight": 1,
+    "debris_reward": 120,
+    "is_boss": false
+  },
+  {
+    "building_id": "bld_school",
+    "name": "학교",
+    "hp": 160,
+    "fall_speed": 0.12,
+    "weight": 1,
+    "debris_reward": 150,
+    "is_boss": false
+  },
+  {
+    "building_id": "bld_apt",
+    "name": "아파트",
+    "hp": 200,
+    "fall_speed": 0.13,
+    "weight": 1,
+    "debris_reward": 180,
+    "is_boss": false
+  },
+  {
+    "building_id": "bld_hospital",
+    "name": "병원",
+    "hp": 250,
+    "fall_speed": 0.14,
+    "weight": 1,
+    "debris_reward": 210,
+    "is_boss": false
+  },
+  {
+    "building_id": "bld_tower",
+    "name": "타워",
+    "hp": 320,
+    "fall_speed": 0.15,
+    "weight": 1,
+    "debris_reward": 240,
+    "is_boss": false
+  }
+]

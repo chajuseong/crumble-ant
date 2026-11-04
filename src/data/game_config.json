@@ -1,1 +1,68 @@
-{}
+{
+  "layout": {
+    "frame_width": 720,
+    "frame_height": 1560,
+    "hud_ratio": 0.06,
+    "battle_ratio": 0.84,
+    "strip_ratio": 0.1,
+    "strip_menu_height_ratio": 0.62,
+    "challenge_button_y_ratio": 0.06
+  },
+  "battle": {
+    "ant": {
+      "max_hp": 100,
+      "height_ratio": 0.07,
+      "width_ratio": 0.16,
+      "down_duration_s": 1.2,
+      "refill_hp_on_stage_start": true
+    },
+    "jump": {
+      "height_ratio": 0.42,
+      "speed_ratio_per_s": 1.1,
+      "ground_delay_s": 0.25
+    },
+    "strong_jump": {
+      "height_mult": 1.6,
+      "speed_mult": 1,
+      "cooldown_s": 0
+    },
+    "arm_damage": [
+      10,
+      10,
+      10,
+      10
+    ],
+    "strike_interval_s": 0.12,
+    "arm_order_resets_each_jump": false,
+    "landing_damage_coeff": 0.5,
+    "building": {
+      "height_ratio": 0.16,
+      "width_ratio": 0.5,
+      "spawn_bottom_ratio": 1,
+      "spawn_delay_s": 0.6,
+      "landed_linger_s": 0.6
+    }
+  },
+  "stage": {
+    "beyond_last_row": "repeat_last"
+  },
+  "input": {
+    "strip_tap_slop_ratio": 0.015,
+    "strip_tap_max_ms": 350,
+    "strip_swipe_min_dy_ratio": 0.03,
+    "strip_swipe_max_ms": 700,
+    "nest_swipe_up_min_dy_ratio": 0.05
+  },
+  "strip": {
+    "worker_speed_ratio_per_s": 0.16,
+    "worker_size_ratio": 0.32,
+    "worker_gap_ratio": 0.07,
+    "ambient_spawn_interval_s": 1.6,
+    "ambient_carry_amount": 5,
+    "debris_pieces": 6,
+    "debris_pickup_s": 0.3,
+    "burrow_x_ratio": 0.93,
+    "popup_rise_ratio": 0.5,
+    "popup_duration_s": 0.8
+  }
+}

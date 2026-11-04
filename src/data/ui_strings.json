@@ -1,1 +1,37 @@
-{}
+{
+  "hud": {
+    "stage": "STAGE {n}",
+    "hp": "HP",
+    "auto_on": "자동 진행 ON ▶",
+    "auto_off": "자동 진행 OFF ■"
+  },
+  "challenge": {
+    "title": "도전!",
+    "sub": "스테이지 {n}"
+  },
+  "toast": {
+    "advance": "스테이지 {n}",
+    "retreat": "후퇴… 스테이지 {n} 반복 · 자동 진행 OFF",
+    "restart": "다시 시작! 스테이지 1",
+    "challenge": "도전! 스테이지 {n}",
+    "breakthrough": "돌파! 자동 진행 ON",
+    "menu_wip": "[{label}] 준비 중 — 이번 프로토 범위 밖"
+  },
+  "menu": {
+    "upgrade": "강화",
+    "equip": "장비",
+    "nest": "굴",
+    "shop": "상점"
+  },
+  "fx": {
+    "crumble": "와르르!"
+  },
+  "ant": {
+    "down": "@ @ 기절!"
+  },
+  "nest": {
+    "title": "개미굴",
+    "sub": "준비 중 — 방 기능은 이번 프로토 범위 밖\n(전투는 뒤에서 계속 진행)",
+    "back": "▲ 전투로"
+  }
+}

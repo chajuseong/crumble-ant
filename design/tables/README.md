@@ -13,10 +13,13 @@
 
 | 파일 | 내용 | 시트 | → JSON |
 |---|---|---|---|
+| `buildings.xlsx` | 건물 표 | buildings | `src/data/buildings.json` |
+| `stages.xlsx` | 스테이지 표 (building_id → buildings) | stages | `src/data/stages.json` |
 | `config.xlsx` | 게임 수치 (키-값) | game_config | `src/data/game_config.json` |
 | `ui_strings.xlsx` | 화면 문구 (키-값) | ui_strings | `src/data/ui_strings.json` |
 
-- 지금은 두 시트 모두 **비어 있음** (M0 저장소 세팅). 첫 마일스톤 요청서에서 채운다
+- 키 · 타입 · 설명은 `docs/dev.md` §3. 값은 M1 기준 PR #2 임시값 (밸런싱 아님)
+- `stages.building_id`는 `buildings.building_id`를 가리킴 — 없는 ID면 `npm run data`가 실패
 - 파일마다 맨 앞에 `README` 시트 (변환 제외)
 - 새 시트는 `tools/build_data.mjs`의 `SHEETS`에 한 줄 + `tools/validate_data.mjs`에 검사 — 목록에 없는 시트가 있으면 `npm run data`가 실패함
 - **시트 이름은 폴더 전체에서 하나** — 두 파일에 같은 이름이 있으면 실패
