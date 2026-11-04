@@ -4,6 +4,9 @@ import type { GameConfig } from '../core/config';
 import { type InputAction, InputRouter } from '../core/inputRouter';
 import { battleToScreenY, computeLayout, type Layout, nestBackButtonRect } from '../core/layout';
 import { AntView } from './antView';
+import { ART_FILE_URLS, artTextureKey } from './artFiles';
+import { createArtPanel } from './artPanel';
+import { ART_DATA, type ArtPlan, type ArtSettings, loadArtSettings, neededFiles, resolveArtPlan } from './artPlan';
 import { BuildingView } from './buildingView';
 import { StripView } from './stripView';
 import { COLOR, FONT } from './theme';
@@ -91,6 +94,12 @@ export class BattleScene extends Phaser.Scene {
   /** M2 연출 객체 · 호출 수 (전부 끔이면 0이어야 함 — 완료 조건 ③) */
   fxCount = 0;
   private scaleK = 1;
+  // ── M3 아트 (I-11 · H-12) — 그림이 없거나 끄면 도형 (= M2 화면) ──
+  private artSettings!: ArtSettings;
+  /** 지금 그리는 계획 (smoke · 검수용으로 읽음) */
+  artPlan!: ArtPlan;
+  /** 실제로 텍스처가 올라간 그림 파일 이름 */
+  artLoaded: string[] = [];
   /** PR #2 1080폭 기준 px → 지금 프레임 px */
   private px(n: number): number {
     return n * this.scaleK;
@@ -108,7 +117,22 @@ export class BattleScene extends Phaser.Scene {
     this.router = new InputRouter(this.L, this.cfg.input);
     this.scaleK = this.L.width / DESIGN_WIDTH;
     this.fxOn = loadToggles();
+    this.artSettings = loadArtSettings();
     this.menuGfx.clear();
+  }
+
+  /** art/game 그림 불러오기 — 목록(빌드에 묶인 파일)에 있는 것만. 못 읽은 파일은 텍스처가 없어서 폴백 */
+  preload(): void {
+    for (const file of neededFiles()) {
+      const url = ART_FILE_URLS[file];
+      if (url && !this.textures.exists(artTextureKey(file))) this.load.image(artTextureKey(file), url);
+    }
+  }
+
+  private applyArt(): void {
+    this.artLoaded = neededFiles().filter((f) => this.textures.exists(artTextureKey(f)));
+    this.artPlan = resolveArtPlan(ART_DATA, this.artSettings, new Set(this.artLoaded));
+    this.ant.setArt(this.artPlan);
   }
 
   create(): void {
@@ -131,6 +155,17 @@ export class BattleScene extends Phaser.Scene {
     this.createChallengeButton();
     this.createInput();
     createFxPanel(this.fxOn, (t) => (this.fxOn = t), () => this.sfx.unlock());
+    this.applyArt();
+    const artPanel = createArtPanel(
+      ART_DATA,
+      this.artSettings,
+      () => {
+        this.applyArt();
+        artPanel.showPlan(this.artPlan);
+      },
+      () => this.sfx.unlock(),
+    );
+    artPanel.showPlan(this.artPlan);
 
     if (this.debug) {
       this.debugText = this.add
@@ -391,7 +426,7 @@ export class BattleScene extends Phaser.Scene {
           break;
         case 'land':
           this.comboText?.setVisible(false);
-          this.ant.hit();
+          this.ant.hit(ART_DATA.config.hit_face_ms);
           this.cameras.main.shake(260, 0.014);
           this.floatText(this.L.width / 2, this.L.groundY - this.cfg.battle.ant.height_ratio * this.L.battle.height * 2.2, `-${e.damage}`, COLOR.hurt, this.px(72), 900);
           break;

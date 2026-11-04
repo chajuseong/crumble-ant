@@ -2,6 +2,7 @@
  * [FX] 패널 — 테스트 빌드에서 M2 연출을 하나씩 켜고 끈다 (HTML 오버레이 · 캔버스 밖이라 InputRouter와 안 겹침).
  * 글자는 테스트 빌드 확인용 디버그 라벨 (CLAUDE.md 규칙 3 예외).
  */
+import { closeOther } from './artPanel';
 import { allToggles, FX_TOGGLES, type FxToggles, saveToggles } from './fx';
 
 const CSS = `
@@ -9,7 +10,7 @@ const CSS = `
   font:700 12px/1 system-ui,sans-serif;letter-spacing:.06em;color:#fff8ec;background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.35);
   border-radius:999px;padding:7px 12px;cursor:pointer;-webkit-tap-highlight-color:transparent}
 #fx-btn[aria-expanded="true"]{background:#ff8a3d;border-color:#fff}
-#fx-panel{position:fixed;top:calc(env(safe-area-inset-top,0px) + 40px);left:50%;transform:translateX(-50%);z-index:20;width:min(260px,calc(100vw - 32px));
+#fx-panel{position:fixed;top:calc(env(safe-area-inset-top,0px) + 72px);left:50%;transform:translateX(-50%);z-index:20;width:min(260px,calc(100vw - 32px));
   background:rgba(27,26,23,.94);color:#fff8ec;border:1px solid rgba(255,255,255,.25);border-radius:12px;padding:10px 12px;
   font:14px/1.4 system-ui,sans-serif;box-shadow:0 8px 24px rgba(0,0,0,.4)}
 #fx-panel label{display:flex;align-items:center;gap:10px;padding:7px 2px;cursor:pointer}
@@ -77,6 +78,7 @@ export function createFxPanel(toggles: FxToggles, onChange: (t: FxToggles) => vo
   btn.addEventListener('click', () => {
     panel.hidden = !panel.hidden;
     btn.setAttribute('aria-expanded', String(!panel.hidden));
+    if (!panel.hidden) closeOther('art'); // 패널은 하나만 (M3 [ART]가 바로 아래)
   });
   // 패널을 눌러도 소리 unlock (첫 탭 어디서든 — H-10 ⑥-5)
   for (const el of [btn, panel]) el.addEventListener('pointerdown', onTouch);
