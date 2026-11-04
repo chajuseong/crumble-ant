@@ -1,0 +1,74 @@
+[
+  {
+    "weapon_id": "club",
+    "name": "몽둥이",
+    "file": "weapon_club.png",
+    "grip_x": 0.484,
+    "grip_y": 0.894,
+    "scale": 0.5,
+    "angle_deg": 0
+  },
+  {
+    "weapon_id": "drill",
+    "name": "드릴",
+    "file": "weapon_drill.png",
+    "grip_x": 0.499,
+    "grip_y": 0.9,
+    "scale": 0.5,
+    "angle_deg": 0
+  },
+  {
+    "weapon_id": "flail",
+    "name": "쇠사슬 철퇴",
+    "file": "weapon_flail.png",
+    "grip_x": 0.497,
+    "grip_y": 0.896,
+    "scale": 0.5,
+    "angle_deg": 0
+  },
+  {
+    "weapon_id": "hammer",
+    "name": "망치",
+    "file": "weapon_hammer.png",
+    "grip_x": 0.498,
+    "grip_y": 0.894,
+    "scale": 0.5,
+    "angle_deg": 0
+  },
+  {
+    "weapon_id": "mace",
+    "name": "가시 철퇴",
+    "file": "weapon_mace.png",
+    "grip_x": 0.499,
+    "grip_y": 0.896,
+    "scale": 0.5,
+    "angle_deg": 0
+  },
+  {
+    "weapon_id": "mallet",
+    "name": "나무 메",
+    "file": "weapon_mallet.png",
+    "grip_x": 0.497,
+    "grip_y": 0.893,
+    "scale": 0.5,
+    "angle_deg": 0
+  },
+  {
+    "weapon_id": "pickaxe",
+    "name": "곡괭이",
+    "file": "weapon_pickaxe.png",
+    "grip_x": 0.5,
+    "grip_y": 0.893,
+    "scale": 0.5,
+    "angle_deg": 0
+  },
+  {
+    "weapon_id": "wrench",
+    "name": "렌치",
+    "file": "weapon_wrench.png",
+    "grip_x": 0.499,
+    "grip_y": 0.896,
+    "scale": 0.5,
+    "angle_deg": 0
+  }
+]

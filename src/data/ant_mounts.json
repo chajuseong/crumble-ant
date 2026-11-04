@@ -1,0 +1,74 @@
+[
+  {
+    "mount_id": "leg_l",
+    "part_id": "leg",
+    "anchor_x": -0.088,
+    "anchor_y": 0.22,
+    "angle_deg": 0,
+    "layer": 10,
+    "mirror": true
+  },
+  {
+    "mount_id": "leg_r",
+    "part_id": "leg",
+    "anchor_x": 0.088,
+    "anchor_y": 0.22,
+    "angle_deg": 0,
+    "layer": 10,
+    "mirror": false
+  },
+  {
+    "mount_id": "arm_3",
+    "part_id": "arm",
+    "anchor_x": -0.181,
+    "anchor_y": 0.339,
+    "angle_deg": -70,
+    "layer": 20,
+    "mirror": true
+  },
+  {
+    "mount_id": "arm_4",
+    "part_id": "arm",
+    "anchor_x": 0.181,
+    "anchor_y": 0.339,
+    "angle_deg": 70,
+    "layer": 20,
+    "mirror": false
+  },
+  {
+    "mount_id": "arm_1",
+    "part_id": "arm",
+    "anchor_x": -0.181,
+    "anchor_y": 0.475,
+    "angle_deg": -35,
+    "layer": 30,
+    "mirror": true
+  },
+  {
+    "mount_id": "arm_2",
+    "part_id": "arm",
+    "anchor_x": 0.181,
+    "anchor_y": 0.475,
+    "angle_deg": 35,
+    "layer": 30,
+    "mirror": false
+  },
+  {
+    "mount_id": "body",
+    "part_id": "body",
+    "anchor_x": 0,
+    "anchor_y": 0.22,
+    "angle_deg": 0,
+    "layer": 40,
+    "mirror": false
+  },
+  {
+    "mount_id": "head",
+    "part_id": "head_normal",
+    "anchor_x": 0,
+    "anchor_y": 0.485,
+    "angle_deg": 0,
+    "layer": 50,
+    "mirror": false
+  }
+]

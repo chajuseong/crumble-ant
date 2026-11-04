@@ -1,6 +1,7 @@
 # 와르르 개미 — 개발 기준 문서 (단일 기준)
 
-> 문서 버전: v0.5 (2026-11-04) — M2 타격감: fx_config · strike combo 인자 · 연출 목록 · 완료 조건 (H-10 계획 승인)
+> 문서 버전: v0.6 (2026-11-04) — M3 아트 데이터: art.xlsx 5시트 · 연출 목록 · 완료 조건 (H-12 계획 승인). 규격 = `docs/art.md`
+> v0.5 (2026-11-04) — M2 타격감: fx_config · strike combo 인자 · 연출 목록 · 완료 조건 (H-10 계획 승인)
 > v0.4 (2026-11-04) — M1 머지 커밋 기록
 > v0.3 (2026-11-04) — M1 데이터 구조 · 이벤트 목록 · 연출 목록 · 완료 조건 (H-05 계획 승인)
 > v0.2 (2026-11-04) — M0 머지 커밋 기록 · 기획서 회차 v0.4
@@ -109,7 +110,26 @@ px = 1080폭 기준 (view가 프레임 폭에 비례해 줄임) · ms = 밀리�
 | sfx.volume · hit_hz · hit_ms · final_hz · final_ms · crumble_ms | float · float · int · float · int · int | G 임시 합성음 — 볼륨 · 타격음 · 마지막 일격 · 붕괴음 | 0.5 · 220 · 70 · 110 · 180 · 600 |
 | sfx.combo_pitch_step · combo_pitch_max | float · int | G 연타마다 음 높이 증가 비율 · 상한 연타 | 0.04 · 8 |
 
-### 3-5. `ui_strings.xlsx` › ui_strings → `ui_strings.json` (키-값, 전부 string)
+### 3-5. `art.xlsx` → 아트 배치 (M3 — view만 읽음 · 규격과 맞추는 법 = `docs/art.md`)
+값은 모두 [가정] (초안 측정 · M1 도형 비율 — `docs/art.md` §6). `art/game` 납품 뒤 다시 맞춘다
+
+| 파일 · 시트 | Column명 | 데이터 타입 | 설명 | 예시 데이터 |
+|---|---|---|---|---|
+| art_config (키-값) | skin_id · enabled | string · bool | 지금 스킨 · 그림으로 그리기 | black · TRUE |
+| | draw_scale · draw_scale_max · weapon_scale · weapon_scale_max | float | 그림 배율 · [ART] 슬라이더 상한 (판정 크기는 그대로 — H-12 Q1) | 1.0 · 2.5 · 1.0 · 2.0 |
+| | hit_face_ms | int | 착지 피격 표정 시간 | 600 |
+| ant_parts (표) | skin_id · part_id | string (PK 둘) | 스킨 + 파츠 (body · head_normal · head_hit · head_down · arm · leg) | black · arm |
+| | file | string | `ant_<skin>_<part>.png` (art/game/ant/) | ant_black_arm.png |
+| | pivot_x · pivot_y · socket_x? · socket_y? · draw_h | float | 그림 안 점 (0 ~ 1) · 팔만 손 · 그림 높이 (개미 키 기준) | 0.491 · 0.941 · 0.509 · 0.109 · 0.36 |
+| ant_mounts (표) | mount_id | string (PK) | leg_l · leg_r · arm_1 ~ arm_4 · body · head | arm_1 |
+| | part_id | string (FK → ant_parts) | 붙일 파츠 (머리 = head_normal, 표정은 head_ 이름으로 바꿈) | arm |
+| | anchor_x · anchor_y · angle_deg · layer · mirror | float · float · float · int · bool | 개미 기준 자리 · 기본 각도 · 그리는 순서 · 좌우 반전 | -0.181 · 0.475 · -35 · 30 · TRUE |
+| weapons (표) | weapon_id | string (PK) | club · drill · flail · hammer · mace · mallet · pickaxe · wrench | hammer |
+| | name · file | string | 한글 이름 (임시) · `weapon_<id>.png` | 망치 · weapon_hammer.png |
+| | grip_x · grip_y · scale · angle_deg | float | 손잡이 점 · 그림 높이 (개미 키 기준) · 손에서의 각도 | 0.498 · 0.894 · 0.5 · 0 |
+| ant_loadout (표) | slot · weapon_id? | int (PK) · string (FK → weapons, 빈칸 = 맨주먹) | 팔 슬롯 1 ~ 4 장착 (외형만) | 1 · hammer |
+
+### 3-6. `ui_strings.xlsx` › ui_strings → `ui_strings.json` (키-값, 전부 string)
 | Column명 (key) | 데이터 타입 | 설명 | 예시 데이터 |
 |---|---|---|---|
 | hud.stage · hud.hp · hud.auto_on · hud.auto_off | string | HUD | `STAGE {n}` · `HP` · `자동 진행 ON ▶` · `자동 진행 OFF ■` |
@@ -160,6 +180,9 @@ px = 1080폭 기준 (view가 프레임 폭에 비례해 줄임) · ms = 밀리�
 | **M2 G** 임시 합성음 | strike · strike(마지막) · destroy | 0.07초 · 0.18초 · 0.6초 | "퍽"(연타마다 조금씩 높게) · "쾅" · 내려가는 "와르르" — WebAudio 생성, 첫 탭 뒤 | `fx_config` sfx.* |
 | **M2** "와르르!" 대비 | destroy | 0.75초 | 어두운 받침 판 + 굵은 테두리 (잼병 L-05) | `fx_config` crumble_text.plate_alpha · stroke_px |
 | **M2** [FX] 패널 | (HUD 가운데 [FX] 버튼) | — | A ~ G · 대비를 하나씩 켜고 끔 (기본 전부 켬). 끄면 그 연출은 M1 모습 그대로 | — (테스트 빌드 확인용) |
+| **M3** 표정 바꾸기 | land · antDown | hit_face_ms · 기절 동안 | 착지 피격 = head_hit · 기절 = head_down · 그 외 head_normal | `art_config.hit_face_ms` |
+| **M3** 파츠 그림 | (늘) | — | 도형 대신 파츠 그림 조립. M2 연출(펀치 과장 = 팔 늘이기 + 손 소켓 키우기 · 찌그러짐 등)은 같게 | `art.xlsx` 전부 |
+| **M3** [ART] 패널 | ([FX] 옆 [ART] 버튼) | — | 그림 켜기 / 끄기 · 팔 슬롯별 무기 (8종 + 맨주먹) · 기준점 보기 · 크기 슬라이더 | `art_config.*_max` (테스트 빌드 확인용) |
 | 잔해 집어가기 | (잔해가 지면에 닿음) | 0.3초 대기 + 0.16초 | 땅속으로 쏙 → 띠에 운반 일개미 | `strip.debris_pickup_s` |
 | 운반 행렬 | (계속) | — | 일개미가 좌 → 우로 걸음 (메뉴 뒤 레이어) | `strip.worker_*` · `strip.ambient_*` |
 | 운반 팝업 | (일개미가 굴 입구 도착) | 0.8초 | `+N`이 떠오름 | `strip.popup_*` · `debris_reward` |
@@ -182,3 +205,4 @@ px = 1080폭 기준 (view가 프레임 폭에 비례해 줄임) · ms = 밀리�
 | M0 | 저장소 세팅 | 세로 720×1280 빈 장면 · `npm test` · `build` · `smoke` ✅ · `data` · `data:check` ✅ · CI ✅ | `d57359f` (PR #4) |
 | M1 | 코어 루프 (PR #2 이식) | ① 화면 720×1560 · HUD / 전투 / 띠 = 6 / 84 / 10% (core 레이아웃 테스트) ② PR #2 테스트 57개 이식 통과 + [굴] 버튼 테스트 ③ **`npm run measure` 표 = PR #2 본문 표** (다르면 이유를 PR에) ④ `data` · `data:check` ✅ (시트 4개 · PK · FK) ⑤ smoke: 콘솔 오류 0 · 전투 구역 그려짐 · 15초 안에 건물 파괴 수 > 0 ⑥ 화면 6컷 (매달려 연타 · 잔해 → 운반 팝업 · 착지 피격 · 기절 · 후퇴 + [도전] · [굴] → 개미굴) 360 / 390 / 430 폭 ⑦ 이 문서 §3 · §4 · §5 · §7 | `ff3175d` (PR #9) |
 | M2 | 타격감 보강 (I-10) | ① **`npm run measure` 표 = M1 표** ② 테스트: M1 59개 + 연타 카운트(core) · 히트스톱 시계 · fx_config 검증 ③ **[FX] 전부 끔 = M1 화면** (같은 장면 M1 빌드와 나란히 · 끈 상태에서 M2 연출 객체 0개 자동 확인) ④ smoke ✅ (콘솔 오류 0 · 첫 탭 전 소리 객체 없음) ⑤ 화면 컷: 연타 중 ("N HIT!" · 번쩍 · 큰 주먹) · 마지막 일격 · "와르르!" 받침 · [FX] 패널 — 360 / 390 / 430 ⑥ 히트스톱 지연 측정 (스테이지 1 · 5 · 7 — 건물당 %) PR 본문에 ⑦ 이 문서 §3 · §4 · §5 · §7 | |
+| M3 | 아트 적용 — 개미 파츠 + 무기 8종 (I-11 · H-12) | ① **`npm run measure` 표 = M2 표** (core 안 건드림) ② **그림 끔 = M2 화면** (같은 장면 나란히) ③ 그림 켬 화면 컷: 기본 자세 · 매달려 연타 (펀치 과장 + 무기) · 착지 피격 표정 · 기절 표정 · 슬롯별 무기 8종 — 360 / 390 / 430 ④ 폴백 자동 테스트 (파츠 하나 빠짐 → 도형 · 무기 빠짐 → 맨주먹) + 아트 없이 빌드 · smoke ✅ ⑤ smoke 콘솔 오류 0 (그림 켬 기본) ⑥ 데이터 검증: weapons PK · loadout FK · mounts → parts FK · 파일 이름 규칙 · art/game 파일 (폴더 없으면 경고) ⑦ `docs/art.md` · 이 문서 §3 · §5 · §7 | |

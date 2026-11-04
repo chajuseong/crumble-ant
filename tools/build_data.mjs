@@ -5,7 +5,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import ExcelJS from "exceljs";
-import { validateAll } from "./validate_data.mjs";
+import { artFileIssues, validateAll } from "./validate_data.mjs";
 
 // 변환할 시트 목록 — 새 시트는 여기 한 줄 (kind: "kv" = key/type/value, "table" = 1행 키 · 2행 타입 · 3행 설명 · 4행~ 데이터)
 const SHEETS = [
@@ -14,6 +14,11 @@ const SHEETS = [
   { sheet: "game_config", kind: "kv", out: "game_config" },
   { sheet: "ui_strings", kind: "kv", out: "ui_strings" },
   { sheet: "fx_config", kind: "kv", out: "fx_config" },
+  { sheet: "art_config", kind: "kv", out: "art_config" },
+  { sheet: "ant_parts", kind: "table", out: "ant_parts" },
+  { sheet: "ant_mounts", kind: "table", out: "ant_mounts" },
+  { sheet: "weapons", kind: "table", out: "weapons" },
+  { sheet: "ant_loadout", kind: "table", out: "ant_loadout" },
 ];
 
 const IN = process.argv[2] || "design/tables";
@@ -153,6 +158,8 @@ if (problems.length) {
   process.exit(1);
 }
 const errors = validateAll(data);
+for (const w of artFileIssues(data).warnings) console.warn(" ⚠ " + w);
+errors.push(...artFileIssues(data).errors);
 if (errors.length) {
   console.error(`검증 실패 ${errors.length}건 (JSON을 쓰지 않았습니다)`);
   errors.forEach((e) => console.error(" - " + e));

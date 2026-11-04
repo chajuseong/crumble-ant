@@ -1,0 +1,9 @@
+{
+  "skin_id": "black",
+  "enabled": true,
+  "draw_scale": 1,
+  "draw_scale_max": 2.5,
+  "weapon_scale": 1,
+  "weapon_scale_max": 2,
+  "hit_face_ms": 600
+}
