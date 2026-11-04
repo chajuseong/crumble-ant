@@ -178,6 +178,20 @@ describe('HP 0 → 후퇴 · auto_advance · [도전]', () => {
     expect(sim.stage.challenging).toBe(false);
   });
 
+  it('CA-001: 도전 중에는 [도전] 버튼이 숨고, 다시 눌러도 스테이지 그대로 (건너뛰기 없음)', () => {
+    const sim = new BattleSim(impossible(), 3);
+    sim.stage.autoAdvance = false;
+    expect(sim.challenge()).toBe(true);
+    expect(sim.stage.stage).toBe(4);
+    expect(sim.challengeAvailable).toBe(false);
+    expect(sim.challenge()).toBe(false);
+    expect(sim.stage.stage).toBe(4);
+    // 도전 실패 → 후퇴하면 다시 보임
+    runUntil(sim, (e) => e.some((x) => x.type === 'stageStart' && x.reason === 'retreat'), 120);
+    expect(sim.stage.stage).toBe(3);
+    expect(sim.challengeAvailable).toBe(true);
+  });
+
   it('auto_advance ON 상태에서는 [도전]이 동작하지 않는다', () => {
     const sim = new BattleSim(makeConfig(), 2);
     expect(sim.challenge()).toBe(false);

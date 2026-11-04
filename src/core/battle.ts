@@ -156,17 +156,17 @@ export class BattleSim {
     return true;
   }
 
-  /** [도전] 버튼 — auto_advance OFF일 때만. 실패했던 스테이지(현재 + 1)를 다시 시작. */
+  /** [도전] 버튼 — auto_advance OFF이고 도전 중이 아닐 때만. 실패했던 스테이지(현재 + 1)를 다시 시작. */
   challenge(): boolean {
-    if (this.stage.autoAdvance || this.ant.phase === 'down') return false;
+    if (!this.challengeAvailable || this.ant.phase === 'down') return false;
     this.stage.challenging = true;
     this.startStage(this.stage.stage + 1, 'challenge');
     return true;
   }
 
-  /** [도전] 버튼을 보여야 하는가 */
+  /** [도전] 버튼을 보여야 하는가 — 도전 중에는 숨김 (CA-001: 다시 누르면 깨지 않은 스테이지를 건너뛰었음) */
   get challengeAvailable(): boolean {
-    return !this.stage.autoAdvance;
+    return !this.stage.autoAdvance && !this.stage.challenging;
   }
 
   // ──────────────────────────────────────────────────────────
