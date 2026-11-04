@@ -1,0 +1,5 @@
+# node_modules = 폴더 · 심볼릭 링크 둘 다 (끝에 /를 붙이지 않음 — 링크로 된 node_modules도 걸러짐, 잼병 L-11)
+node_modules
+dist/
+logs/
+ci-smoke/

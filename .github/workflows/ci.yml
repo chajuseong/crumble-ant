@@ -1,0 +1,84 @@
+# 와르르 개미 CI — 잼병 원정대 ci.yml 구조를 와르르 폴더 구조에 맞춤
+# PR이 올라오거나 수정될 때, main에 머지될 때 돈다. 실패하면 PR에 ❌ — ✅인 PR만 머지한다 (docs/handoff.md).
+# 문서만 바뀐 PR · 머지는 돌지 않는다 (Actions 시간 절약). src/ · design/ · tools/ · scripts/ · art/game/ · 설정 파일이 하나라도 바뀌면 돈다.
+# 배포 빌드 화면 확인(scripts/ci_smoke.mjs)은 코드(src/ — src/data 제외) · art/game/ · 설정 · scripts/ · 이 워크플로가 바뀌었을 때만 — 데이터만 바뀌면 건너뜀.
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
+      - "art/concept/**"
+      - "art/production/**"
+  push:
+    branches: [main]
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
+      - "art/concept/**"
+      - "art/production/**"
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2   # 화면 확인 대상 판정: 바로 앞 커밋과 비교 (PR = 합친 커밋의 첫 부모 = base)
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: 패키지 설치
+        run: npm ci
+
+      - name: 데이터 시트 ↔ JSON 일치 (시트를 고치고 변환을 안 했거나, JSON을 직접 고쳤는지)
+        run: |
+          npm run data
+          git diff --exit-code -- src/data || (echo "::error::src/data/*.json이 design/tables/*.xlsx 변환 결과와 다릅니다. 시트를 고친 뒤 npm run data를 실행해 함께 커밋하세요." && exit 1)
+
+      - name: 데이터 검증
+        run: npm run data:check
+
+      - name: 타입 검사
+        run: npm run typecheck
+
+      - name: 자동 테스트
+        run: npm test
+
+      - name: 빌드
+        run: npm run build
+
+      - name: 배포 빌드 화면 확인 대상인지 (코드 · art/game · 설정 · scripts · CI가 바뀌었을 때만)
+        id: smoke_scope
+        run: |
+          run=no
+          if ! files=$(git diff --name-only HEAD^1 HEAD); then
+            run=yes   # 바뀐 파일을 못 구하면 돌린다 (놓치는 쪽보다 안전)
+          else
+            code=$(grep -v '^src/data/' <<< "$files" || true)
+            if grep -Eq '^(src/|art/game/|scripts/|\.github/workflows/|index\.html$|vite\.config\.ts$|package(-lock)?\.json$|tsconfig\.json$)' <<< "$code"; then run=yes; fi
+          fi
+          echo "화면 확인 대상: $run"
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+
+      - name: 배포 빌드 화면 확인 (콘솔 오류 0 · 장면 그려짐 · 장면 돎)
+        if: steps.smoke_scope.outputs.run == 'yes'
+        run: npm run smoke
+
+      - name: 화면 확인 실패 기록 남기기 (스크린샷 · result.json)
+        if: failure() && steps.smoke_scope.outputs.run == 'yes'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-smoke
+          path: ci-smoke/
+          retention-days: 7
