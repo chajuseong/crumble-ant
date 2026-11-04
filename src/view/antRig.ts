@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { artTextureKey } from './artFiles';
+import { artArm, MOTION, type Pose } from './antMotion';
 import { armSlotOf, type ArtPlan, type Face, SLOTS } from './artPlan';
 import { COLOR } from './theme';
 
@@ -16,6 +17,14 @@ interface RigArm {
   socketX: number;
   socketY: number;
   rest: number;
+  /** 마운트 기본 자리 (모션이 팔 전체를 밀어낼 때 기준) */
+  baseX: number;
+  baseY: number;
+  /** 팔 그림 길이 px (pivot → socket) */
+  len: number;
+  mir: number;
+  weapon: Phaser.GameObjects.Image | null;
+  weaponAngle: number;
   hasWeapon: boolean;
   fist: Phaser.GameObjects.Arc | null;
   /** 트윈 대상 (늘어남 k · 손 소켓 크기 f) */
@@ -31,6 +40,8 @@ export class AntRig {
   readonly root: Phaser.GameObjects.Container;
   private readonly arms: (RigArm | null)[] = Array.from({ length: SLOTS }, () => null);
   private readonly heads = new Map<Face, Phaser.GameObjects.Image>();
+  /** 다리 마운트 [왼, 오] — M3-C 모션 */
+  private readonly legs: { mount: Phaser.GameObjects.Container; rest: number; side: number }[] = [];
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -45,6 +56,7 @@ export class AntRig {
     for (const mount of plan.mounts) {
       const isHead = mount.part_id.startsWith('head_');
       const m = scene.add.container(mount.anchor_x * h, -mount.anchor_y * h).setAngle(mount.angle_deg);
+      if (isHead) m.setScale(plan.headScale); // 머리만 따로 (목 기준) — 표정 가독성 (H-22)
       const mir = mount.mirror ? -1 : 1;
       const place = (partId: keyof ArtPlan['parts']) => {
         const part = plan.parts[partId];
@@ -68,15 +80,24 @@ export class AntRig {
           const sy = (p.part.socket_y - p.part.pivot_y) * p.img.height * p.s;
           const socket = scene.add.container(sx, sy);
           const weapon = plan.slots[slot - 1] ?? null;
+          let wImg: Phaser.GameObjects.Image | null = null;
           if (weapon) {
-            const w = scene.add.image(0, 0, artTextureKey(weapon.file)).setOrigin(weapon.grip_x, weapon.grip_y);
-            const ws = (weapon.scale * h * plan.weaponScale) / w.height;
-            w.setScale(ws * mir, ws).setAngle(weapon.angle_deg * mir);
-            socket.add(w);
+            wImg = scene.add.image(0, 0, artTextureKey(weapon.file)).setOrigin(weapon.grip_x, weapon.grip_y);
+            const ws = (weapon.scale * h * plan.weaponScale) / wImg.height;
+            wImg.setScale(ws * mir, ws).setAngle(weapon.angle_deg * mir);
+            socket.add(wImg);
           }
           dot(socket, 0, 0, SOCKET_COLOR);
           m.add(socket);
-          this.arms[slot - 1] = { mount: m, image: p.img, baseSX: p.img.scaleX, baseSY: p.img.scaleY, socket, socketX: sx, socketY: sy, rest: mount.angle_deg, hasWeapon: !!weapon, fist: null, anim: { k: 1, f: 1 } };
+          this.arms[slot - 1] = {
+            mount: m, image: p.img, baseSX: p.img.scaleX, baseSY: p.img.scaleY, socket, socketX: sx, socketY: sy, rest: mount.angle_deg,
+            baseX: m.x, baseY: m.y, len: Math.hypot(sx, sy), mir, weapon: wImg, weaponAngle: weapon ? weapon.angle_deg * mir : 0,
+            hasWeapon: !!weapon, fist: null, anim: { k: 1, f: 1 },
+          };
+        }
+        if (mount.part_id === 'leg') {
+          this.legs.push({ mount: m, rest: mount.angle_deg, side: mount.anchor_x < 0 ? -1 : 1 });
+          this.legs.sort((a, b) => a.side - b.side); // [왼, 오]
         }
       }
       dot(m, 0, 0, PIVOT_COLOR);
@@ -124,6 +145,51 @@ export class AntRig {
       },
     });
     return created;
+  }
+
+  /** M3-C: 맨주먹 슬롯 주먹을 미리 만들어 둠 (모션이 크기만 바꿈). 반환 = 새로 만든 수 */
+  ensureFist(slot: number, want: boolean): number {
+    const arm = this.arms[slot - 1];
+    if (!arm || !want || arm.hasWeapon || arm.fist) return 0;
+    arm.fist = this.scene.add.circle(0, 0, this.fistR, COLOR.armSlot[slot - 1]!).setStrokeStyle(3, COLOR.antBody).setVisible(false);
+    arm.socket.add(arm.fist);
+    return 1;
+  }
+
+  /**
+   * M3-C 자세 적용. 그림 팔은 늘어남을 motion.strike.art_stretch_max까지만 — 넘는 길이는 팔 전체가 팔 방향으로 튀어나감 (고무 팔 고침 — H-21 Q6)
+   */
+  applyPose(p: Pose, _shapeArmLen: number): void {
+    this.legs.forEach((l, i) => l.mount.setAngle(l.rest + l.side * p.legs[i as 0 | 1]));
+    this.arms.forEach((arm, i) => {
+      if (!arm) return;
+      const a = p.arms[i]!;
+      const angle = arm.rest + Math.sign(arm.rest || 1) * a.out;
+      const { stretch, thrust } = artArm(MOTION, a.stretch);
+      const push = thrust * arm.len;
+      const rad = Phaser.Math.DegToRad(angle);
+      arm.mount.setAngle(angle).setPosition(arm.baseX + Math.sin(rad) * push, arm.baseY - Math.cos(rad) * push);
+      arm.image.setScale(arm.baseSX, arm.baseSY * stretch);
+      arm.socket.setPosition(arm.socketX, arm.socketY * stretch).setScale(a.socket);
+      arm.weapon?.setAngle(arm.weaponAngle + Math.sign(arm.rest || 1) * a.spin);
+      arm.fist?.setVisible(!arm.hasWeapon && a.socket > 1.001);
+    });
+  }
+
+  /** 모션을 끌 때 기본 자세로 */
+  resetPose(): void {
+    for (const l of this.legs) l.mount.setAngle(l.rest);
+    for (const arm of this.arms) {
+      if (!arm) continue;
+      this.scene.tweens.killTweensOf([arm.mount, arm.anim]);
+      arm.anim.k = 1;
+      arm.anim.f = 1;
+      arm.mount.setAngle(arm.rest).setPosition(arm.baseX, arm.baseY);
+      arm.image.setScale(arm.baseSX, arm.baseSY);
+      arm.socket.setPosition(arm.socketX, arm.socketY).setScale(1);
+      arm.weapon?.setAngle(arm.weaponAngle);
+      arm.fist?.setVisible(false);
+    }
   }
 
   destroy(): void {

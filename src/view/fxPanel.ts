@@ -72,7 +72,7 @@ export function createFxPanel(toggles: FxToggles, onChange: (t: FxToggles) => vo
   panel.appendChild(row);
   const note = document.createElement('div');
   note.className = 'note';
-  note.textContent = '끄면 그 연출은 M1 모습 그대로 · 이 브라우저에만 기억';
+  note.textContent = '끄면 그 연출은 M1 모습 그대로 (모션은 M3 모습) · 이 브라우저에만 기억';
   panel.appendChild(note);
 
   btn.addEventListener('click', () => {
