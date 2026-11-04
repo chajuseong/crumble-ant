@@ -19,6 +19,7 @@ const SHEETS = [
   { sheet: "ant_mounts", kind: "table", out: "ant_mounts" },
   { sheet: "weapons", kind: "table", out: "weapons" },
   { sheet: "ant_loadout", kind: "table", out: "ant_loadout" },
+  { sheet: "upgrades", kind: "table", out: "upgrades" },
 ];
 
 const IN = process.argv[2] || "design/tables";

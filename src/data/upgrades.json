@@ -1,0 +1,42 @@
+[
+  {
+    "upgrade_id": "attack_power",
+    "name": "공격력",
+    "stat": "attack_power",
+    "per_level_pct": 10,
+    "max_level": 20,
+    "cost_base": 60,
+    "cost_growth_pct": 130,
+    "sort": 1
+  },
+  {
+    "upgrade_id": "attack_speed",
+    "name": "공격속도",
+    "stat": "attack_speed",
+    "per_level_pct": 8,
+    "max_level": 10,
+    "cost_base": 90,
+    "cost_growth_pct": 135,
+    "sort": 2
+  },
+  {
+    "upgrade_id": "jump_power",
+    "name": "점프력",
+    "stat": "jump_power",
+    "per_level_pct": 5,
+    "max_level": 7,
+    "cost_base": 80,
+    "cost_growth_pct": 145,
+    "sort": 3
+  },
+  {
+    "upgrade_id": "move_speed",
+    "name": "이동속도",
+    "stat": "move_speed",
+    "per_level_pct": 5,
+    "max_level": 6,
+    "cost_base": 80,
+    "cost_growth_pct": 145,
+    "sort": 4
+  }
+]

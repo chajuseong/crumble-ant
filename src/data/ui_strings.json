@@ -3,7 +3,8 @@
     "stage": "STAGE {n}",
     "hp": "HP",
     "auto_on": "자동 진행 ON ▶",
-    "auto_off": "자동 진행 OFF ■"
+    "auto_off": "자동 진행 OFF ■",
+    "debris": "잔해 {n}"
   },
   "challenge": {
     "title": "도전!",
@@ -34,5 +35,26 @@
     "title": "개미굴",
     "sub": "준비 중 — 방 기능은 이번 프로토 범위 밖\n(전투는 뒤에서 계속 진행)",
     "back": "▲ 전투로"
+  },
+  "upgrade": {
+    "title": "강화",
+    "level": "Lv {n} / {max}",
+    "max": "MAX",
+    "short": "잔해가 부족해요",
+    "close": "✕",
+    "reset": "기록 지우기",
+    "reset_confirm": "한 번 더 누르면 지워져요",
+    "fx": {
+      "attack_power": "데미지 {a} → {b}",
+      "attack_speed": "초당 {a} → {b}회",
+      "jump_power": "점프 +{a}% → +{b}%",
+      "move_speed": "하강 +{a}% → +{b}%"
+    },
+    "now": {
+      "attack_power": "데미지 {a}",
+      "attack_speed": "초당 {a}회",
+      "jump_power": "점프 +{a}%",
+      "move_speed": "하강 +{a}%"
+    }
   }
 }

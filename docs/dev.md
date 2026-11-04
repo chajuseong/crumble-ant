@@ -1,6 +1,7 @@
 # 와르르 개미 — 개발 기준 문서 (단일 기준)
 
-> 문서 버전: v0.8 (2026-11-04) — §3-5 아트 좌표 = art/game 납품본 측정값 · 무기 이름 = README
+> 문서 버전: v0.9 (2026-11-04) — M4 강화 데이터: upgrades 시트 · economy 키 · 문구 · 이벤트 · 연출 · 완료 조건 (H-17 · I-13) · M3 B 머지 기록
+> v0.8 (2026-11-04) — §3-5 아트 좌표 = art/game 납품본 측정값 · 무기 이름 = README
 > v0.7 (2026-11-04) — M2 머지 커밋 기록
 > v0.6 (2026-11-04) — M3 아트 데이터: art.xlsx 5시트 · 연출 목록 · 완료 조건 (H-12 계획 승인). 규격 = `docs/art.md`
 > v0.5 (2026-11-04) — M2 타격감: fx_config · strike combo 인자 · 연출 목록 · 완료 조건 (H-10 계획 승인)
@@ -15,10 +16,10 @@
 - v0.4 변경: §6 그림 굴 입구 = 띠 우측 끝 · [굴] 버튼으로도 개미굴 진입 · §10 DD 위치 (기획 + DD 겸하는 Claude Code 창) · §11 요청서 #1 원문
 
 ## 1. 범위
-- 지금 범위: **M2 타격감 보강** (I-10 · H-08 · H-10) — 연출 A 히트스톱 · B 건물 피격 반응 · C 화면 흔들림 · D 연타 카운트 · E 펀치 과장 · F 타격 파편 · G 임시 합성음 · "와르르!" 대비 · 테스트 빌드 [FX] 토글
-- 타격 방식 (H-01 #1) · core 판정 · 전투 수치는 그대로 — `npm run measure` = M1 표. core에 더하는 것은 연타 카운터(strike `combo` 인자)뿐이고 결과는 안 바뀜
-- 범위 밖: 타격 방식 변경 · 밸런싱 · 실제 아트 · 실제 사운드 리소스 · 필살기 · 반격
-- 끝난 것: M1 코어 루프 (PR #2 이식 · [굴] 버튼 · 720×1560) — §7
+- 지금 범위: **M3-C 공격 · 점프 모션** (I-14 — 계획 중 · view 전용) → **M4 강화 4종 + 소프트 재화** (I-12 · I-13 · H-17) — 잔해 = 재화 · 강화 공격력 · 공격속도 · 점프력 · 이동속도(하강만) · 강화 패널 · 브라우저 저장 (형식 v1)
+- M4는 core 규칙이 바뀐다 (재화 · 강화 반영 전투 값). 강화 0이면 `npm run measure` = M3 표
+- 범위 밖: 체력 강화 · 하드 재화 · 오프라인 보상 · 장비 수치 · 개미굴 방 기능 · 필살기 · 반격
+- 끝난 것: M1 코어 루프 · M2 타격감 · M3 아트 적용 B (파츠 조립 · [ART] 패널) — §7
 
 ## 2. 폴더 구조
 ```
@@ -44,7 +45,7 @@ art/production/ (원본) · art/game/ (게임용) — 아트가 들어올 때 �
 | hp | int | 건물 HP | 60 |
 | fall_speed | float | 낙하 속도 (전투 구역 높이 / 초) | 0.1 |
 | weight | float | 무게 — 추후 반격용. 지금 로직 없음 (기본 1.0) | 1.0 |
-| debris_reward | int | 파괴 시 잔해 운반 팝업 합계 — **연출용, 재화 아님** (H-01 #13) | 60 |
+| debris_reward | int | 파괴 시 잔해 — **M4부터 실제 재화** (H-01 #13 → I-12). 파괴 + `economy.carry_delay_s` 뒤 `deposit` | 60 |
 | is_boss | bool | 보스 건물 — 지금 로직 없음 (H-01 #14) | FALSE |
 
 ### 3-2. `stages.xlsx` › stages → `stages.json` (표)
@@ -74,6 +75,7 @@ art/production/ (원본) · art/game/ (게임용) — 아트가 들어올 때 �
 | battle.strong_jump.height_mult · speed_mult · cooldown_s | float | 강점프 배율 · 속도 배율 · 쿨타임 (기획서 §9 미정 — 임시, H-01 #3) | 1.6 · 1.0 · 0 |
 | battle.arm_damage | int[] (4개) | 팔 1 ~ 4 슬롯 1타 데미지 (장비 회차에 표로) | 10,10,10,10 |
 | battle.strike_interval_s | float | 매달려 있는 동안 팔 타격 간격 | 0.12 |
+| battle.strike_interval_min_s | float | 공격속도 강화 하한 — 간격이 이보다 짧아지지 않음 (M4 · 지금 표 최대 Lv = 0.067초라 안 닿는 안전값) | 0.06 |
 | battle.combo_window_s | float | 연타가 이어지는 시간 — 같은 건물에서 마지막 타격 뒤 이 안에 다음 타격 (M2 · H-10: 자동 점프 한 사이클 ≈ 1.0초) | 1.2 |
 | battle.arm_order_resets_each_jump | bool | TRUE = 점프마다 팔 1부터 / FALSE = 이어서 (H-01 #2) | FALSE |
 | battle.landing_damage_coeff | float | 착지 데미지 = ceil(건물 남은 HP × 계수) (I-08) | 0.5 |
@@ -86,10 +88,12 @@ art/production/ (원본) · art/game/ (게임용) — 아트가 들어올 때 �
 | input.strip_swipe_min_dy_ratio · strip_swipe_max_ms | float · int | 띠 아래 스와이프 판정 | 0.03 · 700 |
 | input.nest_swipe_up_min_dy_ratio | float | 개미굴 위로 스와이프 → 복귀 | 0.05 |
 | strip.worker_speed_ratio_per_s · worker_size_ratio · worker_gap_ratio | float | 일개미 속도 · 크기 · 간격 (연출) | 0.16 · 0.32 · 0.07 |
-| strip.ambient_spawn_interval_s · ambient_carry_amount | float · int | 배경 행렬 간격 · 팝업 숫자 (연출) | 1.6 · 5 |
+| strip.ambient_spawn_interval_s · ambient_carry_amount | float · int | 배경 행렬 간격 · 팝업 숫자 (연출). **M4 B에서 `ambient_carry_amount`를 지움** — 배경 행렬은 재화 없음 · "+N" 팝업 없음 (H-17 질문 3) | 1.6 · 5 |
 | strip.debris_pieces · debris_pickup_s | int · float | 잔해 조각 수 · 집어가기까지 (기획서 §7 "0.3초") | 6 · 0.3 |
 | strip.burrow_x_ratio | float | 굴 입구 위치 (띠 우측 끝 — H-01 #8) | 0.93 |
 | strip.popup_rise_ratio · popup_duration_s | float | 운반 팝업 높이 · 시간 | 0.5 · 0.8 |
+| economy.carry_delay_s | float | 파괴 → 재화 도착까지 (core 예약 — 평균 운반 시간: 날아감 1.0 + 집기 0.3 + 걷기 2.7초, M4 B에서 실제로 재서 맞춤) | 4.0 |
+| economy.start_debris | int | 새로 시작할 때 잔해 | 0 |
 
 ### 3-4. `fx.xlsx` › fx_config → `fx_config.json` (키-값 · M2 타격 연출 — view만 읽음)
 px = 1080폭 기준 (view가 프레임 폭에 비례해 줄임) · ms = 밀리초. 값은 기개발 제안 임시값 (폰 확인 뒤 조정 — H-10). "M1 값" = M1 view 상수를 옮긴 것 (H-10 ⑥-4)
@@ -131,7 +135,36 @@ pivot · socket · grip = `art/game` 납품본 측정값 · draw_h · anchor · 
 | | grip_x · grip_y · scale · angle_deg | float | 손잡이 점 · 그림 높이 (개미 키 기준) · 손에서의 각도 | 0.496 · 0.887 · 0.5 · 0 |
 | ant_loadout (표) | slot · weapon_id? | int (PK) · string (FK → weapons, 빈칸 = 맨주먹) | 팔 슬롯 1 ~ 4 장착 (외형만) | 1 · hammer |
 
-### 3-6. `ui_strings.xlsx` › ui_strings → `ui_strings.json` (키-값, 전부 string)
+### 3-6. `upgrades.xlsx` › upgrades → `upgrades.json` (표 · M4 — core가 읽음)
+| Column명 | 데이터 타입 | 설명 | 예시 데이터 |
+|---|---|---|---|
+| upgrade_id | string (PK) | 강화 ID | attack_power |
+| name | string | 카드 이름 | 공격력 |
+| stat | enum (attack_power · attack_speed · jump_power · move_speed) | 바꾸는 값 — 코드가 아는 4종 고정, 각 1행 (H-17 질문 5) | attack_power |
+| per_level_pct | int (> 0) | Lv당 +% (합산) | 10 |
+| max_level | int (≥ 1) | 최대 Lv | 20 |
+| cost_base | int (≥ 1) | Lv 0 → 1 비용 (잔해) | 60 |
+| cost_growth_pct | int (≥ 100) | 다음 Lv 비용 배율 % | 130 |
+| sort | int | 카드 순서 (중복 불가) | 1 |
+
+- 효과 % = `100 + per_level_pct × Lv` (정수). 비용 = 정수 반복: Lv 0 → 1 = `cost_base`, 다음 = `floor(이전 × cost_growth_pct / 100)` (H-17 질문 4 — `pow` 실수 계산은 JS · C# 경계값이 다를 수 있음)
+
+| stat | 바뀌는 값 | 계산 (정수화) | 한계 (검증) |
+|---|---|---|---|
+| attack_power | `battle.arm_damage` (4슬롯 공통) | `floor(기본 × % / 100)` | — |
+| attack_speed | `battle.strike_interval_s` | `기본 × 100 / %` | 최대 Lv 간격 ≥ `battle.strike_interval_min_s` |
+| jump_power | `battle.jump.height_ratio` | `기본 × % / 100` | 최대 Lv에서 강점프 최고점 + 개미 키 ≤ 1.0 (전투 구역 맨 위) |
+| move_speed | **하강 속도만** (`jump.speed_ratio_per_s` — 상승 · 매달려 치는 시간은 그대로, I-13) | `기본 × % / 100` | — |
+
+| upgrade_id | per_level_pct · max_level | cost_base · cost_growth_pct | 근거 (지시함 #3 M4 계획 ⑤ 측정) |
+|---|---|---|---|
+| attack_power 공격력 | 10 · 20 (×3.0) | 60 · 130 | 데미지 10 → 30 (Lv당 +1). 첫 건물 보상 60 = 첫 강화 바로 |
+| attack_speed 공격속도 | 8 · 10 (×1.8) | 90 · 135 | 간격 0.120 → 0.067초 · 히트스톱 벽시계 지연 최대 +10.6% |
+| jump_power 점프력 | 5 · 7 (×1.35) | 80 · 145 | 천장 ×1.384 바로 아래 · 단독 효과가 커서 비싸게 |
+| move_speed 이동속도 | 5 · 6 (×1.3) | 80 · 145 | 효과가 약해서 Lv 짧게 |
+- 측정 (자동만 · 가장 싼 것부터 · 이동속도 하강만): 스테이지 3 = 1.4분 · 5 = 7.9분 · 8 = 22.4분 (구매 순서에 따라 8스테이지 약 20 ~ 35분) · 강점프 연타 = 8스테이지 3.5분 — 값은 임시, 폰 확인 뒤 조정
+
+### 3-7. `ui_strings.xlsx` › ui_strings → `ui_strings.json` (키-값, 전부 string)
 | Column명 (key) | 데이터 타입 | 설명 | 예시 데이터 |
 |---|---|---|---|
 | hud.stage · hud.hp · hud.auto_on · hud.auto_off | string | HUD | `STAGE {n}` · `HP` · `자동 진행 ON ▶` · `자동 진행 OFF ■` |
@@ -140,8 +173,13 @@ pivot · socket · grip = `art/game` 납품본 측정값 · draw_h · anchor · 
 | menu.upgrade · equip · nest · shop | string | 하단 메뉴 | 강화 · 장비 · 굴 · 상점 |
 | fx.crumble · fx.combo · ant.down | string | 파괴 · 연타 카운트 (M2 D) · 기절 글자 | `와르르!` · `{n} HIT!` · `@ @ 기절!` |
 | nest.title · nest.sub · nest.back | string | 개미굴 화면 | 개미굴 · … · `▲ 전투로` |
+| hud.debris | string | HUD 보유 잔해 (M4) | `잔해 {n}` |
+| upgrade.title · level · max · short · close | string | 강화 패널 | 강화 · `Lv {n} / {max}` · MAX · 잔해가 부족해요 · ✕ |
+| upgrade.reset · reset_confirm | string | 테스트 빌드 기록 지우기 (두 번 눌러 확정 — H-17 질문 7) | 기록 지우기 · 한 번 더 누르면 지워져요 |
+| upgrade.fx.{stat} (4) | string | 지금 → 다음 효과 | `데미지 {a} → {b}` · `초당 {a} → {b}회` · `점프 +{a}% → +{b}%` · `하강 +{a}% → +{b}%` |
+| upgrade.now.{stat} (4) | string | MAX일 때 지금 효과만 | `데미지 {a}` … |
 
-- `{n}` = 숫자 자리 · `{label}` = 메뉴 이름 자리 (`toast.menu_wip`) — **view가 core 값으로 채움** (H-05 ⑤-4)
+- `{n}` = 숫자 자리 · `{label}` = 메뉴 이름 자리 (`toast.menu_wip`) · `{a}` · `{b}` · `{max}` = 강화 효과 · 최대 Lv — **view가 core 값으로 채움** (H-05 ⑤-4)
 
 ## 4. core → view 이벤트 목록 (이식 계약 — 새 이벤트는 여기 한 줄)
 | 이벤트 | 인자 | 언제 |
@@ -156,8 +194,13 @@ pivot · socket · grip = `art/game` 납품본 측정값 · draw_h · anchor · 
 | land | seq · damage · antHp | 건물 착지 — damage = ceil(남은 HP × 계수) (정수화 시점) |
 | antDown | stage | 개미 HP 0 |
 | tapIgnored | reason (airborne / cooldown / down / pinned) | 강점프를 무시할 때 |
+| **deposit** (M4) | amount · wallet | 파괴 뒤 `economy.carry_delay_s`가 지나 잔해가 굴에 도착 — wallet += amount. 후퇴 · 재시작 · 도전이 있어도 예약은 그대로 |
+| **upgrade** (M4) | id · level · cost · wallet | 강화 구매 성공. 데미지 · 타격 간격 = 다음 타격부터, 점프력 · 이동속도 = 다음 점프부터 |
 
 **view → core 입력 계약 (InputRouter action)**: strongJump · challenge · menu{id} · openNest{via: tap / swipe_down / button} · closeNest{via: button / swipe_up}
+- M4: `buyUpgrade{id}` · `closeUpgrade{via: button / outside}` · `resetSave` (두 번째 누름). InputRouter `upgrade` 모드 = 패널 버튼만 받고 바깥 탭은 닫기 (강점프 안 됨, H-17 질문 6). 구매 결과 = core `buyUpgrade(id)` → ok / short (부족) / max
+
+**저장 (M4 — 형식 v1, H-17 ③)**: 키 `crumble-ant.save` · `{ v: 1, debris, upgrades: {upgrade_id: Lv}, stage, auto_advance }`. 만들기 · 검증 · 버전 변환 = `src/core/save.ts` (읽고 쓰기는 view). 저장 시점 = deposit · upgrade · stageStart · 화면을 떠날 때 (1초에 한 번 이하). 도전 중 = 도전 전 스테이지 · auto_advance OFF로. 운반 중 잔해는 저장 안 함 [프로토만]. 못 읽으면 새로 시작 + 원본을 `crumble-ant.save.bad`로. 시간 기록 없음
 
 **히트스톱 (M2 A)**: view가 그 시간 동안 `sim.update`를 부르지 않는다 (core 시계를 통째로 멈춤 — H-10 ⑥-1). 결과는 게임 시간 기준이라 그대로, 벽시계로만 늦어짐. 방치 · 오프라인 보상이 생기면 게임 시간 기준으로 계산
 
@@ -187,7 +230,9 @@ pivot · socket · grip = `art/game` 납품본 측정값 · draw_h · anchor · 
 | **M3** [ART] 패널 | ([FX] 옆 [ART] 버튼) | — | 그림 켜기 / 끄기 · 팔 슬롯별 무기 (8종 + 맨주먹) · 기준점 보기 · 크기 슬라이더 | `art_config.*_max` (테스트 빌드 확인용) |
 | 잔해 집어가기 | (잔해가 지면에 닿음) | 0.3초 대기 + 0.16초 | 땅속으로 쏙 → 띠에 운반 일개미 | `strip.debris_pickup_s` |
 | 운반 행렬 | (계속) | — | 일개미가 좌 → 우로 걸음 (메뉴 뒤 레이어) | `strip.worker_*` · `strip.ambient_*` |
-| 운반 팝업 | (일개미가 굴 입구 도착) | 0.8초 | `+N`이 떠오름 | `strip.popup_*` · `debris_reward` |
+| 운반 팝업 | (일개미가 굴 입구 도착) → **M4: deposit** | 0.8초 | `+N`이 떠오름. M4부터 = 실제 재화 도착 (core 시각에 맞춰 일개미가 걸음) · 배경 행렬은 팝업 없음 | `strip.popup_*` · `debris_reward` |
+| **M4** HUD 잔해 | deposit · upgrade | 0.2초 | 숫자가 톡 튀어오름 (들어올 때) · 줄어들 때는 바로 | `hud.debris` |
+| **M4** 강화 패널 | ([강화] 버튼) · upgrade | 0.22초 · 0.15초 | 아래에서 올라옴 · 산 카드가 짧게 튐 · 부족하면 버튼이 좌우로 흔들림 | `upgrade.*` (문구) |
 | 착지 짓눌림 · 화면 흔들림 · 피격 숫자 | land | 0.26초 · 0.26초 · 0.75초 | 개미 납작 · 강한 흔들림 · 빨간 `-N` | — |
 | 착지 건물 사라짐 | (landed_linger 끝) | 0.22초 | 납작해지며 사라짐 | `battle.building.landed_linger_s` (대기) |
 | 기절 | antDown | down_duration_s | 납작 + "@ @ 기절!" 흔들림 | `battle.ant.down_duration_s` · `ant.down` |
@@ -207,4 +252,5 @@ pivot · socket · grip = `art/game` 납품본 측정값 · draw_h · anchor · 
 | M0 | 저장소 세팅 | 세로 720×1280 빈 장면 · `npm test` · `build` · `smoke` ✅ · `data` · `data:check` ✅ · CI ✅ | `d57359f` (PR #4) |
 | M1 | 코어 루프 (PR #2 이식) | ① 화면 720×1560 · HUD / 전투 / 띠 = 6 / 84 / 10% (core 레이아웃 테스트) ② PR #2 테스트 57개 이식 통과 + [굴] 버튼 테스트 ③ **`npm run measure` 표 = PR #2 본문 표** (다르면 이유를 PR에) ④ `data` · `data:check` ✅ (시트 4개 · PK · FK) ⑤ smoke: 콘솔 오류 0 · 전투 구역 그려짐 · 15초 안에 건물 파괴 수 > 0 ⑥ 화면 6컷 (매달려 연타 · 잔해 → 운반 팝업 · 착지 피격 · 기절 · 후퇴 + [도전] · [굴] → 개미굴) 360 / 390 / 430 폭 ⑦ 이 문서 §3 · §4 · §5 · §7 | `ff3175d` (PR #9) |
 | M2 | 타격감 보강 (I-10) | ① **`npm run measure` 표 = M1 표** ② 테스트: M1 59개 + 연타 카운트(core) · 히트스톱 시계 · fx_config 검증 ③ **[FX] 전부 끔 = M1 화면** (같은 장면 M1 빌드와 나란히 · 끈 상태에서 M2 연출 객체 0개 자동 확인) ④ smoke ✅ (콘솔 오류 0 · 첫 탭 전 소리 객체 없음) ⑤ 화면 컷: 연타 중 ("N HIT!" · 번쩍 · 큰 주먹) · 마지막 일격 · "와르르!" 받침 · [FX] 패널 — 360 / 390 / 430 ⑥ 히트스톱 지연 측정 (스테이지 1 · 5 · 7 — 건물당 %) PR 본문에 ⑦ 이 문서 §3 · §4 · §5 · §7 | `d563925` (PR #16) |
-| M3 | 아트 적용 — 개미 파츠 + 무기 8종 (I-11 · H-12) | ① **`npm run measure` 표 = M2 표** (core 안 건드림) ② **그림 끔 = M2 화면** (같은 장면 나란히) ③ 그림 켬 화면 컷: 기본 자세 · 매달려 연타 (펀치 과장 + 무기) · 착지 피격 표정 · 기절 표정 · 슬롯별 무기 8종 — 360 / 390 / 430 ④ 폴백 자동 테스트 (파츠 하나 빠짐 → 도형 · 무기 빠짐 → 맨주먹) + 아트 없이 빌드 · smoke ✅ ⑤ smoke 콘솔 오류 0 (그림 켬 기본) ⑥ 데이터 검증: weapons PK · loadout FK · mounts → parts FK · 파일 이름 규칙 · art/game 파일 (폴더 없으면 경고) ⑦ `docs/art.md` · 이 문서 §3 · §5 · §7 | |
+| M3 | 아트 적용 — 개미 파츠 + 무기 8종 (I-11 · H-12) · C 모션 (I-14 — 계획 중) | ① **`npm run measure` 표 = M2 표** (core 안 건드림) ② **그림 끔 = M2 화면** (같은 장면 나란히) ③ 그림 켬 화면 컷: 기본 자세 · 매달려 연타 (펀치 과장 + 무기) · 착지 피격 표정 · 기절 표정 · 슬롯별 무기 8종 — 360 / 390 / 430 ④ 폴백 자동 테스트 (파츠 하나 빠짐 → 도형 · 무기 빠짐 → 맨주먹) + 아트 없이 빌드 · smoke ✅ ⑤ smoke 콘솔 오류 0 (그림 켬 기본) ⑥ 데이터 검증: weapons PK · loadout FK · mounts → parts FK · 파일 이름 규칙 · art/game 파일 (폴더 없으면 경고) ⑦ `docs/art.md` · 이 문서 §3 · §5 · §7 | B `d127828` (PR #19) · C 진행 |
+| M4 | 강화 4종 + 소프트 재화 (I-12 · I-13 · H-17) | ① 강화 0이면 `npm run measure` 표 = M3 표 ② `npm run measure -- --upgrades` = 진행 표 (§3-6 측정 · PR 본문에) · **단일 강화 Lv 0 ~ max 퇴보 0건** ③ 테스트: 비용 (정수 반복) · 효과 정수화 · 구매 (부족 · MAX) · deposit 시각 · 저장 왕복 · 깨진 저장 → 새로 시작 + `.bad` 보관 · 버전 · 도전 중 저장 · 강화가 다음 타격 · 점프부터 적용 ④ 실제 브라우저: 구매 → 새로고침 → 잔해 · Lv · 스테이지 그대로 ⑤ smoke ✅ + 강화 패널 열기 · 구매 1회 · 콘솔 오류 0 ⑥ 화면 컷: HUD 잔해 · 패널 (가능 · 부족 · MAX) · 구매 순간 — 360 / 390 / 430 ⑦ 이 문서 §3 · §4 · §5 · §7 | |

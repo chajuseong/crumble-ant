@@ -6,7 +6,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 
 // 있어야 하는 JSON (build_data.mjs SHEETS의 out과 같아야 함)
-export const REQUIRED = ["buildings", "stages", "game_config", "ui_strings", "fx_config", "art_config", "ant_parts", "ant_mounts", "weapons", "ant_loadout"];
+export const REQUIRED = ["buildings", "stages", "game_config", "ui_strings", "fx_config", "art_config", "ant_parts", "ant_mounts", "weapons", "ant_loadout", "upgrades"];
 
 // M3 아트 — 파츠 이름 · 파일 이름 규칙 (docs/art.md §3)
 export const ART_PARTS = ["body", "head_normal", "head_hit", "head_down", "arm", "leg"];
@@ -40,6 +40,7 @@ const CONFIG_KEYS = [
   ["battle.strong_jump.cooldown_s", "num", { min: 0 }],
   ["battle.arm_damage", "int4", { min: 0 }],
   ["battle.strike_interval_s", "num", { gt: 0 }],
+  ["battle.strike_interval_min_s", "num", { gt: 0 }],
   ["battle.combo_window_s", "num", { gt: 0 }],
   ["battle.arm_order_resets_each_jump", "bool"],
   ["battle.landing_damage_coeff", "num", { min: 0 }],
@@ -64,6 +65,8 @@ const CONFIG_KEYS = [
   ["strip.burrow_x_ratio", "num", { gt: 0, max: 1 }],
   ["strip.popup_rise_ratio", "num", { min: 0 }],
   ["strip.popup_duration_s", "num", { gt: 0 }],
+  ["economy.carry_delay_s", "num", { min: 0 }],
+  ["economy.start_debris", "int", { min: 0 }],
 ];
 
 // fx_config 필수 키 (M2 타격 연출 — view만 읽음, core 결과와 무관)
@@ -92,7 +95,21 @@ const UI_KEYS = [
   "toast.advance", "toast.retreat", "toast.restart", "toast.challenge", "toast.breakthrough", "toast.menu_wip",
   "menu.upgrade", "menu.equip", "menu.nest", "menu.shop",
   "fx.crumble", "fx.combo", "ant.down", "nest.title", "nest.sub", "nest.back",
+  "hud.debris", "upgrade.title", "upgrade.level", "upgrade.max", "upgrade.short", "upgrade.close", "upgrade.reset", "upgrade.reset_confirm",
+  "upgrade.fx.attack_power", "upgrade.fx.attack_speed", "upgrade.fx.jump_power", "upgrade.fx.move_speed",
+  "upgrade.now.attack_power", "upgrade.now.attack_speed", "upgrade.now.jump_power", "upgrade.now.move_speed",
 ];
+
+// 강화 4종 (M4 — I-12 · H-17). stat은 코드가 아는 4종 고정 — 각 1행
+const UPGRADE_STATS = ["attack_power", "attack_speed", "jump_power", "move_speed"];
+/** C# int 상한 (Unity 이식 — 비용이 넘치면 안 됨) */
+const INT32_MAX = 2147483647;
+/** 정수 반복 비용 (src/core/economy.ts와 같은 식): Lv 0 → 1 = base, 다음 = floor(이전 × growth / 100) */
+export function upgradeCost(row, lv) {
+  let c = row.cost_base;
+  for (let i = 0; i < lv; i++) c = Math.floor((c * row.cost_growth_pct) / 100);
+  return c;
+}
 
 const get = (obj, dotted) => dotted.split(".").reduce((o, k) => (isPlainObject(o) ? o[k] : undefined), obj);
 
@@ -265,6 +282,48 @@ export function validateAll(data) {
       if (r.weapon_id !== null && !weaponIds.has(r.weapon_id)) errors.push(`ant_loadout[${i}].weapon_id: weapons에 없음 (FK ${JSON.stringify(r.weapon_id)}) — 빈칸 = 맨주먹`);
     });
   }
+
+  // upgrades (M4)
+  if ("upgrades" in data) {
+    const rows = data.upgrades;
+    if (!Array.isArray(rows)) errors.push("upgrades: 표여야 함");
+    else {
+      const ids = new Set(), stats = new Set(), sorts = new Set();
+      rows.forEach((r, i) => {
+        const w = `upgrades[${i}]`;
+        if (typeof r.upgrade_id !== "string" || !ID.test(r.upgrade_id)) errors.push(`${w}.upgrade_id: 영문 소문자 · 숫자 · _ (${JSON.stringify(r.upgrade_id)})`);
+        else if (ids.has(r.upgrade_id)) errors.push(`${w}.upgrade_id: PK 중복 (${r.upgrade_id})`);
+        ids.add(r.upgrade_id);
+        checkValue(`${w}.name`, r.name, "str", {}, errors);
+        if (!UPGRADE_STATS.includes(r.stat)) errors.push(`${w}.stat: ${UPGRADE_STATS.join(" · ")} 중 하나 (${JSON.stringify(r.stat)})`);
+        else if (stats.has(r.stat)) errors.push(`${w}.stat: ${r.stat}이 두 번 (4종 각 1행)`);
+        stats.add(r.stat);
+        checkValue(`${w}.per_level_pct`, r.per_level_pct, "int", { gt: 0 }, errors);
+        checkValue(`${w}.max_level`, r.max_level, "int", { min: 1 }, errors);
+        checkValue(`${w}.cost_base`, r.cost_base, "int", { min: 1 }, errors);
+        checkValue(`${w}.cost_growth_pct`, r.cost_growth_pct, "int", { min: 100 }, errors);
+        checkValue(`${w}.sort`, r.sort, "int", {}, errors);
+        if (sorts.has(r.sort)) errors.push(`${w}.sort: 중복 (${r.sort})`);
+        sorts.add(r.sort);
+        if ([r.max_level, r.cost_base, r.cost_growth_pct].every(Number.isInteger) && r.max_level >= 1 && upgradeCost(r, r.max_level - 1) > INT32_MAX)
+          errors.push(`${w}: 마지막 Lv 비용이 C# int 상한을 넘음 (${upgradeCost(r, r.max_level - 1)})`);
+      });
+      for (const st of UPGRADE_STATS) if (!stats.has(st)) errors.push(`upgrades: stat ${st} 행 없음`);
+      // 강화 끝까지 올렸을 때 판정이 깨지지 않는지 (game_config와 함께)
+      const c = data.game_config, b = isPlainObject(c) ? c.battle : null;
+      const maxPct = (st) => { const r = rows.find((x) => x.stat === st); return r && Number.isInteger(r.per_level_pct) && Number.isInteger(r.max_level) ? 100 + r.per_level_pct * r.max_level : null; };
+      if (isPlainObject(b)) {
+        const jp = maxPct("jump_power");
+        const top = jp && isNum(b.jump?.height_ratio) && isNum(b.strong_jump?.height_mult) && isNum(b.ant?.height_ratio) ? (b.jump.height_ratio * jp / 100) * b.strong_jump.height_mult + b.ant.height_ratio : null;
+        if (top !== null && top > 1 + 1e-9) errors.push(`upgrades jump_power: 최대 Lv 강점프 최고점 + 개미 키 = ${top.toFixed(3)} — 전투 구역 맨 위(1.0)를 넘음`);
+        const sp = maxPct("attack_speed");
+        const iv = sp && isNum(b.strike_interval_s) ? (b.strike_interval_s * 100) / sp : null;
+        if (iv !== null && isNum(b.strike_interval_min_s) && iv < b.strike_interval_min_s - 1e-9) errors.push(`upgrades attack_speed: 최대 Lv 타격 간격 ${iv.toFixed(3)}초 < 하한 battle.strike_interval_min_s ${b.strike_interval_min_s}`);
+      }
+    }
+  }
+  if (isPlainObject(data.game_config?.battle) && isNum(data.game_config.battle.strike_interval_min_s) && isNum(data.game_config.battle.strike_interval_s) && data.game_config.battle.strike_interval_min_s > data.game_config.battle.strike_interval_s)
+    errors.push("game_config.battle.strike_interval_min_s: strike_interval_s 이하여야 함");
 
   // ui_strings
   if ("ui_strings" in data) {
