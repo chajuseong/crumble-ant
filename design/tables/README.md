@@ -19,6 +19,7 @@
 | `ui_strings.xlsx` | 화면 문구 (키-값) | ui_strings | `src/data/ui_strings.json` |
 | `fx.xlsx` | 타격 연출 수치 (키-값 · M2) | fx_config | `src/data/fx_config.json` |
 | `art.xlsx` | 개미 파츠 · 무기 그림 배치 (M3 — 규격 `docs/art.md`) | art_config · ant_parts · ant_mounts · weapons · ant_loadout | `src/data/` 같은 이름 `.json` 5개 |
+| `upgrades.xlsx` | 강화 4종 (M4 — 효과 · 비용 식은 README 시트) | upgrades | `src/data/upgrades.json` |
 
 - 키 · 타입 · 설명은 `docs/dev.md` §3. 값은 M1 기준 PR #2 임시값 (밸런싱 아님)
 - `stages.building_id`는 `buildings.building_id`를 가리킴 — 없는 ID면 `npm run data`가 실패

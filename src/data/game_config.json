@@ -42,7 +42,8 @@
       "spawn_bottom_ratio": 1,
       "spawn_delay_s": 0.6,
       "landed_linger_s": 0.6
-    }
+    },
+    "strike_interval_min_s": 0.06
   },
   "stage": {
     "beyond_last_row": "repeat_last"
@@ -65,5 +66,9 @@
     "burrow_x_ratio": 0.93,
     "popup_rise_ratio": 0.5,
     "popup_duration_s": 0.8
+  },
+  "economy": {
+    "carry_delay_s": 4,
+    "start_debris": 0
   }
 }
