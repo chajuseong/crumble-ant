@@ -101,4 +101,4 @@ DD ──[DD→개발]──→ 📮 개발 지시함 (이슈 #3) ←──[개�
 
 ## 지금 (요약 — 정본 `docs/decisions.md` ★)
 - 완료: M0 저장소 세팅 (`d57359f`) · M1 코어 루프 (`ff3175d`) · M2 타격감 (`d563925`) · M3 B 파츠 조립 (`d127828`)
-- 진행: CA-001 (PR #22) → M3 아트 좌표 (PR #23) → **M3-C 공격 · 점프 모션** (계획) → **M4 강화** A `plan/m4-upgrades-data` · B `m4-upgrades`
+- 진행: **M3-C 공격 · 점프 모션** A `plan/m3c-motion-data` (motion 키 · 그림 기본값) → B `m3-motion` → **M4 강화** B `m4-upgrades` (A 데이터 머지됨 `7d483d7`)
