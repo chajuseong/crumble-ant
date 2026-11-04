@@ -6,7 +6,12 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 
 // 있어야 하는 JSON (build_data.mjs SHEETS의 out과 같아야 함)
-export const REQUIRED = ["buildings", "stages", "game_config", "ui_strings", "fx_config"];
+export const REQUIRED = ["buildings", "stages", "game_config", "ui_strings", "fx_config", "art_config", "ant_parts", "ant_mounts", "weapons", "ant_loadout"];
+
+// M3 아트 — 파츠 이름 · 파일 이름 규칙 (docs/art.md §3)
+export const ART_PARTS = ["body", "head_normal", "head_hit", "head_down", "arm", "leg"];
+export const ART_MOUNTS = ["leg_l", "leg_r", "arm_1", "arm_2", "arm_3", "arm_4", "body", "head"];
+const ID = /^[a-z0-9_]+$/;
 
 const KEY_PART = /^[a-z][a-z0-9_]*$/;   // 키 조각: 영문 소문자 · 숫자 · _ (점 묶음의 각 조각)
 const isPlainObject = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
@@ -185,6 +190,82 @@ export function validateAll(data) {
     }
   }
 
+  // ── M3 아트 (view만 읽음) ──
+  const ratio = (w, k, v, errors) => checkValue(`${w}.${k}`, v, "num", { min: 0, max: 1 }, errors);
+  if ("art_config" in data) {
+    const a = data.art_config;
+    if (!isPlainObject(a)) errors.push("art_config.json: 객체(키-값)여야 함");
+    else {
+      checkValue("art_config.skin_id", a.skin_id, "str", {}, errors);
+      checkValue("art_config.enabled", a.enabled, "bool", {}, errors);
+      for (const k of ["draw_scale", "draw_scale_max", "weapon_scale", "weapon_scale_max"]) checkValue(`art_config.${k}`, a[k], "num", { gt: 0 }, errors);
+      checkValue("art_config.hit_face_ms", a.hit_face_ms, "int", { min: 0 }, errors);
+      if (a.draw_scale > a.draw_scale_max) errors.push("art_config.draw_scale: draw_scale_max 이하여야 함");
+      if (a.weapon_scale > a.weapon_scale_max) errors.push("art_config.weapon_scale: weapon_scale_max 이하여야 함");
+    }
+  }
+  const partKeys = new Set();
+  if ("ant_parts" in data) {
+    const rows = data.ant_parts;
+    if (!Array.isArray(rows)) errors.push("ant_parts: 표여야 함");
+    else rows.forEach((r, i) => {
+      const w = `ant_parts[${i}]`;
+      if (typeof r.skin_id !== "string" || !ID.test(r.skin_id)) errors.push(`${w}.skin_id: 영문 소문자 · 숫자 · _`);
+      if (!ART_PARTS.includes(r.part_id)) errors.push(`${w}.part_id: ${ART_PARTS.join(" · ")} 중 하나 (${JSON.stringify(r.part_id)})`);
+      const key = `${r.skin_id}/${r.part_id}`;
+      if (partKeys.has(key)) errors.push(`${w}: PK 중복 (${key})`);
+      partKeys.add(key);
+      if (r.file !== `ant_${r.skin_id}_${r.part_id}.png`) errors.push(`${w}.file: ant_${r.skin_id}_${r.part_id}.png 여야 함 (${r.file})`);
+      ratio(w, "pivot_x", r.pivot_x, errors); ratio(w, "pivot_y", r.pivot_y, errors);
+      if (r.part_id === "arm") { ratio(w, "socket_x", r.socket_x, errors); ratio(w, "socket_y", r.socket_y, errors); }
+      checkValue(`${w}.draw_h`, r.draw_h, "num", { gt: 0 }, errors);
+    });
+    const skin = isPlainObject(data.art_config) ? data.art_config.skin_id : undefined;
+    for (const p of ART_PARTS) if (skin && !partKeys.has(`${skin}/${p}`)) errors.push(`ant_parts: 스킨 ${skin}의 ${p} 없음`);
+  }
+  if ("ant_mounts" in data) {
+    const rows = data.ant_mounts;
+    const ids = new Set();
+    if (!Array.isArray(rows)) errors.push("ant_mounts: 표여야 함");
+    else rows.forEach((r, i) => {
+      const w = `ant_mounts[${i}]`;
+      if (!ART_MOUNTS.includes(r.mount_id)) errors.push(`${w}.mount_id: ${ART_MOUNTS.join(" · ")} 중 하나`);
+      if (ids.has(r.mount_id)) errors.push(`${w}.mount_id: PK 중복 (${r.mount_id})`);
+      ids.add(r.mount_id);
+      if (!ART_PARTS.includes(r.part_id)) errors.push(`${w}.part_id: ant_parts에 없음 (FK ${JSON.stringify(r.part_id)})`);
+      checkValue(`${w}.anchor_x`, r.anchor_x, "num", { min: -1, max: 1 }, errors);
+      checkValue(`${w}.anchor_y`, r.anchor_y, "num", { min: 0, max: 1.5 }, errors);
+      checkValue(`${w}.angle_deg`, r.angle_deg, "num", { min: -180, max: 180 }, errors);
+      checkValue(`${w}.layer`, r.layer, "int", {}, errors);
+      checkValue(`${w}.mirror`, r.mirror, "bool", {}, errors);
+    });
+    for (const m of ART_MOUNTS) if (Array.isArray(rows) && !ids.has(m)) errors.push(`ant_mounts: ${m} 없음`);
+  }
+  const weaponIds = new Set();
+  if ("weapons" in data) {
+    const rows = data.weapons;
+    if (!Array.isArray(rows)) errors.push("weapons: 표여야 함");
+    else rows.forEach((r, i) => {
+      const w = `weapons[${i}]`;
+      if (typeof r.weapon_id !== "string" || !ID.test(r.weapon_id)) errors.push(`${w}.weapon_id: 영문 소문자 · 숫자 · _ (${JSON.stringify(r.weapon_id)})`);
+      else if (weaponIds.has(r.weapon_id)) errors.push(`${w}.weapon_id: PK 중복 (${r.weapon_id})`);
+      weaponIds.add(r.weapon_id);
+      checkValue(`${w}.name`, r.name, "str", {}, errors);
+      if (r.file !== `weapon_${r.weapon_id}.png`) errors.push(`${w}.file: weapon_${r.weapon_id}.png 여야 함 (${r.file})`);
+      ratio(w, "grip_x", r.grip_x, errors); ratio(w, "grip_y", r.grip_y, errors);
+      checkValue(`${w}.scale`, r.scale, "num", { gt: 0 }, errors);
+      checkValue(`${w}.angle_deg`, r.angle_deg, "num", { min: -180, max: 180 }, errors);
+    });
+  }
+  if ("ant_loadout" in data) {
+    const rows = data.ant_loadout;
+    if (!Array.isArray(rows) || rows.length !== 4) errors.push("ant_loadout: 정확히 4행 (팔 슬롯 1 ~ 4)");
+    else rows.forEach((r, i) => {
+      if (r.slot !== i + 1) errors.push(`ant_loadout[${i}].slot: ${i + 1}이어야 함`);
+      if (r.weapon_id !== null && !weaponIds.has(r.weapon_id)) errors.push(`ant_loadout[${i}].weapon_id: weapons에 없음 (FK ${JSON.stringify(r.weapon_id)}) — 빈칸 = 맨주먹`);
+    });
+  }
+
   // ui_strings
   if ("ui_strings" in data) {
     const u = data.ui_strings;
@@ -195,6 +276,24 @@ export function validateAll(data) {
     }
   }
   return errors;
+}
+
+/**
+ * 시트에 적힌 그림 파일이 art/game에 있는지 (H-12 Q6).
+ * art/game 폴더가 없으면 경고만 (아트 납품 전 — 게임은 도형으로 그림), 폴더가 있는데 그 파일만 없으면 오류.
+ */
+export function artFileIssues(data, root = "art/game") {
+  const out = { errors: [], warnings: [] };
+  const need = [
+    ...(Array.isArray(data.ant_parts) ? data.ant_parts.map((r) => ["ant", r.file]) : []),
+    ...(Array.isArray(data.weapons) ? data.weapons.map((r) => ["weapons", r.file]) : []),
+  ];
+  if (!fs.existsSync(root)) {
+    if (need.length) out.warnings.push(`${root} 폴더 없음 — 그림 ${need.length}개는 아트 납품 뒤 (그때까지 게임은 도형으로 그림)`);
+    return out;
+  }
+  for (const [sub, file] of need) if (!fs.existsSync(path.join(root, sub, file))) out.errors.push(`${root}/${sub}/${file}: 파일 없음 (시트에는 있음)`);
+  return out;
 }
 
 export function readDataDir(dir = "src/data") {
@@ -209,7 +308,10 @@ export function readDataDir(dir = "src/data") {
 // 직접 실행: src/data/*.json 검증만
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
   const dir = process.argv[2] || "src/data";
-  const errors = validateAll(readDataDir(dir));
+  const data = readDataDir(dir);
+  const art = artFileIssues(data);
+  for (const w of art.warnings) console.warn(" ⚠ " + w);
+  const errors = [...validateAll(data), ...art.errors];
   if (errors.length) {
     console.error(`검증 실패 ${errors.length}건`);
     errors.forEach((e) => console.error(" - " + e));

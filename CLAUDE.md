@@ -12,6 +12,7 @@ TypeScript + Vite + Phaser 3 + Vitest, 세로 720×1560 (G-03). 출시 코드가
 | `docs/decisions.md` | 맨 위 **★ 지금 상태** (지금 할 일 · 결정 대기 — DD가 실행마다 갱신) · 결정 기록 |
 | `docs/dd.md` | **DD(보조디렉터 AI)** 위임 규칙 · 📮 개발 지시함 (이슈 #3) 주고받기 |
 | `docs/handoff.md` | 완료 보고서 · 검수 · 수정 요청 · Git 방식 |
+| `docs/art.md` | 아트 규격 · 파츠 조립 · 좌표 맞추는 법 (게임은 `art/game/`만 읽음) |
 | `docs/lessons.md` | 반복 실수 기록 · 재발 방지 (DD가 직접) |
 | `docs/00_index.md` | 전체 문서 목록 · 버전 |
 
@@ -100,4 +101,4 @@ DD ──[DD→개발]──→ 📮 개발 지시함 (이슈 #3) ←──[개�
 
 ## 지금 (요약 — 정본 `docs/decisions.md` ★)
 - 완료: M0 저장소 세팅 (`d57359f`) · M1 코어 루프 (`ff3175d`)
-- 진행: **M2 타격감** — A `plan/m2-fx-data` (fx_config · dev.md) → B `m2-hit-feel` (연출 · [FX] 패널). 다음: M3 아트 적용 (계획)
+- 진행: **M2 타격감** B `m2-hit-feel` (PR #16) → **M3 아트 적용** A `plan/m3-art-data` (art.xlsx · docs/art.md) → B `m3-ant-art` (파츠 조립 · [ART] 패널)

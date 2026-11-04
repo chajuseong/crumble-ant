@@ -1,0 +1,62 @@
+[
+  {
+    "skin_id": "black",
+    "part_id": "body",
+    "file": "ant_black_body.png",
+    "pivot_x": 0.489,
+    "pivot_y": 0.97,
+    "socket_x": null,
+    "socket_y": null,
+    "draw_h": 0.34
+  },
+  {
+    "skin_id": "black",
+    "part_id": "head_normal",
+    "file": "ant_black_head_normal.png",
+    "pivot_x": 0.492,
+    "pivot_y": 0.982,
+    "socket_x": null,
+    "socket_y": null,
+    "draw_h": 0.6
+  },
+  {
+    "skin_id": "black",
+    "part_id": "head_hit",
+    "file": "ant_black_head_hit.png",
+    "pivot_x": 0.473,
+    "pivot_y": 0.982,
+    "socket_x": null,
+    "socket_y": null,
+    "draw_h": 0.6
+  },
+  {
+    "skin_id": "black",
+    "part_id": "head_down",
+    "file": "ant_black_head_down.png",
+    "pivot_x": 0.481,
+    "pivot_y": 0.96,
+    "socket_x": null,
+    "socket_y": null,
+    "draw_h": 0.6
+  },
+  {
+    "skin_id": "black",
+    "part_id": "arm",
+    "file": "ant_black_arm.png",
+    "pivot_x": 0.491,
+    "pivot_y": 0.941,
+    "socket_x": 0.509,
+    "socket_y": 0.109,
+    "draw_h": 0.36
+  },
+  {
+    "skin_id": "black",
+    "part_id": "leg",
+    "file": "ant_black_leg.png",
+    "pivot_x": 0.525,
+    "pivot_y": 0.102,
+    "socket_x": null,
+    "socket_y": null,
+    "draw_h": 0.22
+  }
+]
