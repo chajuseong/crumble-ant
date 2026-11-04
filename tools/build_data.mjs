@@ -9,6 +9,8 @@ import { validateAll } from "./validate_data.mjs";
 
 // 변환할 시트 목록 — 새 시트는 여기 한 줄 (kind: "kv" = key/type/value, "table" = 1행 키 · 2행 타입 · 3행 설명 · 4행~ 데이터)
 const SHEETS = [
+  { sheet: "buildings", kind: "table", out: "buildings" },
+  { sheet: "stages", kind: "table", out: "stages" },
   { sheet: "game_config", kind: "kv", out: "game_config" },
   { sheet: "ui_strings", kind: "kv", out: "ui_strings" },
 ];

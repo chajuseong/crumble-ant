@@ -99,5 +99,5 @@ DD ──[DD→개발]──→ 📮 개발 지시함 (이슈 #3) ←──[개�
 - 확인 양식의 괄호에는 추천과 선택지를 글로 채움 (예: `(좋음 / 무거움 / 가벼움)`)
 
 ## 지금 (요약 — 정본 `docs/decisions.md` ★)
-- 진행: 저장소 세팅 (M0, `plan/repo-setup`) → 첫 마일스톤 요청서
-- 보류: PR #2 (예전 세팅 기준으로 만든 코어 루프 코드) — M0 머지 뒤 이 구조(`design/tables` → `src/data` · `src/core` · `src/view`)로 옮겨 M1로 다시 올림
+- 완료: M0 저장소 세팅 (`d57359f`)
+- 진행: **M1 코어 루프** — A `plan/m1-data` (시트 · JSON · 문서) → B `m1-core-loop` (core · view · 테스트). PR #2는 B 머지 때 닫음
