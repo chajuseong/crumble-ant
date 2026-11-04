@@ -71,7 +71,7 @@ jobs:
           echo "화면 확인 대상: $run"
           echo "run=$run" >> "$GITHUB_OUTPUT"
 
-      - name: 배포 빌드 화면 확인 (콘솔 오류 0 · 장면 그려짐 · 장면 돎)
+      - name: 배포 빌드 화면 확인 (콘솔 오류 0 · 전투 구역 그려짐 · 건물 파괴 수 오름)
         if: steps.smoke_scope.outputs.run == 'yes'
         run: npm run smoke
 
