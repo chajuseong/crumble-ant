@@ -31,6 +31,6 @@ npm run dev
 
 | 문서 | 내용 |
 |---|---|
-| [`docs/spec.md`](docs/spec.md) | 기획서 사본 (원본 = Artifact, 회차 표기) |
+| [`docs/spec.md`](docs/spec.md) | 기획서 사본 (원본 = Artifact, 지금 v0.3) |
 | [`CLAUDE.md`](CLAUDE.md) | 역할 분담 · 작업 규칙 · 반복 실수 |
 | [`docs/lessons.md`](docs/lessons.md) | 반복 실수 기록 (DD 관리) |
