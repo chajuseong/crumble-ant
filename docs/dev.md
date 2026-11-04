@@ -116,7 +116,7 @@ px = 1080폭 기준 (view가 프레임 폭에 비례해 줄임) · ms = 밀리�
 | challenge.title · challenge.sub | string | [도전] 버튼 | `도전!` · `스테이지 {n}` |
 | toast.advance · retreat · restart · challenge · breakthrough · menu_wip | string | 토스트 | `후퇴… 스테이지 {n} 반복 · 자동 진행 OFF` |
 | menu.upgrade · equip · nest · shop | string | 하단 메뉴 | 강화 · 장비 · 굴 · 상점 |
-| fx.crumble · ant.down | string | 파괴 · 기절 글자 | `와르르!` · `@ @ 기절!` |
+| fx.crumble · fx.combo · ant.down | string | 파괴 · 연타 카운트 (M2 D) · 기절 글자 | `와르르!` · `{n} HIT!` · `@ @ 기절!` |
 | nest.title · nest.sub · nest.back | string | 개미굴 화면 | 개미굴 · … · `▲ 전투로` |
 
 - `{n}` = 숫자 자리 · `{label}` = 메뉴 이름 자리 (`toast.menu_wip`) — **view가 core 값으로 채움** (H-05 ⑤-4)
@@ -154,7 +154,7 @@ px = 1080폭 기준 (view가 프레임 폭에 비례해 줄임) · ms = 밀리�
 | **M2 A** 히트스톱 | strike (hpLeft 0 = 마지막 일격) | 0.04초 · 0.09초 | 맞는 순간 전체가 멈칫 (core 시계 정지) | `fx_config` hitstop.* |
 | **M2 B** 건물 번쩍 | strike | 0.08초 | 건물이 흰색으로 번쩍 | `fx_config` flash.* |
 | **M2 C** 타격 흔들림 | strike · destroy | 0.06초 · 0.18초 | 매 타격 약하게 · 마지막 일격 · 파괴는 크게 (M1 파괴 흔들림 대체) | `fx_config` camera.hit_* · final_* |
-| **M2 D** 연타 카운트 | strike (combo) | 0.6초 | 데미지 숫자 팝 + 2타부터 건물 옆 "N HIT!"이 칠 때마다 튕김 | `fx_config` combo.* |
+| **M2 D** 연타 카운트 | strike (combo) | 0.6초 | 데미지 숫자 팝 + 2타부터 건물 옆 "N HIT!"이 칠 때마다 튕김 | `fx_config` combo.* · `fx.combo` (문구) |
 | **M2 E** 펀치 과장 | strike | 0.11초 | 팔이 1.8배 늘고 팔 끝 주먹이 커졌다 돌아옴 (코믹 과장) | `fx_config` punch.* |
 | **M2 F** 타격 파편 · 먼지 | strike | 0.3초 | 타격점(건물 밑면)에서 작은 조각 · 먼지가 튐 | `fx_config` hit_debris.* |
 | **M2 G** 임시 합성음 | strike · strike(마지막) · destroy | 0.07초 · 0.18초 · 0.6초 | "퍽"(연타마다 조금씩 높게) · "쾅" · 내려가는 "와르르" — WebAudio 생성, 첫 탭 뒤 | `fx_config` sfx.* |

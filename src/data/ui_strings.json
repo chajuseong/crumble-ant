@@ -24,7 +24,8 @@
     "shop": "상점"
   },
   "fx": {
-    "crumble": "와르르!"
+    "crumble": "와르르!",
+    "combo": "{n} HIT!"
   },
   "ant": {
     "down": "@ @ 기절!"

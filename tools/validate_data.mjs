@@ -86,7 +86,7 @@ const UI_KEYS = [
   "challenge.title", "challenge.sub",
   "toast.advance", "toast.retreat", "toast.restart", "toast.challenge", "toast.breakthrough", "toast.menu_wip",
   "menu.upgrade", "menu.equip", "menu.nest", "menu.shop",
-  "fx.crumble", "ant.down", "nest.title", "nest.sub", "nest.back",
+  "fx.crumble", "fx.combo", "ant.down", "nest.title", "nest.sub", "nest.back",
 ];
 
 const get = (obj, dotted) => dotted.split(".").reduce((o, k) => (isPlainObject(o) ? o[k] : undefined), obj);
