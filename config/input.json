@@ -1,0 +1,7 @@
+{
+  "strip_tap_slop_ratio": 0.015,
+  "strip_tap_max_ms": 350,
+  "strip_swipe_min_dy_ratio": 0.03,
+  "strip_swipe_max_ms": 700,
+  "nest_swipe_up_min_dy_ratio": 0.05
+}

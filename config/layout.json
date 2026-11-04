@@ -1,0 +1,10 @@
+{
+  "frame_aspect_w": 9,
+  "frame_aspect_h": 19.5,
+  "render_width_px": 1080,
+  "hud_ratio": 0.06,
+  "battle_ratio": 0.84,
+  "strip_ratio": 0.10,
+  "strip_menu_height_ratio": 0.62,
+  "challenge_button_y_ratio": 0.06
+}
