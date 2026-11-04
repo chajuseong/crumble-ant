@@ -5,11 +5,12 @@ import { has, makeConfig, run, runUntil } from './helpers';
 /** 아주 약한 건물 / 아주 센 건물 config */
 const easy = () =>
   makeConfig((c) => {
-    c.stages.rows = c.stages.rows.map((r) => ({ ...r, building_hp: 10, buildings_to_clear: 2 }));
+    c.buildings.rows = c.buildings.rows.map((r) => ({ ...r, hp: 10 }));
+    c.stages.rows = c.stages.rows.map((r) => ({ ...r, buildings_to_clear: 2 }));
   });
 const impossible = () =>
   makeConfig((c) => {
-    c.stages.rows = c.stages.rows.map((r) => ({ ...r, building_hp: 1_000_000 }));
+    c.buildings.rows = c.buildings.rows.map((r) => ({ ...r, hp: 1_000_000 }));
     c.battle.ant.max_hp = 10;
   });
 
@@ -28,7 +29,7 @@ describe('건물 낙하 → 자동 점프 → 팔 4슬롯 순차 타격', () => 
   });
 
   it('팔은 1 → 2 → 3 → 4 → 1 순서로 때린다 (점프가 바뀌어도 이어서)', () => {
-    const sim = new BattleSim(makeConfig((c) => (c.stages.rows[0]!.building_hp = 1_000_000)));
+    const sim = new BattleSim(makeConfig((c) => (c.buildings.rows[0]!.hp = 1_000_000)));
     const ev = runUntil(sim, (e) => e.filter((x) => x.type === 'strike').length >= 9, 60);
     const arms = ev.filter((e): e is Extract<BattleEvent, { type: 'strike' }> => e.type === 'strike').map((e) => e.arm);
     expect(arms.slice(0, 9)).toEqual([1, 2, 3, 4, 1, 2, 3, 4, 1]);
@@ -37,7 +38,7 @@ describe('건물 낙하 → 자동 점프 → 팔 4슬롯 순차 타격', () => 
   it('arm_order_resets_each_jump = true 이면 점프마다 팔 1부터', () => {
     const sim = new BattleSim(
       makeConfig((c) => {
-        c.stages.rows[0]!.building_hp = 1_000_000;
+        c.buildings.rows[0]!.hp = 1_000_000;
         c.battle.arm_order_resets_each_jump = true;
       }),
     );
@@ -55,7 +56,7 @@ describe('건물 낙하 → 자동 점프 → 팔 4슬롯 순차 타격', () => 
 
   it('팔 데미지는 config 값 그대로 건물 HP에서 빠진다', () => {
     const cfg = makeConfig((c) => {
-      c.stages.rows[0]!.building_hp = 1_000_000;
+      c.buildings.rows[0]!.hp = 1_000_000;
       c.battle.arms = [
         { slot: 1, damage: 1 },
         { slot: 2, damage: 2 },
@@ -71,7 +72,7 @@ describe('건물 낙하 → 자동 점프 → 팔 4슬롯 순차 타격', () => 
   });
 
   it('개미는 건물을 뚫지 못한다 (머리 ≤ 건물 밑면)', () => {
-    const cfg = makeConfig((c) => (c.stages.rows[0]!.building_hp = 1_000_000));
+    const cfg = makeConfig((c) => (c.buildings.rows[0]!.hp = 1_000_000));
     const sim = new BattleSim(cfg);
     for (let i = 0; i < 60 * 20; i++) {
       sim.update(1 / 60);
@@ -79,6 +80,14 @@ describe('건물 낙하 → 자동 점프 → 팔 4슬롯 순차 타격', () => 
       const b = sim.building;
       if (b && b.state === 'falling') expect(sim.ant.y + cfg.battle.ant.height_ratio).toBeLessThanOrEqual(b.y + 1e-6);
     }
+  });
+
+  it('건물 수치는 건물 테이블에서 온다 (hp · fall_speed · weight · debris_reward)', () => {
+    const cfg = makeConfig();
+    const sim = new BattleSim(cfg, 2);
+    runUntil(sim, has('spawn'), 5);
+    const row = cfg.buildings.rows.find((b) => b.building_id === cfg.stages.rows[1]!.building_id)!;
+    expect(sim.building).toMatchObject({ buildingId: row.building_id, maxHp: row.hp, fallSpeed: row.fall_speed, weight: row.weight, debrisReward: row.debris_reward });
   });
 
   it('착지 전에 HP 0 → 파괴 이벤트 · 진행도 +1', () => {
@@ -92,7 +101,7 @@ describe('건물 낙하 → 자동 점프 → 팔 4슬롯 순차 타격', () => 
 describe('파괴 실패 → 착지 → 개미 피격', () => {
   it('착지 데미지 = ceil(건물 남은 HP × landing_damage_coeff)', () => {
     const cfg = makeConfig((c) => {
-      c.stages.rows[0]!.building_hp = 500;
+      c.buildings.rows[0]!.hp = 500;
       c.battle.arms = c.battle.arms.map((a) => ({ ...a, damage: 0 }));
       c.battle.landing_damage_coeff = 0.07;
       c.battle.ant.max_hp = 1000;
@@ -105,7 +114,7 @@ describe('파괴 실패 → 착지 → 개미 피격', () => {
 
   it('HP > 0 이면 다음 건물이 이어서 떨어진다', () => {
     const cfg = makeConfig((c) => {
-      c.stages.rows[0]!.building_hp = 500;
+      c.buildings.rows[0]!.hp = 500;
       c.battle.arms = c.battle.arms.map((a) => ({ ...a, damage: 0 }));
       c.battle.ant.max_hp = 1_000_000;
     });
@@ -214,7 +223,7 @@ describe('탭 = 강점프', () => {
 
   it('강점프는 자동 점프보다 높은 곳에서 건물에 닿는다 (더 일찍 타격)', () => {
     const firstContactY = (strong: boolean) => {
-      const cfg = makeConfig((c) => (c.stages.rows[0]!.building_hp = 1_000_000));
+      const cfg = makeConfig((c) => (c.buildings.rows[0]!.hp = 1_000_000));
       const sim = new BattleSim(cfg);
       // 건물이 생긴 직후부터 지켜봄
       runUntil(sim, has('spawn'), 5);
@@ -231,7 +240,7 @@ describe('탭 = 강점프', () => {
 
   it('건물이 착지해 깔린 동안에는 탭을 무시한다', () => {
     const cfg = makeConfig((c) => {
-      c.stages.rows[0]!.building_hp = 1_000_000;
+      c.buildings.rows[0]!.hp = 1_000_000;
       c.battle.ant.max_hp = 1e12;
     });
     const sim = new BattleSim(cfg);

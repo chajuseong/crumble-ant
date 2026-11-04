@@ -53,3 +53,11 @@ export function zoneAt(layout: Layout, y: number): Zone {
 export function battleToScreenY(layout: Layout, y: number): number {
   return layout.battle.bottom - y * layout.battle.height;
 }
+
+/** 개미굴 화면의 [▲ 전투로] 버튼 위치 (그리기 · 입력 판정이 같은 값을 쓴다) */
+export function nestBackButtonRect(layout: Layout): { x: number; y: number; w: number; h: number } {
+  const w = layout.width * 0.5;
+  const h = layout.hud.height * 0.9;
+  const cy = layout.hud.height * 0.9;
+  return { x: layout.width / 2 - w / 2, y: cy - h / 2, w, h };
+}

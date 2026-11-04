@@ -1,12 +1,13 @@
 import Phaser from 'phaser';
 import { BattleSim, type BattleEvent } from '../core/battle';
 import type { GameConfig } from '../core/config';
-import { classifyStripGesture } from '../core/input';
-import { battleToScreenY, computeLayout, type Layout } from '../core/layout';
+import { type InputAction, InputRouter } from '../core/inputRouter';
+import { battleToScreenY, computeLayout, type Layout, nestBackButtonRect } from '../core/layout';
 import { AntView } from '../ui/antView';
 import { BuildingView } from '../ui/buildingView';
 import { StripView } from '../ui/stripView';
 import { COLOR, FONT } from '../ui/theme';
+import type { NestScene } from './NestScene';
 
 export interface BattleSceneData {
   config: GameConfig;
@@ -20,6 +21,8 @@ interface Debris {
   vy: number;
   spin: number;
   restTimer: number | null;
+  /** 이 조각을 나르는 일개미 팝업 숫자 (연출) */
+  amount: number;
 }
 
 const DEPTH = {
@@ -58,14 +61,13 @@ export class BattleScene extends Phaser.Scene {
   private hudHpText!: Phaser.GameObjects.Text;
   private hudAuto!: Phaser.GameObjects.Text;
   private challengeBtn!: Phaser.GameObjects.Container;
-  private challengeZone!: Phaser.GameObjects.Zone;
   private challengeSub!: Phaser.GameObjects.Text;
   private toast: Phaser.GameObjects.Container | null = null;
   private debugText: Phaser.GameObjects.Text | null = null;
 
-  private stripStart: { x: number; y: number; t: number } | null = null;
+  private router!: InputRouter;
+  private readonly menuGfx = new Map<string, Phaser.GameObjects.Graphics>();
   private wasDown = false;
-  private nestOpen = false;
 
   constructor() {
     super('battle');
@@ -76,6 +78,8 @@ export class BattleScene extends Phaser.Scene {
     this.debug = data.debug;
     this.sim = new BattleSim(this.cfg, data.startStage);
     this.L = computeLayout(this.cfg.layout, this.scale.width, this.scale.height);
+    this.router = new InputRouter(this.L, this.cfg.input);
+    this.menuGfx.clear();
   }
 
   create(): void {
@@ -123,11 +127,6 @@ export class BattleScene extends Phaser.Scene {
     if (this.debugText) this.debugText.setText(this.debugLines());
   }
 
-  /** 개미굴(NestScene)에서 돌아올 때 */
-  onNestClosed(): void {
-    this.nestOpen = false;
-    this.input.enabled = true;
-  }
 
   // ── 그리기 ───────────────────────────────────────────────
 
@@ -178,13 +177,8 @@ export class BattleScene extends Phaser.Scene {
         .text(x + w / 2, y + h / 2, label, { fontFamily: FONT, fontSize: `${Math.round(h * 0.34)}px`, color: COLOR.menuText, fontStyle: '900' })
         .setOrigin(0.5)
         .setDepth(DEPTH.menu);
-      const zone = this.add.zone(x, y, w, h).setOrigin(0).setDepth(DEPTH.menu + 1).setInteractive();
-      zone.on('pointerdown', () => g.setAlpha(0.6));
-      zone.on('pointerout', () => g.setAlpha(1));
-      zone.on('pointerup', () => {
-        g.setAlpha(1);
-        this.showToast(`[${label}] 준비 중 — 이번 프로토 범위 밖`);
-      });
+      this.menuGfx.set(label, g);
+      this.router.addButton({ id: `menu:${label}`, rect: { x, y, w, h }, mode: 'battle', action: { type: 'menu', id: label }, priority: 10 });
     });
   }
 
@@ -243,38 +237,60 @@ export class BattleScene extends Phaser.Scene {
     this.tweens.add({ targets: this.challengeBtn, scale: { from: 1, to: 1.08 }, yoyo: true, repeat: -1, duration: 520, ease: 'Sine.easeInOut' });
     this.tweens.add({ targets: glow, alpha: { from: 0.2, to: 1 }, yoyo: true, repeat: -1, duration: 520, ease: 'Sine.easeInOut' });
 
-    this.challengeZone = this.add.zone(cx, cy, w + 32, h + 32).setDepth(DEPTH.challenge + 1);
-    this.challengeZone.on('pointerdown', () => {
-      if (this.sim.challenge()) this.handleEvents(this.sim.drainEvents());
+    this.router.addButton({
+      id: 'challenge',
+      rect: { x: cx - w / 2 - 16, y: cy - h / 2 - 16, w: w + 32, h: h + 32 },
+      mode: 'battle',
+      action: { type: 'challenge' },
+      enabled: () => this.sim.challengeAvailable,
+      priority: 20,
     });
   }
 
+  /** 입력은 전부 InputRouter가 판정 → 여기서는 action만 처리 */
   private createInput(): void {
-    const { L } = this;
-    // 전투 구역 탭 = 강점프 (전투 구역에서만)
-    const battleZone = this.add.zone(0, L.battle.top, L.width, L.battle.height).setOrigin(0).setDepth(DEPTH.battleInput).setInteractive();
-    battleZone.on('pointerdown', () => {
-      this.sim.tapStrongJump();
-      this.handleEvents(this.sim.drainEvents());
-    });
-    // 땅속 띠 빈 영역: 탭 또는 아래로 스와이프 → 개미굴 (시작점이 띠 안일 때만)
-    const stripZone = this.add.zone(0, L.strip.top, L.width, L.strip.height).setOrigin(0).setDepth(DEPTH.stripInput).setInteractive();
-    stripZone.on('pointerdown', (p: Phaser.Input.Pointer) => {
-      this.stripStart = { x: p.x, y: p.y, t: p.downTime };
+    this.router.addButton({ id: 'nestBack', rect: nestBackButtonRect(this.L), mode: 'nest', action: { type: 'closeNest', via: 'button' } });
+    const sample = (p: Phaser.Input.Pointer, up: boolean) => ({ id: p.id, x: p.x, y: p.y, t: up ? p.upTime : p.downTime });
+    this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
+      this.dispatch(this.router.down(sample(p, false)));
+      this.refreshPressed();
     });
     this.input.on('pointerup', (p: Phaser.Input.Pointer) => {
-      const s = this.stripStart;
-      this.stripStart = null;
-      if (!s || this.nestOpen) return;
-      const g = classifyStripGesture(this.L, this.cfg.input, { startX: s.x, startY: s.y, endX: p.x, endY: p.y, durationMs: p.upTime - s.t });
-      if (g !== 'none') this.openNest();
+      this.dispatch(this.router.up(sample(p, true)));
+      this.refreshPressed();
     });
   }
 
-  private openNest(): void {
-    this.nestOpen = true;
-    this.input.enabled = false;
-    this.scene.launch('nest', { config: this.cfg, onClose: () => this.onNestClosed() });
+  private dispatch(actions: InputAction[]): void {
+    for (const a of actions) {
+      switch (a.type) {
+        case 'strongJump':
+          this.sim.tapStrongJump();
+          break;
+        case 'challenge':
+          this.sim.challenge();
+          break;
+        case 'menu':
+          this.showToast(`[${a.id}] 준비 중 — 이번 프로토 범위 밖`);
+          break;
+        case 'openNest':
+          this.router.setMode('nest');
+          this.scene.launch('nest', { config: this.cfg });
+          break;
+        case 'closeNest': {
+          this.router.setMode('battle');
+          const nest = this.scene.get('nest') as NestScene;
+          nest.close();
+          break;
+        }
+      }
+    }
+    this.handleEvents(this.sim.drainEvents());
+  }
+
+  private refreshPressed(): void {
+    const pressed = new Set(this.router.pressedButtonIds());
+    for (const [label, g] of this.menuGfx) g.setAlpha(pressed.has(`menu:${label}`) ? 0.6 : 1);
   }
 
   // ── 이벤트 → 연출 ────────────────────────────────────────
@@ -318,7 +334,7 @@ export class BattleScene extends Phaser.Scene {
           break;
         }
         case 'destroy':
-          this.burstDebris();
+          this.burstDebris(e.debrisReward);
           this.removeBuildingView(false);
           this.cameras.main.shake(140, 0.006);
           this.floatText(this.L.width / 2, battleToScreenY(this.L, e.y) - 140, '와르르!', '#ffe08a', 110, 900);
@@ -365,10 +381,12 @@ export class BattleScene extends Phaser.Scene {
     this.tweens.add({ targets: v.root, alpha: 0, scaleY: 0.6, duration: 220, onComplete: () => v.destroy() });
   }
 
-  private burstDebris(): void {
+  /** 잔해 조각마다 운반 팝업 숫자를 나눠 준다 (합계 = 건물 debris_reward, 연출용) */
+  private burstDebris(reward: number): void {
     const v = this.buildingView;
     if (!v) return;
     const n = this.cfg.strip.debris_pieces;
+    const each = n > 0 ? Math.floor(reward / n) : 0;
     const bw = this.cfg.battle.building.width_ratio * this.L.width;
     const bh = this.cfg.battle.building.height_ratio * this.L.battle.height;
     for (let i = 0; i < n; i++) {
@@ -376,7 +394,7 @@ export class BattleScene extends Phaser.Scene {
       const x = v.root.x + Phaser.Math.FloatBetween(-0.45, 0.45) * bw;
       const y = v.root.y - Phaser.Math.FloatBetween(0.1, 0.9) * bh;
       const obj = this.add.rectangle(x, y, size, size * 0.8, v.color).setStrokeStyle(5, COLOR.buildingDark).setDepth(DEPTH.building);
-      this.debris.push({ obj, vx: Phaser.Math.FloatBetween(-520, 520), vy: Phaser.Math.FloatBetween(-900, -300), spin: Phaser.Math.FloatBetween(-8, 8), restTimer: null });
+      this.debris.push({ obj, vx: Phaser.Math.FloatBetween(-520, 520), vy: Phaser.Math.FloatBetween(-900, -300), spin: Phaser.Math.FloatBetween(-8, 8), restTimer: null, amount: each + (i === 0 ? reward - each * n : 0) });
     }
   }
 
@@ -401,7 +419,7 @@ export class BattleScene extends Phaser.Scene {
           const obj = d.obj;
           this.debris.splice(i, 1);
           this.tweens.add({ targets: obj, y: groundY + 30, scale: 0.3, alpha: 0, duration: 160, onComplete: () => obj.destroy() });
-          this.strip.spawnCarrier(obj.x, this.cfg.strip.debris_carry_amount_per_piece);
+          this.strip.spawnCarrier(obj.x, d.amount);
         }
       }
     }
@@ -463,11 +481,7 @@ export class BattleScene extends Phaser.Scene {
     this.hudAuto.setColor(s.autoAdvance ? COLOR.autoOn : COLOR.autoOff);
 
     const show = sim.challengeAvailable;
-    if (this.challengeBtn.visible !== show) {
-      this.challengeBtn.setVisible(show);
-      if (show) this.challengeZone.setInteractive();
-      else this.challengeZone.disableInteractive();
-    }
+    if (this.challengeBtn.visible !== show) this.challengeBtn.setVisible(show);
     if (show) this.challengeSub.setText(`스테이지 ${s.stage + 1}`);
   }
 

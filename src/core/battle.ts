@@ -13,7 +13,7 @@
  *       └ 개미 HP 0 → 기절 → 스테이지 1이면 재시작, 아니면 후퇴 + auto_advance OFF
  */
 
-import { type GameConfig, stageRow } from './config';
+import { type GameConfig, buildingForStage, stageRow } from './config';
 
 export type AntPhase = 'ground' | 'rise' | 'fall' | 'down';
 export type JumpKind = 'auto' | 'strong';
@@ -44,7 +44,14 @@ export interface AntState {
 }
 
 export interface BuildingState {
+  /** 화면에 나온 순번 (렌더러가 뷰를 맞출 때 씀) */
   id: number;
+  /** 건물 테이블 PK */
+  buildingId: string;
+  name: string;
+  weight: number;
+  debrisReward: number;
+  isBoss: boolean;
   /** 밑면 위치 */
   y: number;
   hp: number;
@@ -70,7 +77,7 @@ export type BattleEvent =
   | { type: 'spawn'; buildingId: number; hp: number }
   | { type: 'jump'; kind: JumpKind; apex: number }
   | { type: 'strike'; arm: number; damage: number; buildingId: number; hpLeft: number }
-  | { type: 'destroy'; buildingId: number; y: number }
+  | { type: 'destroy'; buildingId: number; y: number; debrisReward: number }
   | { type: 'land'; buildingId: number; damage: number; antHp: number }
   | { type: 'antDown'; stage: number }
   | { type: 'tapIgnored'; reason: TapIgnoredReason };
@@ -274,13 +281,18 @@ export class BattleSim {
   }
 
   private spawnBuilding(): void {
-    const row = stageRow(this.cfg.stages, this.stage.stage);
+    const row = buildingForStage(this.cfg, this.stage.stage);
     const b: BuildingState = {
       id: this.nextBuildingId++,
+      buildingId: row.building_id,
+      name: row.name,
+      weight: row.weight,
+      debrisReward: row.debris_reward,
+      isBoss: row.is_boss,
       y: this.cfg.battle.building.spawn_bottom_ratio,
-      hp: row.building_hp,
-      maxHp: row.building_hp,
-      fallSpeed: row.fall_speed_ratio_per_s,
+      hp: row.hp,
+      maxHp: row.hp,
+      fallSpeed: row.fall_speed,
       state: 'falling',
       lingerTimer: 0,
     };
@@ -289,7 +301,7 @@ export class BattleSim {
   }
 
   private destroyBuilding(b: BuildingState): void {
-    this.events.push({ type: 'destroy', buildingId: b.id, y: b.y });
+    this.events.push({ type: 'destroy', buildingId: b.id, y: b.y, debrisReward: b.debrisReward });
     this.building = null;
     this.ant.contact = false;
     // 파괴 후에도 남은 상승은 계속 (잔해를 뚫고 올라감) → 하강

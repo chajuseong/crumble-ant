@@ -5,6 +5,7 @@
  */
 import { BattleSim, type BattleEvent } from '../src/core/battle';
 import { loadGameConfig } from '../src/gameConfig';
+import { buildingForStage } from '../src/core/config';
 
 const { config, errors } = loadGameConfig();
 if (errors.length) throw new Error(`config 오류:\n${errors.join('\n')}`);
@@ -42,12 +43,13 @@ function measure(stage: number, policy: Policy) {
 const pct = (v: number) => `${(v * 100).toFixed(0)}%`.padStart(5);
 const f1 = (v: number) => v.toFixed(1).padStart(5);
 console.log(`건물 ${BUILDINGS}개씩 · 개미 HP 무한 · 스테이지 고정`);
-console.log('stage | HP  | 낙하 | 자동: 파괴율 타격/건물 착지뎀 | 강점프: 파괴율 타격/건물 착지뎀');
+console.log('stage | 건물 | HP  | 낙하 | 자동: 파괴율 타격/건물 착지뎀 | 강점프: 파괴율 타격/건물 착지뎀');
 for (const row of config.stages.rows) {
+  const b = buildingForStage(config, row.stage);
   const a = measure(row.stage, 'auto');
   const s = measure(row.stage, 'strong');
   console.log(
-    `${String(row.stage).padStart(5)} | ${String(row.building_hp).padStart(3)} | ${row.fall_speed_ratio_per_s.toFixed(2)} |` +
+    `${String(row.stage).padStart(5)} | ${b.building_id} | ${String(b.hp).padStart(3)} | ${b.fall_speed.toFixed(2)} |` +
       `       ${pct(a.destroyRate)}   ${f1(a.strikesPerBuilding)}   ${f1(a.avgLandDamage)} |` +
       `         ${pct(s.destroyRate)}   ${f1(s.strikesPerBuilding)}   ${f1(s.avgLandDamage)}`,
   );

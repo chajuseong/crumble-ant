@@ -54,10 +54,29 @@ export interface BattleConfig {
   };
 }
 
+/** 건물 테이블 (요청서 #1 §3 스키마). building_id = PK */
+export interface BuildingRow {
+  building_id: string;
+  name: string;
+  hp: number;
+  /** 전투 구역 높이 / 초 */
+  fall_speed: number;
+  /** 기본 1.0 — 추후 반격(밀어 올리기) 밸런싱용. 지금은 로직에서 쓰지 않음 */
+  weight: number;
+  /** 파괴 시 잔해 운반 팝업 합계 (연출 — 재화 아님) */
+  debris_reward: number;
+  /** 보스 건물 여부 — 지금은 로직 없음 */
+  is_boss: boolean;
+}
+
+export interface BuildingsConfig {
+  rows: BuildingRow[];
+}
+
 export interface StageRow {
   stage: number;
-  building_hp: number;
-  fall_speed_ratio_per_s: number;
+  /** FK → buildings.rows[].building_id */
+  building_id: string;
   buildings_to_clear: number;
 }
 
@@ -81,7 +100,6 @@ export interface StripConfig {
   ambient_spawn_interval_s: number;
   ambient_carry_amount: number;
   debris_pieces: number;
-  debris_carry_amount_per_piece: number;
   debris_pickup_s: number;
   burrow_x_ratio: number;
   popup_rise_ratio: number;
@@ -91,6 +109,7 @@ export interface StripConfig {
 export interface GameConfig {
   layout: LayoutConfig;
   battle: BattleConfig;
+  buildings: BuildingsConfig;
   stages: StagesConfig;
   input: InputConfig;
   strip: StripConfig;
@@ -134,6 +153,7 @@ export function validateConfig(raw: unknown): string[] {
   const strong = obj(battle.strong_jump);
   const building = obj(battle.building);
   const stages = obj(root.stages);
+  const buildings = obj(root.buildings);
   const input = obj(root.input);
   const strip = obj(root.strip);
 
@@ -179,7 +199,6 @@ export function validateConfig(raw: unknown): string[] {
     num('strip.ambient_spawn_interval_s', strip.ambient_spawn_interval_s, { gt: 0 }),
     num('strip.ambient_carry_amount', strip.ambient_carry_amount, { min: 0 }),
     num('strip.debris_pieces', strip.debris_pieces, { min: 0, int: true }),
-    num('strip.debris_carry_amount_per_piece', strip.debris_carry_amount_per_piece, { min: 0 }),
     num('strip.debris_pickup_s', strip.debris_pickup_s, { min: 0 }),
     num('strip.burrow_x_ratio', strip.burrow_x_ratio, { gt: 0, max: 1 }),
     num('strip.popup_rise_ratio', strip.popup_rise_ratio, { min: 0 }),
@@ -206,7 +225,28 @@ export function validateConfig(raw: unknown): string[] {
     });
   }
 
-  // 스테이지 표: 1부터 빈칸 없이
+  // 건물 테이블: building_id PK 중복 없음
+  const ids = new Set<string>();
+  const bRows = buildings.rows;
+  if (!Array.isArray(bRows) || bRows.length === 0) {
+    errors.push('buildings.rows: 1행 이상 필요');
+  } else {
+    bRows.forEach((r, i) => {
+      const row = obj(r);
+      const p = `buildings.rows[${i}]`;
+      if (typeof row.building_id !== 'string' || row.building_id === '') errors.push(`${p}.building_id: 빈 문자열 불가`);
+      else if (ids.has(row.building_id)) errors.push(`${p}.building_id: PK 중복 (${row.building_id})`);
+      else ids.add(row.building_id);
+      if (typeof row.name !== 'string' || row.name === '') errors.push(`${p}.name: 빈 문자열 불가`);
+      num(`${p}.hp`, row.hp, { gt: 0, int: true })(errors);
+      num(`${p}.fall_speed`, row.fall_speed, { gt: 0 })(errors);
+      num(`${p}.weight`, row.weight, { gt: 0 })(errors);
+      num(`${p}.debris_reward`, row.debris_reward, { min: 0, int: true })(errors);
+      bool(`${p}.is_boss`, row.is_boss)(errors);
+    });
+  }
+
+  // 스테이지 표: 1부터 빈칸 없이, building_id는 건물 테이블에 있어야 함 (FK)
   const rows = stages.rows;
   if (!Array.isArray(rows) || rows.length === 0) {
     errors.push('stages.rows: 1행 이상 필요');
@@ -214,8 +254,9 @@ export function validateConfig(raw: unknown): string[] {
     rows.forEach((r, i) => {
       const row = obj(r);
       num(`stages.rows[${i}].stage`, row.stage, { int: true })(errors);
-      num(`stages.rows[${i}].building_hp`, row.building_hp, { gt: 0 })(errors);
-      num(`stages.rows[${i}].fall_speed_ratio_per_s`, row.fall_speed_ratio_per_s, { gt: 0 })(errors);
+      if (typeof row.building_id !== 'string' || !ids.has(row.building_id)) {
+        errors.push(`stages.rows[${i}].building_id: 건물 테이블에 없음 (FK ${JSON.stringify(row.building_id)})`);
+      }
       num(`stages.rows[${i}].buildings_to_clear`, row.buildings_to_clear, { min: 1, int: true })(errors);
       if (row.stage !== i + 1) errors.push(`stages.rows[${i}].stage: ${i + 1}이어야 함 (1부터 빈칸 없이)`);
     });
@@ -231,4 +272,12 @@ export function validateConfig(raw: unknown): string[] {
 export function stageRow(stages: StagesConfig, stage: number): StageRow {
   const idx = Math.min(Math.max(1, Math.floor(stage)), stages.rows.length) - 1;
   return stages.rows[idx]!;
+}
+
+/** 스테이지 → 그 스테이지에 떨어지는 건물 행 (FK 조회) */
+export function buildingForStage(cfg: Pick<GameConfig, 'stages' | 'buildings'>, stage: number): BuildingRow {
+  const row = stageRow(cfg.stages, stage);
+  const b = cfg.buildings.rows.find((x) => x.building_id === row.building_id);
+  if (!b) throw new Error(`building_id ${row.building_id} 없음 (config 검증을 먼저 통과해야 함)`);
+  return b;
 }

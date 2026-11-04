@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { stageRow, validateConfig } from '../src/core/config';
+import { buildingForStage, stageRow, validateConfig } from '../src/core/config';
 import { computeLayout, frameHeightForWidth, zoneAt, battleToScreenY } from '../src/core/layout';
 import { classifyStripGesture, isSwipeUp } from '../src/core/input';
 import { RAW_CONFIG } from '../src/gameConfig';
@@ -33,6 +33,38 @@ describe('config 검증', () => {
     const errs = validateConfig(c).join('\n');
     expect(errs).toContain('battle.jump.speed_ratio_per_s');
     expect(errs).toContain('battle.strong_jump.height_mult');
+  });
+
+  it('건물 테이블: building_id PK 중복이면 오류', () => {
+    const c = makeConfig((x) => (x.buildings.rows[1]!.building_id = x.buildings.rows[0]!.building_id));
+    expect(validateConfig(c).join('\n')).toContain('PK 중복');
+  });
+
+  it('스테이지의 building_id가 건물 테이블에 없으면 오류 (FK)', () => {
+    const c = makeConfig((x) => (x.stages.rows[0]!.building_id = 'bld_nope'));
+    expect(validateConfig(c).join('\n')).toContain('stages.rows[0].building_id');
+  });
+
+  it('건물 스키마: hp · debris_reward 정수, weight > 0, is_boss bool', () => {
+    const c = makeConfig((x) => {
+      const b = x.buildings.rows[0]! as unknown as Record<string, unknown>;
+      b.hp = 10.5;
+      b.debris_reward = 1.2;
+      b.weight = 0;
+      b.is_boss = 'no';
+    });
+    const errs = validateConfig(c).join('\n');
+    for (const k of ['hp', 'debris_reward', 'weight', 'is_boss']) expect(errs).toContain(`buildings.rows[0].${k}`);
+  });
+
+  it('건물 weight 기본값 1.0 (요청서 #1 §3)', () => {
+    expect(makeConfig().buildings.rows.every((b) => b.weight === 1)).toBe(true);
+  });
+
+  it('스테이지 → 건물 조회 (FK)', () => {
+    const c = makeConfig();
+    expect(buildingForStage(c, 1).building_id).toBe(c.stages.rows[0]!.building_id);
+    expect(buildingForStage(c, 999).building_id).toBe(c.stages.rows[c.stages.rows.length - 1]!.building_id);
   });
 
   it('마지막 행을 넘는 스테이지는 마지막 행을 반복', () => {

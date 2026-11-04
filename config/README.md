@@ -7,8 +7,8 @@
 
 | 접미사 | 기준 |
 |---|---|
-| `*_ratio` (battle · stages) | 전투 구역 높이 = 1.0 (y = 0 지면, 1 = 전투 구역 맨 위). `width_ratio`만 프레임 폭 기준 |
-| `*_ratio_per_s` | 전투 구역 높이 / 초 |
+| `*_ratio` · buildings `fall_speed` | 전투 구역 높이 = 1.0 (y = 0 지면, 1 = 전투 구역 맨 위). `width_ratio`만 프레임 폭 기준 |
+| `*_ratio_per_s` · `fall_speed` | 전투 구역 높이 / 초 |
 | layout · input `*_ratio` | Safe Area(= 게임 프레임) 높이 기준 |
 | strip | 가로 = 프레임 폭, 세로 = 띠 높이 기준 |
 
@@ -52,13 +52,24 @@
 | building.spawn_delay_s | number | 다음 건물이 떨어지기까지 | 0.6 | 임시 |
 | building.landed_linger_s | number | 착지한 건물이 남아 있는 시간 (깔린 동안 탭 무시) | 0.6 | 임시 |
 
+## buildings.json — 건물 테이블 (요청서 #1 §3 스키마)
+
+| Column | 데이터 타입 | 설명 | 예시 | 상태 |
+|---|---|---|---|---|
+| building_id | string (PK) | 건물 ID. 중복 불가 | bld_hut | — |
+| name | string | 건물 이름 (표시용) | 오두막 | 임시 |
+| hp | int | 건물 HP | 60 | 임시 (기획서 §9 미정) |
+| fall_speed | float | 낙하 속도 (전투 구역 높이 / 초) | 0.1 | 임시 (기획서 §9 미정) |
+| weight | float | 무게. 기본 1.0 — 추후 반격(밀어 올리기) 밸런싱용, 지금은 로직에서 안 씀 | 1.0 | 기획 (요청서 기본값) |
+| debris_reward | int | 파괴 시 잔해 운반 팝업 합계 — 조각 수(`strip.debris_pieces`)로 나눠 일개미마다 표시. **연출용, 재화 아님** | 60 | 임시 |
+| is_boss | bool | 보스 건물 여부 — 지금은 로직 없음 | false | 임시 (기획서 §9 미정) |
+
 ## stages.json — 스테이지 표
 
 | Column | 데이터 타입 | 설명 | 예시 | 상태 |
 |---|---|---|---|---|
 | rows[].stage | int (PK) | 스테이지 번호. 1부터 빈칸 없이 | 1 | — |
-| rows[].building_hp | number | 건물 HP | 60 | 임시 (기획서 §9 미정) |
-| rows[].fall_speed_ratio_per_s | number | 건물 낙하 속도 | 0.1 | 임시 (기획서 §9 미정) |
+| rows[].building_id | string (FK → buildings.building_id) | 이 스테이지에 떨어지는 건물. 없는 ID면 검증 오류 | bld_hut | 임시 |
 | rows[].buildings_to_clear | int | 클리어에 필요한 파괴 수 (착지한 건물은 안 셈) | 3 | 임시 (기획서에 없음) |
 | beyond_last_row | enum | 마지막 행을 넘는 스테이지 처리. 지금은 `repeat_last`만 | repeat_last | 임시 |
 
@@ -81,8 +92,20 @@
 | worker_gap_ratio | number | 일개미 줄 간격 | 0.07 | 연출 |
 | ambient_spawn_interval_s | number | 배경 행렬 일개미 등장 간격 | 1.6 | 연출 |
 | ambient_carry_amount | number | 배경 행렬 일개미 팝업 숫자 | 5 | 연출 (재화 아님) |
-| debris_pieces | int | 파괴 시 잔해 조각 수 (= 운반 일개미 수) | 6 | 연출 |
-| debris_carry_amount_per_piece | number | 잔해 운반 일개미 팝업 숫자 | 20 | 연출 (재화 아님) |
+| debris_pieces | int | 파괴 시 잔해 조각 수 (= 운반 일개미 수). 팝업 숫자는 건물 `debris_reward` ÷ 조각 수 | 6 | 연출 |
 | debris_pickup_s | number | 잔해가 지면에 닿고 일개미가 집어가기까지 | 0.3 | 기획 (§7 "0.3초 정도") |
 | burrow_x_ratio | number | 굴 입구 위치 (띠 우측 끝) | 0.93 | 연출 |
 | popup_rise_ratio / popup_duration_s | number | 팝업이 떠오르는 높이 · 시간 | 0.5 / 0.8 | 연출 |
+
+## 입력 — `src/core/inputRouter.ts`
+
+입력 판정은 한 곳(`InputRouter`)에만 있다. 장면은 포인터 down / up을 넘기고 나온 action만 처리한다.
+
+| 우선 | 규칙 | action |
+|---|---|---|
+| 1 | 등록된 버튼 (priority 높은 순 — [도전] 20 > 메뉴 10). 숨겨진 버튼은 건너뜀. 버튼에서 누르고 버튼 위에서 떼야 실행 | `challenge` · `menu` · `closeNest(button)` |
+| 2 | battle 모드 · 전투 구역 down | `strongJump` (닿는 순간) |
+| 2 | battle 모드 · 띠에서 시작한 탭 / 아래 스와이프 | `openNest` |
+| 2 | nest 모드 · 위로 스와이프 | `closeNest(swipe_up)` |
+
+필살기 · 반격 입력은 `InputAction`에 종류를 추가하고 위 표에 규칙 한 줄을 넣는 방식으로 붙인다 (예: 전투 구역 길게 누르기 · 위로 스와이프 — 기획서 §9 "탭과 입력이 겹치지 않게").
