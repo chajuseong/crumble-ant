@@ -1,19 +1,19 @@
-// 배포 빌드 화면 확인 ⑥ — ① 콘솔 오류 0 ② 장면이 그려짐 ③ 장면이 돎 (잼병 원정대 ci_smoke 구조를 와르르 M0 빈 장면에 맞춤)
+// 배포 빌드 화면 확인 — ① 콘솔 오류 0 ② 전투 구역이 그려짐 ③ 전투가 돎 = 건물 파괴 수가 오름 (docs/dev.md §7 M1 ⑤)
 // 사용: npm run build → npm run smoke
 //   브라우저: CI는 러너에 깔린 Chrome (channel "chrome"). 다른 브라우저는 SMOKE_CHROME=<실행 파일 경로>
 // 결과: 통과 exit 0 / 실패 exit 1 — ci-smoke/에 스크린샷 · result.json (CI는 실패 때 Actions 산출물로 남김)
-// 마일스톤이 진행되면 ②③ 기준을 게임 화면에 맞게 바꾼다 (예: ③ = 건물이 부서짐) — docs/dev.md §7 완료 조건과 함께
+// ③은 core 누적 파괴 수(BattleScene이 #game data-destroyed에 남김). 스테이지 1은 자동만으로도 100% 파괴 (measure 표)
 import fs from "node:fs";
 import path from "node:path";
 import { preview } from "vite";
 import { chromium } from "playwright-core";
 
 const OUT = "ci-smoke";
-const VIEW = { width: 405, height: 720 };   // 폰 세로 한 크기 — 장면 720×1280 [가정]과 같은 비율
-const SETTLE_MS = 1000;                     // 첫 화면이 뜬 뒤 프레임 수를 처음 읽기까지
-const RUN_MS = 10000;                       // ③ 이 시간 안에 프레임 수가 올라야 함
+const VIEW = { width: 360, height: 780 };   // 폰 세로 한 크기 — 프레임 720×1560 (G-03)과 같은 비율
+const SETTLE_MS = 1000;                     // 첫 화면이 뜬 뒤 처음 읽기까지
+const RUN_MS = 15000;                       // ③ 이 시간 안에 건물 파괴 수가 올라야 함 (H-05 ③-5)
 const LIMIT_MS = 45000;                     // 전체 상한
-const MIN_COLORS = 3;                       // ② 화면 색 종류가 이보다 많아야 "그려짐" (빈 캔버스 = 1색. M0 빈 장면 = 하늘 · 땅 · 글자)
+const MIN_COLORS = 30;                      // ② 전투 구역 색 종류가 이보다 많아야 "그려짐" (빈 캔버스 = 1색 · 하늘 그라데이션만 있어도 넘음 — 너무 낮지 않게)
 const IGNORE_ERRORS = [];                   // ① 의도한 오류 (정규식) — 지금은 없음
 
 const t0 = Date.now();
@@ -44,20 +44,23 @@ const errors = [];
 page.on("console", (m) => { if (m.type() === "error") errors.push(m.text().slice(0, 300)); });
 page.on("pageerror", (e) => errors.push(String(e.message).slice(0, 300)));
 
-const frames = () => page.evaluate(() => Number(document.getElementById("game")?.getAttribute("data-frames") ?? NaN));
+const attr = (name) => page.evaluate((n) => Number(document.getElementById("game")?.getAttribute(n) ?? NaN), name);
+const destroyed = () => attr("data-destroyed");
 let before = null, after = null, drawn = { colors: 0 };
 try {
   await page.goto(url);
   await page.waitForSelector("#game canvas");
+  if (await page.$("#config-error")) throw new Error("데이터 오류 화면");
   await page.waitForTimeout(SETTLE_MS);
-  before = await frames();
+  before = (await destroyed()) || 0;
   const start = Date.now();
   do {
     await page.waitForTimeout(250);
-    after = await frames();
+    after = await destroyed();
   } while (!(after > before) && Date.now() - start < RUN_MS);
-  // ② WebGL 캔버스는 직접 못 읽어서 스크린샷으로 색 종류를 센다
-  const png = await page.screenshot();
+  result.ms.rise = after > before ? Date.now() - start : null;
+  // ② 전투 구역(프레임 높이 6% ~ 90%)을 스크린샷으로 — WebGL 캔버스는 직접 못 읽음
+  const png = await page.screenshot({ clip: { x: 0, y: VIEW.height * 0.06, width: VIEW.width, height: VIEW.height * 0.84 } });
   drawn = await page.evaluate(async (b64) => {
     const img = new Image();
     img.src = "data:image/png;base64," + b64;
@@ -85,8 +88,8 @@ try {
 const realErrors = errors.filter((e) => !IGNORE_ERRORS.some((re) => re.test(e)));
 result.checks = {
   console_errors: { ok: realErrors.length === 0, errors: realErrors },
-  scene_drawn: { ok: drawn.colors > MIN_COLORS, colors: drawn.colors, min: MIN_COLORS },
-  scene_runs: { ok: Number.isFinite(before) && after > before, before, after, limit_ms: RUN_MS },
+  battle_drawn: { ok: drawn.colors > MIN_COLORS, colors: drawn.colors, min: MIN_COLORS },
+  battle_runs: { ok: Number.isFinite(after) && after > before, destroyed_before: before, destroyed_after: after, rise_ms: result.ms.rise, limit_ms: RUN_MS },
 };
 result.ok = Object.values(result.checks).every((c) => c.ok);
 await browser.close();
