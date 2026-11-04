@@ -6,7 +6,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 
 // 있어야 하는 JSON (build_data.mjs SHEETS의 out과 같아야 함)
-export const REQUIRED = ["buildings", "stages", "game_config", "ui_strings"];
+export const REQUIRED = ["buildings", "stages", "game_config", "ui_strings", "fx_config"];
 
 const KEY_PART = /^[a-z][a-z0-9_]*$/;   // 키 조각: 영문 소문자 · 숫자 · _ (점 묶음의 각 조각)
 const isPlainObject = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
@@ -35,6 +35,7 @@ const CONFIG_KEYS = [
   ["battle.strong_jump.cooldown_s", "num", { min: 0 }],
   ["battle.arm_damage", "int4", { min: 0 }],
   ["battle.strike_interval_s", "num", { gt: 0 }],
+  ["battle.combo_window_s", "num", { gt: 0 }],
   ["battle.arm_order_resets_each_jump", "bool"],
   ["battle.landing_damage_coeff", "num", { min: 0 }],
   ["battle.building.height_ratio", "num", { gt: 0, max: 1 }],
@@ -60,13 +61,32 @@ const CONFIG_KEYS = [
   ["strip.popup_duration_s", "num", { gt: 0 }],
 ];
 
+// fx_config 필수 키 (M2 타격 연출 — view만 읽음, core 결과와 무관)
+const FX_KEYS = [
+  ["hitstop.hit_ms", "int", { min: 0 }], ["hitstop.final_ms", "int", { min: 0 }], ["hitstop.max_ms", "int", { min: 0 }],
+  ["flash.alpha", "num", { min: 0, max: 1 }], ["flash.ms", "int", { min: 0 }],
+  ["building_shake.px", "num", { min: 0 }], ["building_shake.ms", "int", { min: 0 }],
+  ["crack.steps", "int", { min: 1 }],
+  ["camera.hit_ms", "int", { min: 0 }], ["camera.hit_intensity", "num", { min: 0, max: 0.1 }],
+  ["camera.final_ms", "int", { min: 0 }], ["camera.final_intensity", "num", { min: 0, max: 0.1 }],
+  ["camera.destroy_ms", "int", { min: 0 }], ["camera.destroy_intensity", "num", { min: 0, max: 0.1 }],
+  ["combo.min_show", "int", { min: 1 }], ["combo.text_px", "num", { gt: 0 }], ["combo.pop_scale", "num", { gt: 0 }], ["combo.ms", "int", { min: 0 }],
+  ["damage.pop_scale", "num", { gt: 0 }], ["damage.text_px", "num", { gt: 0 }], ["damage.ms", "int", { min: 0 }],
+  ["arm.stretch", "num", { gt: 0 }],
+  ["punch.stretch", "num", { gt: 0 }], ["punch.fist_scale", "num", { gt: 0 }], ["punch.ms", "int", { min: 0 }],
+  ["hit_debris.count", "int", { min: 0 }], ["hit_debris.speed_px", "num", { min: 0 }], ["hit_debris.life_ms", "int", { min: 0 }], ["hit_debris.size_px", "num", { gt: 0 }],
+  ["crumble_text.px", "num", { gt: 0 }], ["crumble_text.plate_alpha", "num", { min: 0, max: 1 }], ["crumble_text.stroke_px", "num", { min: 0 }], ["crumble_text.ms", "int", { min: 0 }],
+  ["sfx.volume", "num", { min: 0, max: 1 }], ["sfx.hit_hz", "num", { gt: 0 }], ["sfx.hit_ms", "int", { gt: 0 }], ["sfx.final_hz", "num", { gt: 0 }], ["sfx.final_ms", "int", { gt: 0 }],
+  ["sfx.crumble_ms", "int", { gt: 0 }], ["sfx.combo_pitch_step", "num", { min: 0 }], ["sfx.combo_pitch_max", "int", { min: 0 }],
+];
+
 // ui_strings 필수 키 (view가 읽는 것)
 const UI_KEYS = [
   "hud.stage", "hud.hp", "hud.auto_on", "hud.auto_off",
   "challenge.title", "challenge.sub",
   "toast.advance", "toast.retreat", "toast.restart", "toast.challenge", "toast.breakthrough", "toast.menu_wip",
   "menu.upgrade", "menu.equip", "menu.nest", "menu.shop",
-  "fx.crumble", "ant.down", "nest.title", "nest.sub", "nest.back",
+  "fx.crumble", "fx.combo", "ant.down", "nest.title", "nest.sub", "nest.back",
 ];
 
 const get = (obj, dotted) => dotted.split(".").reduce((o, k) => (isPlainObject(o) ? o[k] : undefined), obj);
@@ -152,6 +172,16 @@ export function validateAll(data) {
       for (const [key, kind, o] of CONFIG_KEYS) checkValue(`game_config.${key}`, get(c, key), kind, o, errors);
       const sum = ["hud_ratio", "battle_ratio", "strip_ratio"].reduce((s, k) => s + Number(get(c, `layout.${k}`)), 0);
       if (Number.isFinite(sum) && Math.abs(sum - 1) > 1e-6) errors.push(`game_config.layout: hud + battle + strip 비율 합이 1이어야 함 (${sum})`);
+    }
+  }
+
+  // fx_config
+  if ("fx_config" in data) {
+    const f = data.fx_config;
+    if (!isPlainObject(f)) errors.push("fx_config.json: 객체(키-값)여야 함");
+    else {
+      walkKeys(f, "fx_config", errors);
+      for (const [key, kind, o] of FX_KEYS) checkValue(`fx_config.${key}`, get(f, key), kind, o, errors);
     }
   }
 

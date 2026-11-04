@@ -13,6 +13,7 @@ const SHEETS = [
   { sheet: "stages", kind: "table", out: "stages" },
   { sheet: "game_config", kind: "kv", out: "game_config" },
   { sheet: "ui_strings", kind: "kv", out: "ui_strings" },
+  { sheet: "fx_config", kind: "kv", out: "fx_config" },
 ];
 
 const IN = process.argv[2] || "design/tables";
