@@ -1,6 +1,7 @@
 # 와르르 개미 — 개발 기준 문서 (단일 기준)
 
-> 문서 버전: v0.7 (2026-11-04) — M2 머지 커밋 기록
+> 문서 버전: v0.8 (2026-11-04) — §3-5 아트 좌표 = art/game 납품본 측정값 · 무기 이름 = README
+> v0.7 (2026-11-04) — M2 머지 커밋 기록
 > v0.6 (2026-11-04) — M3 아트 데이터: art.xlsx 5시트 · 연출 목록 · 완료 조건 (H-12 계획 승인). 규격 = `docs/art.md`
 > v0.5 (2026-11-04) — M2 타격감: fx_config · strike combo 인자 · 연출 목록 · 완료 조건 (H-10 계획 승인)
 > v0.4 (2026-11-04) — M1 머지 커밋 기록
@@ -112,7 +113,7 @@ px = 1080폭 기준 (view가 프레임 폭에 비례해 줄임) · ms = 밀리�
 | sfx.combo_pitch_step · combo_pitch_max | float · int | G 연타마다 음 높이 증가 비율 · 상한 연타 | 0.04 · 8 |
 
 ### 3-5. `art.xlsx` → 아트 배치 (M3 — view만 읽음 · 규격과 맞추는 법 = `docs/art.md`)
-값은 모두 [가정] (초안 측정 · M1 도형 비율 — `docs/art.md` §6). `art/game` 납품 뒤 다시 맞춘다
+pivot · socket · grip = `art/game` 납품본 측정값 · draw_h · anchor · angle = [가정] M1 도형 비율 (`docs/art.md` §6)
 
 | 파일 · 시트 | Column명 | 데이터 타입 | 설명 | 예시 데이터 |
 |---|---|---|---|---|
@@ -121,13 +122,13 @@ px = 1080폭 기준 (view가 프레임 폭에 비례해 줄임) · ms = 밀리�
 | | hit_face_ms | int | 착지 피격 표정 시간 | 600 |
 | ant_parts (표) | skin_id · part_id | string (PK 둘) | 스킨 + 파츠 (body · head_normal · head_hit · head_down · arm · leg) | black · arm |
 | | file | string | `ant_<skin>_<part>.png` (art/game/ant/) | ant_black_arm.png |
-| | pivot_x · pivot_y · socket_x? · socket_y? · draw_h | float | 그림 안 점 (0 ~ 1) · 팔만 손 · 그림 높이 (개미 키 기준) | 0.491 · 0.941 · 0.509 · 0.109 · 0.36 |
+| | pivot_x · pivot_y · socket_x? · socket_y? · draw_h | float | 그림 안 점 (0 ~ 1) · 팔만 손 · 그림 높이 (개미 키 기준) | 0.479 · 0.938 · 0.51 · 0.073 · 0.36 |
 | ant_mounts (표) | mount_id | string (PK) | leg_l · leg_r · arm_1 ~ arm_4 · body · head | arm_1 |
 | | part_id | string (FK → ant_parts) | 붙일 파츠 (머리 = head_normal, 표정은 head_ 이름으로 바꿈) | arm |
 | | anchor_x · anchor_y · angle_deg · layer · mirror | float · float · float · int · bool | 개미 기준 자리 · 기본 각도 · 그리는 순서 · 좌우 반전 | -0.181 · 0.475 · -35 · 30 · TRUE |
 | weapons (표) | weapon_id | string (PK) | club · drill · flail · hammer · mace · mallet · pickaxe · wrench | hammer |
-| | name · file | string | 한글 이름 (임시) · `weapon_<id>.png` | 망치 · weapon_hammer.png |
-| | grip_x · grip_y · scale · angle_deg | float | 손잡이 점 · 그림 높이 (개미 키 기준) · 손에서의 각도 | 0.498 · 0.894 · 0.5 · 0 |
+| | name · file | string | 한글 이름 (`art/game/weapons/README.md`) · `weapon_<id>.png` | 망치 · weapon_hammer.png |
+| | grip_x · grip_y · scale · angle_deg | float | 손잡이 점 · 그림 높이 (개미 키 기준) · 손에서의 각도 | 0.496 · 0.887 · 0.5 · 0 |
 | ant_loadout (표) | slot · weapon_id? | int (PK) · string (FK → weapons, 빈칸 = 맨주먹) | 팔 슬롯 1 ~ 4 장착 (외형만) | 1 · hammer |
 
 ### 3-6. `ui_strings.xlsx` › ui_strings → `ui_strings.json` (키-값, 전부 string)
