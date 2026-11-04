@@ -1,0 +1,526 @@
+import Phaser from 'phaser';
+import { BattleSim, type BattleEvent } from '../core/battle';
+import type { GameConfig } from '../core/config';
+import { type InputAction, InputRouter } from '../core/inputRouter';
+import { battleToScreenY, computeLayout, type Layout, nestBackButtonRect } from '../core/layout';
+import { AntView } from './antView';
+import { BuildingView } from './buildingView';
+import { StripView } from './stripView';
+import { COLOR, FONT } from './theme';
+import { t } from './text';
+import type { NestScene } from './NestScene';
+
+export interface BattleSceneData {
+  config: GameConfig;
+  startStage: number;
+  debug: boolean;
+}
+
+interface Debris {
+  obj: Phaser.GameObjects.Rectangle;
+  vx: number;
+  vy: number;
+  spin: number;
+  restTimer: number | null;
+  /** 이 조각을 나르는 일개미 팝업 숫자 (연출) */
+  amount: number;
+}
+
+const DEPTH = {
+  sky: 0,
+  battleInput: 5,
+  building: 10,
+  ant: 20,
+  ground: 30,
+  strip: 40,
+  stripInput: 45,
+  menu: 50,
+  hud: 60,
+  challenge: 70,
+  fx: 80,
+  debug: 90,
+} as const;
+
+// 하단 메뉴 — 문구 키 · [굴]은 개미굴 진입 (H-01 #9 · 기획서 v0.4 §6)
+const MENU = [
+  { key: 'menu.upgrade', nest: false },
+  { key: 'menu.equip', nest: false },
+  { key: 'menu.nest', nest: true },
+  { key: 'menu.shop', nest: false },
+] as const;
+/** 그림 상수(px)는 PR #2의 1080폭 기준값 — 지금 프레임 폭에 비례해 줄인다 (view 전용) */
+const DESIGN_WIDTH = 1080;
+
+export class BattleScene extends Phaser.Scene {
+  private cfg!: GameConfig;
+  private sim!: BattleSim;
+  private L!: Layout;
+  private debug = false;
+
+  private ant!: AntView;
+  private buildingView: BuildingView | null = null;
+  private buildingViewId = -1;
+  private strip!: StripView;
+  private debris: Debris[] = [];
+  private clouds: Phaser.GameObjects.Ellipse[] = [];
+
+  private hudStage!: Phaser.GameObjects.Text;
+  private hudPips!: Phaser.GameObjects.Graphics;
+  private hudHpFill!: Phaser.GameObjects.Rectangle;
+  private hudHpText!: Phaser.GameObjects.Text;
+  private hudAuto!: Phaser.GameObjects.Text;
+  private challengeBtn!: Phaser.GameObjects.Container;
+  private challengeSub!: Phaser.GameObjects.Text;
+  private toast: Phaser.GameObjects.Container | null = null;
+  private debugText: Phaser.GameObjects.Text | null = null;
+
+  private router!: InputRouter;
+  private readonly menuGfx = new Map<string, Phaser.GameObjects.Graphics>();
+  private wasDown = false;
+  private frames = 0;
+  private scaleK = 1;
+  /** PR #2 1080폭 기준 px → 지금 프레임 px */
+  private px(n: number): number {
+    return n * this.scaleK;
+  }
+
+  constructor() {
+    super('battle');
+  }
+
+  init(data: BattleSceneData): void {
+    this.cfg = data.config;
+    this.debug = data.debug;
+    this.sim = new BattleSim(this.cfg, data.startStage);
+    this.L = computeLayout(this.cfg.layout, this.scale.width, this.scale.height);
+    this.router = new InputRouter(this.L, this.cfg.input);
+    this.scaleK = this.L.width / DESIGN_WIDTH;
+    this.menuGfx.clear();
+  }
+
+  create(): void {
+    const { L, cfg } = this;
+    this.drawSky();
+    this.drawGround();
+
+    // 개미
+    const antH = cfg.battle.ant.height_ratio * L.battle.height;
+    const antW = cfg.battle.ant.width_ratio * L.width;
+    this.ant = new AntView(this, L.width / 2, L.groundY, antW, antH);
+    this.ant.root.setDepth(DEPTH.ant);
+
+    // 땅속 띠 + 메뉴
+    this.strip = new StripView(this, cfg.strip, L.strip, L.width);
+    this.strip.layer.setDepth(DEPTH.strip);
+    this.createMenu();
+
+    this.createHud();
+    this.createChallengeButton();
+    this.createInput();
+
+    if (this.debug) {
+      this.debugText = this.add
+        .text(this.px(16), L.battle.top + this.px(12), '', { fontFamily: 'monospace', fontSize: `${Math.round(this.px(26))}px`, color: '#1b1a17', backgroundColor: '#ffffffaa' })
+        .setDepth(DEPTH.debug);
+    }
+
+    this.handleEvents(this.sim.drainEvents());
+    this.refreshHud();
+  }
+
+  update(_time: number, deltaMs: number): void {
+    const dt = deltaMs / 1000;
+    this.sim.update(dt);
+    this.handleEvents(this.sim.drainEvents());
+    this.syncViews();
+    this.updateDebris(dt);
+    this.strip.update(dt);
+    for (const c of this.clouds) {
+      c.x += dt * 18 * (c.scaleX > 1 ? 1.4 : 1);
+      if (c.x - c.width > this.L.width) c.x = -c.width;
+    }
+    this.refreshHud();
+    if (this.debugText) this.debugText.setText(this.debugLines());
+    this.markForSmoke();
+  }
+
+
+  // ── 그리기 ───────────────────────────────────────────────
+
+  private drawSky(): void {
+    const { L } = this;
+    const g = this.add.graphics().setDepth(DEPTH.sky);
+    const steps = 28;
+    const top = Phaser.Display.Color.ValueToColor(COLOR.skyTop);
+    const bottom = Phaser.Display.Color.ValueToColor(COLOR.skyBottom);
+    for (let i = 0; i < steps; i++) {
+      const c = Phaser.Display.Color.Interpolate.ColorWithColor(top, bottom, steps - 1, i);
+      g.fillStyle(Phaser.Display.Color.GetColor(c.r, c.g, c.b), 1);
+      const y0 = L.hud.top + (L.battle.bottom - L.hud.top) * (i / steps);
+      g.fillRect(0, y0, L.width, (L.battle.bottom - L.hud.top) / steps + 1);
+    }
+    for (let i = 0; i < 4; i++) {
+      const w = L.width * (0.22 + 0.08 * (i % 2));
+      const c = this.add
+        .ellipse(((i * 337) % 1000) / 1000 * L.width, L.battle.top + L.battle.height * (0.12 + 0.13 * i), w, w * 0.32, COLOR.cloud, 0.75)
+        .setDepth(DEPTH.sky);
+      if (i % 2) c.setScale(1.2);
+      this.clouds.push(c);
+    }
+  }
+
+  private drawGround(): void {
+    const { L } = this;
+    const g = this.add.graphics().setDepth(DEPTH.ground);
+    g.fillStyle(COLOR.groundLine, 1);
+    g.fillRect(0, L.groundY - this.px(5), L.width, this.px(10));
+  }
+
+  private createMenu(): void {
+    const { L, cfg } = this;
+    const h = L.strip.height * cfg.layout.strip_menu_height_ratio;
+    const y = L.strip.top + (L.strip.height - h) / 2;
+    const w = L.width * 0.17;
+    const gap = L.width * 0.02;
+    const x0 = L.width * 0.03;
+    MENU.forEach(({ key, nest }, i) => {
+      const label = t(key);
+      const x = x0 + i * (w + gap);
+      const g = this.add.graphics().setDepth(DEPTH.menu);
+      g.fillStyle(COLOR.menuBg, 0.45);
+      g.fillRoundedRect(x, y, w, h, this.px(24));
+      g.lineStyle(this.px(4), 0xffffff, 0.25);
+      g.strokeRoundedRect(x, y, w, h, this.px(24));
+      this.add
+        .text(x + w / 2, y + h / 2, label, { fontFamily: FONT, fontSize: `${Math.round(h * 0.34)}px`, color: COLOR.menuText, fontStyle: '900' })
+        .setOrigin(0.5)
+        .setDepth(DEPTH.menu);
+      this.menuGfx.set(label, g);
+      const action = nest ? ({ type: 'openNest', via: 'button' } as const) : ({ type: 'menu', id: label } as const);
+      this.router.addButton({ id: `menu:${label}`, rect: { x, y, w, h }, mode: 'battle', action, priority: 10 });
+    });
+  }
+
+  private createHud(): void {
+    const { L } = this;
+    const h = L.hud.height;
+    this.add.rectangle(0, 0, L.width, h, COLOR.hudBg).setOrigin(0).setDepth(DEPTH.hud);
+    this.hudStage = this.add
+      .text(this.px(36), h * 0.34, '', { fontFamily: FONT, fontSize: `${Math.round(h * 0.36)}px`, color: COLOR.hudText, fontStyle: '900' })
+      .setOrigin(0, 0.5)
+      .setDepth(DEPTH.hud);
+    this.hudPips = this.add.graphics().setDepth(DEPTH.hud);
+
+    const barW = L.width * 0.36;
+    const barH = h * 0.26;
+    const barX = L.width - this.px(36) - barW;
+    const barY = h * 0.34;
+    this.add.rectangle(barX, barY, barW, barH, COLOR.hpBack).setOrigin(0, 0.5).setDepth(DEPTH.hud);
+    this.hudHpFill = this.add.rectangle(barX, barY, barW, barH, COLOR.hpFill).setOrigin(0, 0.5).setDepth(DEPTH.hud);
+    this.hudHpText = this.add
+      .text(barX + barW / 2, barY, '', { fontFamily: FONT, fontSize: `${Math.round(barH * 0.8)}px`, color: '#ffffff', fontStyle: '900', stroke: '#22201c', strokeThickness: this.px(6) })
+      .setOrigin(0.5)
+      .setDepth(DEPTH.hud);
+    this.add
+      .text(barX - this.px(14), barY, t('hud.hp'), { fontFamily: FONT, fontSize: `${Math.round(barH * 0.8)}px`, color: COLOR.hudText, fontStyle: '900' })
+      .setOrigin(1, 0.5)
+      .setDepth(DEPTH.hud);
+    this.hudAuto = this.add
+      .text(L.width - this.px(36), h * 0.78, '', { fontFamily: FONT, fontSize: `${Math.round(h * 0.2)}px`, color: COLOR.autoOn, fontStyle: '900' })
+      .setOrigin(1, 0.5)
+      .setDepth(DEPTH.hud);
+  }
+
+  private createChallengeButton(): void {
+    const { L, cfg } = this;
+    const w = L.width * 0.34;
+    const h = L.battle.height * 0.075;
+    const cx = L.width - this.px(36) - w / 2;
+    const cy = L.battle.top + L.battle.height * cfg.layout.challenge_button_y_ratio + h / 2;
+    const glow = this.add.graphics();
+    glow.fillStyle(COLOR.challenge, 0.35);
+    glow.fillRoundedRect(-w / 2 - this.px(16), -h / 2 - this.px(16), w + this.px(32), h + this.px(32), this.px(40));
+    const g = this.add.graphics();
+    g.fillStyle(COLOR.challenge, 1);
+    g.fillRoundedRect(-w / 2, -h / 2, w, h, this.px(32));
+    g.lineStyle(this.px(6), 0xffffff, 0.9);
+    g.strokeRoundedRect(-w / 2, -h / 2, w, h, this.px(32));
+    const label = this.add
+      .text(0, -h * 0.12, t('challenge.title'), { fontFamily: FONT, fontSize: `${Math.round(h * 0.42)}px`, color: COLOR.challengeText, fontStyle: '900', stroke: '#a2440f', strokeThickness: this.px(8) })
+      .setOrigin(0.5);
+    this.challengeSub = this.add
+      .text(0, h * 0.3, '', { fontFamily: FONT, fontSize: `${Math.round(h * 0.2)}px`, color: '#fff3e0', fontStyle: '900' })
+      .setOrigin(0.5);
+    this.challengeBtn = this.add.container(cx, cy, [glow, g, label, this.challengeSub]).setDepth(DEPTH.challenge).setVisible(false);
+    // 강조 연출: 숨쉬기 + 빛 번짐
+    this.tweens.add({ targets: this.challengeBtn, scale: { from: 1, to: 1.08 }, yoyo: true, repeat: -1, duration: 520, ease: 'Sine.easeInOut' });
+    this.tweens.add({ targets: glow, alpha: { from: 0.2, to: 1 }, yoyo: true, repeat: -1, duration: 520, ease: 'Sine.easeInOut' });
+
+    this.router.addButton({
+      id: 'challenge',
+      rect: { x: cx - w / 2 - this.px(16), y: cy - h / 2 - this.px(16), w: w + this.px(32), h: h + this.px(32) },
+      mode: 'battle',
+      action: { type: 'challenge' },
+      enabled: () => this.sim.challengeAvailable,
+      priority: 20,
+    });
+  }
+
+  /** 입력은 전부 InputRouter가 판정 → 여기서는 action만 처리 */
+  private createInput(): void {
+    this.router.addButton({ id: 'nestBack', rect: nestBackButtonRect(this.L), mode: 'nest', action: { type: 'closeNest', via: 'button' } });
+    const sample = (p: Phaser.Input.Pointer, up: boolean) => ({ id: p.id, x: p.x, y: p.y, t: up ? p.upTime : p.downTime });
+    this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
+      this.dispatch(this.router.down(sample(p, false)));
+      this.refreshPressed();
+    });
+    this.input.on('pointerup', (p: Phaser.Input.Pointer) => {
+      this.dispatch(this.router.up(sample(p, true)));
+      this.refreshPressed();
+    });
+  }
+
+  private dispatch(actions: InputAction[]): void {
+    for (const a of actions) {
+      switch (a.type) {
+        case 'strongJump':
+          this.sim.tapStrongJump();
+          break;
+        case 'challenge':
+          this.sim.challenge();
+          break;
+        case 'menu':
+          this.showToast(t('toast.menu_wip', { label: a.id }));
+          break;
+        case 'openNest':
+          this.router.setMode('nest');
+          this.scene.launch('nest', { config: this.cfg });
+          break;
+        case 'closeNest': {
+          this.router.setMode('battle');
+          const nest = this.scene.get('nest') as NestScene;
+          nest.close();
+          break;
+        }
+      }
+    }
+    this.handleEvents(this.sim.drainEvents());
+  }
+
+  private refreshPressed(): void {
+    const pressed = new Set(this.router.pressedButtonIds());
+    for (const [label, g] of this.menuGfx) g.setAlpha(pressed.has(`menu:${label}`) ? 0.6 : 1);
+  }
+
+  // ── 이벤트 → 연출 ────────────────────────────────────────
+
+  private handleEvents(events: BattleEvent[]): void {
+    for (const e of events) {
+      switch (e.type) {
+        case 'stageStart':
+          this.removeBuildingView(false);
+          if (e.reason === 'retreat') this.showToast(t('toast.retreat', { n: e.stage }), COLOR.hurt);
+          else if (e.reason === 'restart') this.showToast(t('toast.restart'));
+          else if (e.reason === 'challenge') this.showToast(t('toast.challenge', { n: e.stage }));
+          else if (e.reason === 'advance') this.showToast(t('toast.advance', { n: e.stage }));
+          break;
+        case 'stageClear':
+          if (e.wasChallenge) this.showToast(t('toast.breakthrough'), COLOR.autoOn);
+          break;
+        case 'spawn': {
+          this.removeBuildingView(false);
+          const b = this.sim.building!;
+          const bw = this.cfg.battle.building.width_ratio * this.L.width;
+          const bh = this.cfg.battle.building.height_ratio * this.L.battle.height;
+          this.buildingView = new BuildingView(this, this.L.width / 2, battleToScreenY(this.L, b.y), bw, bh, b.id, b.maxHp);
+          this.buildingView.root.setDepth(DEPTH.building);
+          this.buildingViewId = b.id;
+          break;
+        }
+        case 'jump':
+          this.ant.jump(e.kind === 'strong');
+          if (e.kind === 'strong') this.dustRing();
+          break;
+        case 'strike': {
+          this.ant.strike(e.arm);
+          const b = this.sim.building;
+          if (this.buildingView && b) {
+            this.buildingView.shake();
+            this.buildingView.setHp(e.hpLeft, b.maxHp);
+          }
+          const y = this.ant.root.y - this.cfg.battle.ant.height_ratio * this.L.battle.height;
+          this.floatText(this.L.width / 2 + this.px(Phaser.Math.Between(-120, 120)), y, `${e.damage}`, COLOR.damage, this.px(44));
+          break;
+        }
+        case 'destroy':
+          this.burstDebris(e.debrisReward);
+          this.removeBuildingView(false);
+          this.cameras.main.shake(140, 0.006);
+          this.floatText(this.L.width / 2, battleToScreenY(this.L, e.y) - this.px(140), t('fx.crumble'), '#ffe08a', this.px(110), 900);
+          break;
+        case 'land':
+          this.ant.hit();
+          this.cameras.main.shake(260, 0.014);
+          this.floatText(this.L.width / 2, this.L.groundY - this.cfg.battle.ant.height_ratio * this.L.battle.height * 2.2, `-${e.damage}`, COLOR.hurt, this.px(72), 900);
+          break;
+        case 'antDown':
+          this.ant.setDown(true);
+          this.wasDown = true;
+          break;
+        case 'autoAdvance':
+        case 'tapIgnored':
+          break;
+      }
+    }
+  }
+
+  private syncViews(): void {
+    const { L, sim } = this;
+    this.ant.setY(battleToScreenY(L, sim.ant.y));
+    if (this.wasDown && sim.ant.phase !== 'down') {
+      this.ant.setDown(false);
+      this.wasDown = false;
+    }
+    const b = sim.building;
+    if (this.buildingView) {
+      if (!b || b.id !== this.buildingViewId) this.removeBuildingView(true);
+      else this.buildingView.setY(battleToScreenY(L, b.y));
+    }
+  }
+
+  private removeBuildingView(fade: boolean): void {
+    const v = this.buildingView;
+    if (!v) return;
+    this.buildingView = null;
+    this.buildingViewId = -1;
+    if (!fade) {
+      v.destroy();
+      return;
+    }
+    this.tweens.add({ targets: v.root, alpha: 0, scaleY: 0.6, duration: 220, onComplete: () => v.destroy() });
+  }
+
+  /** 잔해 조각마다 운반 팝업 숫자를 나눠 준다 (합계 = 건물 debris_reward, 연출용) */
+  private burstDebris(reward: number): void {
+    const v = this.buildingView;
+    if (!v) return;
+    const n = this.cfg.strip.debris_pieces;
+    const each = n > 0 ? Math.floor(reward / n) : 0;
+    const bw = this.cfg.battle.building.width_ratio * this.L.width;
+    const bh = this.cfg.battle.building.height_ratio * this.L.battle.height;
+    for (let i = 0; i < n; i++) {
+      const size = this.px(Phaser.Math.Between(40, 80));
+      const x = v.root.x + Phaser.Math.FloatBetween(-0.45, 0.45) * bw;
+      const y = v.root.y - Phaser.Math.FloatBetween(0.1, 0.9) * bh;
+      const obj = this.add.rectangle(x, y, size, size * 0.8, v.color).setStrokeStyle(this.px(5), COLOR.buildingDark).setDepth(DEPTH.building);
+      this.debris.push({ obj, vx: this.px(Phaser.Math.FloatBetween(-520, 520)), vy: this.px(Phaser.Math.FloatBetween(-900, -300)), spin: Phaser.Math.FloatBetween(-8, 8), restTimer: null, amount: each + (i === 0 ? reward - each * n : 0) });
+    }
+  }
+
+  private updateDebris(dt: number): void {
+    const groundY = this.L.groundY;
+    const gravity = this.px(2600); // 연출 전용 (1080폭 기준 px/s²)
+    for (let i = this.debris.length - 1; i >= 0; i--) {
+      const d = this.debris[i]!;
+      if (d.restTimer === null) {
+        d.vy += gravity * dt;
+        d.obj.x = Phaser.Math.Clamp(d.obj.x + d.vx * dt, this.px(40), this.L.width - this.px(40));
+        d.obj.y += d.vy * dt;
+        d.obj.rotation += d.spin * dt;
+        const floor = groundY - d.obj.height / 2;
+        if (d.obj.y >= floor) {
+          d.obj.y = floor;
+          d.restTimer = this.cfg.strip.debris_pickup_s; // 지면에 닿음 → 잠깐 뒤 일개미가 집어감
+        }
+      } else {
+        d.restTimer -= dt;
+        if (d.restTimer <= 0) {
+          const obj = d.obj;
+          this.debris.splice(i, 1);
+          this.tweens.add({ targets: obj, y: groundY + this.px(30), scale: 0.3, alpha: 0, duration: 160, onComplete: () => obj.destroy() });
+          this.strip.spawnCarrier(obj.x, d.amount);
+        }
+      }
+    }
+  }
+
+  private dustRing(): void {
+    const ring = this.add.ellipse(this.L.width / 2, this.L.groundY, this.px(120), this.px(36)).setStrokeStyle(this.px(8), 0xffffff, 0.9).setDepth(DEPTH.ant - 1);
+    this.tweens.add({ targets: ring, scaleX: 3, scaleY: 2, alpha: 0, duration: 320, onComplete: () => ring.destroy() });
+  }
+
+  private floatText(x: number, y: number, text: string, color: string, size: number, weight = 900): void {
+    const tx = this.add
+      .text(x, y, text, { fontFamily: FONT, fontSize: `${size}px`, color, fontStyle: `${weight}`, stroke: COLOR.damageStroke, strokeThickness: Math.max(this.px(6), size / 7) })
+      .setOrigin(0.5)
+      .setDepth(DEPTH.fx);
+    this.tweens.add({ targets: tx, y: y - this.px(110), alpha: { from: 1, to: 0 }, scale: { from: 1.25, to: 1 }, duration: 750, ease: 'Quad.easeOut', onComplete: () => tx.destroy() });
+  }
+
+  private showToast(text: string, color = '#ffffff'): void {
+    this.toast?.destroy(true);
+    const { L } = this;
+    const tx = this.add.text(0, 0, text, { fontFamily: FONT, fontSize: `${Math.round(this.px(46))}px`, color, fontStyle: '900' }).setOrigin(0.5);
+    const pad = this.px(28);
+    const bg = this.add.rectangle(0, 0, tx.width + pad * 2, tx.height + pad, COLOR.toastBg, 0.55);
+    const c = this.add.container(L.width / 2, L.battle.top + L.battle.height * 0.2, [bg, tx]).setDepth(DEPTH.fx);
+    this.toast = c;
+    c.setAlpha(0);
+    this.tweens.add({ targets: c, alpha: 1, duration: 120 });
+    this.tweens.add({
+      targets: c,
+      alpha: 0,
+      delay: 1500,
+      duration: 300,
+      onComplete: () => {
+        if (this.toast === c) this.toast = null;
+        c.destroy(true);
+      },
+    });
+  }
+
+  private refreshHud(): void {
+    const { sim, L } = this;
+    const s = sim.stage;
+    this.hudStage.setText(t('hud.stage', { n: s.stage }));
+    // 진행도 점
+    const g = this.hudPips;
+    g.clear();
+    const r = L.hud.height * 0.07;
+    for (let i = 0; i < s.toClear; i++) {
+      g.fillStyle(i < s.destroyed ? COLOR.pipOn : COLOR.pipOff, 1);
+      g.fillCircle(this.px(36) + r + i * r * 3, L.hud.height * 0.78, r);
+    }
+    const a = sim.ant;
+    const ratio = a.hp / a.maxHp;
+    this.hudHpFill.scaleX = Math.max(0, ratio);
+    this.hudHpFill.fillColor = ratio > 0.3 ? COLOR.hpFill : COLOR.hpLow;
+    this.hudHpText.setText(`${Math.ceil(a.hp)} / ${a.maxHp}`);
+    this.hudAuto.setText(t(s.autoAdvance ? 'hud.auto_on' : 'hud.auto_off'));
+    this.hudAuto.setColor(s.autoAdvance ? COLOR.autoOn : COLOR.autoOff);
+
+    const show = sim.challengeAvailable;
+    if (this.challengeBtn.visible !== show) this.challengeBtn.setVisible(show);
+    if (show) this.challengeSub.setText(t('challenge.sub', { n: s.stage + 1 }));
+  }
+
+  /** scripts/ci_smoke.mjs 확인용 — core 값을 DOM에 남긴다 (view가 세지 않음: 파괴 수는 core 누적값) */
+  private markForSmoke(): void {
+    this.frames += 1;
+    if (this.frames % 10 !== 0) return;
+    const host = this.game.canvas.parentElement;
+    host?.setAttribute('data-frames', String(this.frames));
+    host?.setAttribute('data-destroyed', String(this.sim.totalDestroyed));
+  }
+
+  private debugLines(): string {
+    const { sim } = this;
+    const a = sim.ant;
+    const b = sim.building;
+    return [
+      `t=${sim.time.toFixed(1)} stage=${sim.stage.stage} ${sim.stage.destroyed}/${sim.stage.toClear} auto=${sim.stage.autoAdvance} chal=${sim.stage.challenging}`,
+      `ant ${a.phase} y=${a.y.toFixed(3)} hp=${a.hp} contact=${a.contact} nextArm=${a.nextArm + 1}`,
+      b ? `bld#${b.id} ${b.state} y=${b.y.toFixed(3)} hp=${b.hp}/${b.maxHp}` : `bld - spawnIn=${sim.spawnTimer.toFixed(2)}`,
+    ].join('\n');
+  }
+}

@@ -12,7 +12,8 @@
     "test": "vitest run",
     "data": "node tools/build_data.mjs",
     "data:check": "node tools/validate_data.mjs",
-    "smoke": "node scripts/ci_smoke.mjs"
+    "smoke": "node scripts/ci_smoke.mjs",
+    "measure": "node scripts/measure.mjs"
   },
   "dependencies": {
     "phaser": "^3.90.0"
