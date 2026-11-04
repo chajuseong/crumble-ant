@@ -1,13 +1,13 @@
 # 와르르 개미 — 웹 프로토 저장소
 
 방치형 게임 「와르르 개미」의 **재미 검증용 웹 프로토**. 팔 4개 · 다리 2개 개미가 점프해서 위에서 떨어지는 건물을 부순다.
-TypeScript + Vite + Phaser 3 + Vitest, 세로 720×1280 [가정 — 기획서 v0.3은 9:19.5, `docs/decisions.md` 확인 대기]. 출시 코드가 아니며 결과가 좋으면 Unity로 본 개발한다.
+TypeScript + Vite + Phaser 3 + Vitest, 세로 720×1280 [M0 가정 — 기획서 v0.4는 9:19.5, G-03으로 720×1560 확정 · M1에서 바꿈]. 출시 코드가 아니며 결과가 좋으면 Unity로 본 개발한다.
 
 ## 먼저 읽을 것
 
 | 문서 | 용도 |
 |---|---|
-| 기획서 원본 (Artifact) | https://claude.ai/artifact/7mVinfNzvJsdpBkU972TxZ — 지금 v0.3. Artifact read로 읽는다 (저장소에 사본 없음) |
+| 기획서 원본 (Artifact) | https://claude.ai/artifact/7mVinfNzvJsdpBkU972TxZ — 지금 v0.4. Artifact read로 읽는다 (저장소에 사본 없음) |
 | `docs/dev.md` | **개발 기준 문서 (단일 기준)** — 규칙 · 데이터 구조 · 마일스톤 · 완료 조건 |
 | `docs/decisions.md` | 맨 위 **★ 지금 상태** (지금 할 일 · 결정 대기 — DD가 실행마다 갱신) · 결정 기록 |
 | `docs/dd.md` | **DD(보조디렉터 AI)** 위임 규칙 · 📮 개발 지시함 (이슈 #3) 주고받기 |
