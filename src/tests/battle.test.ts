@@ -261,3 +261,55 @@ describe('결정론', () => {
     expect(a.building?.hp).toBe(b.building?.hp);
   });
 });
+
+describe('M2 연타 카운트 (core — 판정에는 쓰지 않음)', () => {
+  type Strike = Extract<BattleEvent, { type: 'strike' }>;
+  const strikes = (ev: BattleEvent[]) => ev.filter((e): e is Strike => e.type === 'strike');
+
+  it('같은 건물에서 이어 치면 1, 2, 3 … 으로 늘어난다 (점프를 넘어도 window 안이면 이어짐)', () => {
+    const sim = new BattleSim(makeConfig((c) => (c.buildings.rows[0]!.hp = 1_000_000)));
+    const ev = runUntil(sim, (e) => strikes(e).length >= 12, 60);
+    const combos = strikes(ev).map((s) => s.combo);
+    expect(combos.slice(0, 4)).toEqual([1, 2, 3, 4]);
+    expect(Math.max(...combos)).toBeGreaterThan(4); // 첫 매달림이 4타보다 적어도, 다음 점프에서 이어짐
+  });
+
+  it('window보다 오래 쉬면 1부터 다시', () => {
+    const sim = new BattleSim(makeConfig((c) => {
+      c.buildings.rows[0]!.hp = 1_000_000;
+      c.battle.combo_window_s = 0.05; // 한 매달림 안(0.12초 간격)에서도 끊기게
+    }));
+    const ev = runUntil(sim, (e) => strikes(e).length >= 6, 60);
+    expect(strikes(ev).every((s) => s.combo === 1)).toBe(true);
+  });
+
+  it('파괴 · 착지 · 스테이지 시작 때 0으로 돌아간다', () => {
+    const sim = new BattleSim(makeConfig((c) => {
+      c.buildings.rows = c.buildings.rows.map((r) => ({ ...r, hp: 10 }));
+    }));
+    runUntil(sim, has('destroy'), 30);
+    expect(sim.combo).toBe(0);
+    const sim2 = new BattleSim(makeConfig((c) => {
+      c.buildings.rows[0]!.hp = 1_000_000;
+      c.battle.ant.max_hp = 1e12;
+    }));
+    runUntil(sim2, has('land'), 60);
+    expect(sim2.combo).toBe(0);
+    const sim3 = new BattleSim(makeConfig((c) => (c.buildings.rows[0]!.hp = 1_000_000)), 2);
+    runUntil(sim3, has('strike'), 30);
+    sim3.stage.autoAdvance = false;
+    sim3.challenge();
+    expect(sim3.combo).toBe(0);
+  });
+
+  it('연타 카운터는 결과를 바꾸지 않는다 (window를 바꿔도 같은 결과)', () => {
+    const a = new BattleSim(makeConfig((c) => (c.battle.combo_window_s = 0.01)), 3);
+    const b = new BattleSim(makeConfig((c) => (c.battle.combo_window_s = 100)), 3);
+    run(a, 40);
+    run(b, 40);
+    expect(a.stage).toEqual(b.stage);
+    expect(a.ant.hp).toBe(b.ant.hp);
+    expect(a.totalDestroyed).toBe(b.totalDestroyed);
+    expect(a.building?.hp).toBe(b.building?.hp);
+  });
+});

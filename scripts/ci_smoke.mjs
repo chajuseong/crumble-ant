@@ -74,6 +74,8 @@ try {
     for (let i = 0; i < d.length; i += 4 * 7) colors.add(((d[i] >> 3) << 10) | ((d[i + 1] >> 3) << 5) | (d[i + 2] >> 3));
     return { colors: colors.size };
   }, png.toString("base64"));
+  // M2 G: 첫 탭 전에는 소리 객체(AudioContext)를 만들지 않음 (브라우저 정책 · 콘솔 경고 방지)
+  result.audio_before_tap = await page.evaluate(() => window.__game?.scene.getScene("battle")?.sfx?.created ?? null);
   result.renderer = await page.evaluate(() => {
     const c = document.querySelector("#game canvas");
     if (!c) return null;
@@ -89,6 +91,7 @@ const realErrors = errors.filter((e) => !IGNORE_ERRORS.some((re) => re.test(e)))
 result.checks = {
   console_errors: { ok: realErrors.length === 0, errors: realErrors },
   battle_drawn: { ok: drawn.colors > MIN_COLORS, colors: drawn.colors, min: MIN_COLORS },
+  no_audio_before_tap: { ok: result.audio_before_tap === false, created: result.audio_before_tap },
   battle_runs: { ok: Number.isFinite(after) && after > before, destroyed_before: before, destroyed_after: after, rise_ms: result.ms.rise, limit_ms: RUN_MS },
 };
 result.ok = Object.values(result.checks).every((c) => c.ok);

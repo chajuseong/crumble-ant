@@ -12,6 +12,8 @@ export class BuildingView {
   private readonly h: number;
   private readonly scene: Phaser.Scene;
   private readonly crackSeed: number[];
+  private flashRect: Phaser.GameObjects.Rectangle | null = null;
+  private crackSteps = 6;
 
   constructor(scene: Phaser.Scene, x: number, y: number, w: number, h: number, id: number, maxHp: number) {
     this.scene = scene;
@@ -73,10 +75,30 @@ export class BuildingView {
   }
 
   /** 맞았을 때 흔들림 */
-  shake(): void {
+  /** 맞았을 때 흔들림 — 거리 · 시간 = fx_config building_shake */
+  shake(px: number, ms: number): void {
     this.scene.tweens.killTweensOf(this.root);
     const x = this.root.x;
-    this.scene.tweens.add({ targets: this.root, x: { from: x - 10, to: x }, duration: 90, ease: 'Quad.easeOut' });
+    this.scene.tweens.add({ targets: this.root, x: { from: x - px, to: x }, duration: ms, ease: 'Quad.easeOut' });
+  }
+
+  /** M2 B — 흰색 번쩍 (처음 쓸 때 덮개를 만든다) */
+  flash(alpha: number, ms: number): boolean {
+    let created = false;
+    if (!this.flashRect) {
+      this.flashRect = this.scene.add.rectangle(0, -this.h / 2, this.w, this.h, 0xffffff, 1).setAlpha(0);
+      this.root.add(this.flashRect);
+      created = true;
+    }
+    const f = this.flashRect;
+    this.scene.tweens.killTweensOf(f);
+    f.setAlpha(alpha);
+    this.scene.tweens.add({ targets: f, alpha: 0, duration: ms, ease: 'Quad.easeOut' });
+    return created;
+  }
+
+  setCrackSteps(n: number): void {
+    this.crackSteps = Math.max(1, Math.floor(n));
   }
 
   destroy(): void {
@@ -87,7 +109,7 @@ export class BuildingView {
   private drawCracks(damage: number): void {
     const g = this.cracks;
     g.clear();
-    const n = Math.floor(damage * 6);
+    const n = Math.floor(damage * this.crackSteps);
     if (n <= 0) return;
     g.lineStyle(7, COLOR.crack, 0.85);
     for (let i = 0; i < n; i++) {

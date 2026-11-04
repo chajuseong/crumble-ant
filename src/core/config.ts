@@ -44,6 +44,8 @@ export interface BattleConfig {
   };
   arms: ArmConfig[];
   strike_interval_s: number;
+  /** 연타가 이어지는 시간 (같은 건물 · 마지막 타격 뒤) — M2 D, 결과에는 영향 없음 */
+  combo_window_s: number;
   arm_order_resets_each_jump: boolean;
   landing_damage_coeff: number;
   building: {
@@ -179,6 +181,7 @@ export function validateConfig(raw: unknown): string[] {
     num('battle.strong_jump.speed_mult', strong.speed_mult, { gt: 0 }),
     num('battle.strong_jump.cooldown_s', strong.cooldown_s, { min: 0 }),
     num('battle.strike_interval_s', battle.strike_interval_s, { gt: 0 }),
+    num('battle.combo_window_s', battle.combo_window_s, { gt: 0 }),
     bool('battle.arm_order_resets_each_jump', battle.arm_order_resets_each_jump),
     num('battle.landing_damage_coeff', battle.landing_damage_coeff, { min: 0 }),
     num('battle.building.height_ratio', building.height_ratio, { gt: 0, max: 1 }),

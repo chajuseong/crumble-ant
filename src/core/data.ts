@@ -29,6 +29,7 @@ export function fromData(raw: RawGameData): GameConfig {
       strong_jump: o(battle.strong_jump) as unknown as GameConfig['battle']['strong_jump'],
       arms,
       strike_interval_s: battle.strike_interval_s as number,
+      combo_window_s: battle.combo_window_s as number,
       arm_order_resets_each_jump: battle.arm_order_resets_each_jump as boolean,
       landing_damage_coeff: battle.landing_damage_coeff as number,
       building: o(battle.building) as unknown as GameConfig['battle']['building'],
