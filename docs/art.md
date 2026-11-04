@@ -1,6 +1,7 @@
 # 아트 규격 · 파츠 조립 (M3)
 
-> 문서 버전: v0.1 (2026-11-04) — 📮 #3 [DD→개발] M3 아트 적용 (I-11) · 계획 승인 H-12. 아트(ChatGPT)에 전달된 규격을 정본으로 옮김
+> 문서 버전: v0.2 (2026-11-04) — §6 좌표를 `art/game` 납품본(아트 #15 `faa5c2c`)으로 다시 잼 · 무기 이름 = README
+> v0.1 (2026-11-04) — 📮 #3 [DD→개발] M3 아트 적용 (I-11) · 계획 승인 H-12. 아트(ChatGPT)에 전달된 규격을 정본으로 옮김
 > 아트 PR은 `art/`만 고친다 (대표 머지). 게임은 **`art/game/`만** 읽는다 — `art/production/`은 원본 · 초안 보관
 
 ## 1. 무엇을 만드나
@@ -25,7 +26,7 @@
 | `art/game/weapons/` | `weapon_<weapon_id>.png` × 8 — weapon_id = 영문 소문자 · 숫자 · 밑줄 |
 | `art/game/weapons/README.md` | 무기 목록 표 `weapon_id | 한글 이름 | 파일` (H-12 Q7) |
 
-- 지금 무기 8종 (H-12 — 아트 PR #15 파일 이름): `club` 몽둥이 · `drill` 드릴 · `flail` 쇠사슬 철퇴 · `hammer` 망치 · `mace` 가시 철퇴 · `mallet` 나무 메 · `pickaxe` 곡괭이 · `wrench` 렌치 (한글 이름 임시)
+- 지금 무기 8종 (H-12 · 이름 = `art/game/weapons/README.md`): `club` 몽둥이 · `drill` 드릴 · `flail` 도리깨 · `hammer` 망치 · `mace` 철퇴 · `mallet` 나무망치 · `pickaxe` 곡괭이 · `wrench` 렌치
 - 파일 이름 규칙은 `npm run data:check`가 검사한다. 시트에 있는 파일이 `art/game/`에 없으면: 폴더가 없을 때 = 경고, 폴더가 있을 때 = 오류 (H-12 Q6)
 
 ## 4. 좌표 — 아트가 아니라 데이터로 맞춘다 (`design/tables/art.xlsx`)
@@ -53,9 +54,13 @@
 - 무기 그림 없음 → 그 슬롯만 맨주먹
 - `art_config.enabled` FALSE이거나 [ART]에서 끔 → 도형 (= M2 화면)
 
-## 6. 지금 값 (M3 A — 모두 [가정])
-- pivot · socket · grip = `tools/suggest_pivots.mjs`를 `art/production/parts-draft-v1/`(아트 PR #15 초안)에 돌린 값. 초안은 1024×1536 · 여백이 커서(규격 §2와 다름) `art/game` 납품 뒤 다시 잰다
-- draw_h · anchor · angle = M1 도형 개미 비율 (팔 0.36 · 다리 0.22 · 몸통 0.34 · 머리 지름 0.6 · 팔 자리 0.475 / 0.339 · 좌우 ±0.181)
-- 무기 scale 0.5 = 팔(0.36)보다 조금 길게 · `weapon_scale` 1.0에서 폰으로 정함
+## 6. 지금 값 (M3 좌표 맞춤 — 아트 #15 납품본)
+- pivot · socket · grip = `npm run art:pivots`를 `art/game/` 납품본에 돌린 값 (여백 2 ~ 4px — 규격 §2 안). [가정] 아님
+  - 머리 3종(normal · hit · down)은 **같은 캔버스(153×162)**라서 head_normal 값을 셋 다 씀 — 그림마다 따로 재면 투명 영역이 달라 표정을 바꿀 때 머리가 4 ~ 6px 움직임
+  - 무기 grip = 아래 끝에서 손잡이 길이 10% 위 (§4 맞추는 순서 2) — 8종 모두 높이 194px라 grip_y 0.887로 같음
+- 무기 한글 이름 = `art/game/weapons/README.md` (몽둥이 · 드릴 · 도리깨 · 망치 · 철퇴 · 나무망치 · 곡괭이 · 렌치)
+- [가정] 그대로 (폰 확인 뒤 맞춤): draw_h · anchor · angle = M1 도형 개미 비율 (팔 0.36 · 다리 0.22 · 몸통 0.34 · 머리 0.6 · 팔 자리 0.475 / 0.339 · 좌우 ±0.181)
+- 무기 scale 0.5 = 팔(0.36)보다 조금 길게. 납품본 무기 높이 194px ÷ 완성 개미 384px ≈ 0.505라 아트 의도와도 맞음
+- `draw_scale` · `weapon_scale` 기본값 1.0 = 대표 폰 확인 뒤 정함 (지금 1.0이면 작음)
 - `draw_scale_max` 2.5 = 아트 인게임 목업의 개미(화면 높이 약 15%) ÷ 지금 개미(0.07 × 0.84 ≈ 5.9%)
-- 기본 장착: 1 망치 · 2 드릴 · 3 가시 철퇴 · 4 렌치 — 실루엣이 서로 다른 4개 (목업은 망치)
+- 기본 장착: 1 망치 · 2 드릴 · 3 철퇴 · 4 렌치 — 실루엣이 서로 다른 4개 (목업은 망치)
