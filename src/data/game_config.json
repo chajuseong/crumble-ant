@@ -33,6 +33,7 @@
       10
     ],
     "strike_interval_s": 0.12,
+    "combo_window_s": 1.2,
     "arm_order_resets_each_jump": false,
     "landing_damage_coeff": 0.5,
     "building": {

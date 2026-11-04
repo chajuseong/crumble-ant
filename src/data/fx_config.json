@@ -1,0 +1,67 @@
+{
+  "hitstop": {
+    "hit_ms": 40,
+    "final_ms": 90,
+    "max_ms": 120
+  },
+  "flash": {
+    "alpha": 0.7,
+    "ms": 80
+  },
+  "building_shake": {
+    "px": 10,
+    "ms": 90
+  },
+  "crack": {
+    "steps": 6
+  },
+  "camera": {
+    "hit_ms": 60,
+    "hit_intensity": 0.002,
+    "final_ms": 180,
+    "final_intensity": 0.01,
+    "destroy_ms": 140,
+    "destroy_intensity": 0.006
+  },
+  "combo": {
+    "min_show": 2,
+    "text_px": 64,
+    "pop_scale": 1.4,
+    "ms": 600
+  },
+  "damage": {
+    "pop_scale": 1.25,
+    "text_px": 44,
+    "ms": 750
+  },
+  "arm": {
+    "stretch": 1.35
+  },
+  "punch": {
+    "stretch": 1.8,
+    "fist_scale": 1.6,
+    "ms": 110
+  },
+  "hit_debris": {
+    "count": 5,
+    "speed_px": 420,
+    "life_ms": 300,
+    "size_px": 14
+  },
+  "crumble_text": {
+    "px": 110,
+    "plate_alpha": 0.55,
+    "stroke_px": 14,
+    "ms": 750
+  },
+  "sfx": {
+    "volume": 0.5,
+    "hit_hz": 220,
+    "hit_ms": 70,
+    "final_hz": 110,
+    "final_ms": 180,
+    "crumble_ms": 600,
+    "combo_pitch_step": 0.04,
+    "combo_pitch_max": 8
+  }
+}
