@@ -76,7 +76,8 @@ export type BattleEvent =
   | { type: 'autoAdvance'; on: boolean }
   | { type: 'spawn'; buildingId: number; hp: number }
   | { type: 'jump'; kind: JumpKind; apex: number }
-  | { type: 'strike'; arm: number; damage: number; buildingId: number; hpLeft: number }
+  /** combo = 같은 건물에서 이어진 연타 수 (1부터) — 표시용, 판정에는 쓰지 않음 (docs/dev.md §4) */
+  | { type: 'strike'; arm: number; damage: number; buildingId: number; hpLeft: number; combo: number }
   | { type: 'destroy'; buildingId: number; y: number; debrisReward: number }
   | { type: 'land'; buildingId: number; damage: number; antHp: number }
   | { type: 'antDown'; stage: number }
@@ -96,6 +97,10 @@ export class BattleSim {
   time = 0;
   /** 누적 파괴 수 (스테이지가 바뀌어도 이어짐 — 확인 · 측정용) */
   totalDestroyed = 0;
+  /** 연타 카운터 (M2 D) — 판정 · 결과에 쓰지 않음 */
+  combo = 0;
+  private comboBuildingId = -1;
+  private lastStrikeTime = -Infinity;
   private accumulator = 0;
   private nextBuildingId = 1;
   private events: BattleEvent[] = [];
@@ -277,10 +282,22 @@ export class BattleSim {
     const a = this.ant;
     const arm = this.cfg.battle.arms[a.nextArm]!;
     b.hp = Math.max(0, b.hp - arm.damage);
-    this.events.push({ type: 'strike', arm: a.nextArm + 1, damage: arm.damage, buildingId: b.id, hpLeft: b.hp });
+    // 연타: 같은 건물에서 마지막 타격 뒤 combo_window_s 안이면 이어짐 (비교 전 반올림 — 결정성)
+    const gap = Math.round((this.time - this.lastStrikeTime) * 1e6) / 1e6;
+    this.combo = this.comboBuildingId === b.id && gap <= this.cfg.battle.combo_window_s ? this.combo + 1 : 1;
+    this.comboBuildingId = b.id;
+    this.lastStrikeTime = this.time;
+    this.events.push({ type: 'strike', arm: a.nextArm + 1, damage: arm.damage, buildingId: b.id, hpLeft: b.hp, combo: this.combo });
     a.nextArm = (a.nextArm + 1) % this.cfg.battle.arms.length;
     if (b.hp <= 0) this.destroyBuilding(b);
   }
+
+  private resetCombo(): void {
+    this.combo = 0;
+    this.comboBuildingId = -1;
+    this.lastStrikeTime = -Infinity;
+  }
+
 
   private spawnBuilding(): void {
     const row = buildingForStage(this.cfg, this.stage.stage);
@@ -303,6 +320,7 @@ export class BattleSim {
   }
 
   private destroyBuilding(b: BuildingState): void {
+    this.resetCombo();
     this.events.push({ type: 'destroy', buildingId: b.id, y: b.y, debrisReward: b.debrisReward });
     this.building = null;
     this.ant.contact = false;
@@ -317,6 +335,7 @@ export class BattleSim {
   }
 
   private landBuilding(b: BuildingState): void {
+    this.resetCombo();
     const a = this.ant;
     const bc = this.cfg.battle;
     b.state = 'landed';
@@ -365,6 +384,7 @@ export class BattleSim {
   }
 
   private startStage(stage: number, reason: StageStartReason): void {
+    this.resetCombo();
     const row = stageRow(this.cfg.stages, stage);
     const s = this.stage;
     s.stage = stage;

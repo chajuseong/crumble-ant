@@ -8,6 +8,10 @@ import { BuildingView } from './buildingView';
 import { StripView } from './stripView';
 import { COLOR, FONT } from './theme';
 import { t } from './text';
+import { FX, type FxToggles, loadToggles } from './fx';
+import { createFxPanel } from './fxPanel';
+import { HitstopClock } from './hitstop';
+import { Sfx } from './sfx';
 import type { NestScene } from './NestScene';
 
 export interface BattleSceneData {
@@ -78,6 +82,14 @@ export class BattleScene extends Phaser.Scene {
   private readonly menuGfx = new Map<string, Phaser.GameObjects.Graphics>();
   private wasDown = false;
   private frames = 0;
+  // ── M2 타격감 (I-10) — 끄면 M1 모습 그대로 ──
+  private fxOn!: FxToggles;
+  private readonly hitstop = new HitstopClock();
+  private readonly sfx = new Sfx();
+  private comboText: Phaser.GameObjects.Text | null = null;
+  private comboHideAt = 0;
+  /** M2 연출 객체 · 호출 수 (전부 끔이면 0이어야 함 — 완료 조건 ③) */
+  fxCount = 0;
   private scaleK = 1;
   /** PR #2 1080폭 기준 px → 지금 프레임 px */
   private px(n: number): number {
@@ -95,6 +107,7 @@ export class BattleScene extends Phaser.Scene {
     this.L = computeLayout(this.cfg.layout, this.scale.width, this.scale.height);
     this.router = new InputRouter(this.L, this.cfg.input);
     this.scaleK = this.L.width / DESIGN_WIDTH;
+    this.fxOn = loadToggles();
     this.menuGfx.clear();
   }
 
@@ -117,6 +130,7 @@ export class BattleScene extends Phaser.Scene {
     this.createHud();
     this.createChallengeButton();
     this.createInput();
+    createFxPanel(this.fxOn, (t) => (this.fxOn = t), () => this.sfx.unlock());
 
     if (this.debug) {
       this.debugText = this.add
@@ -130,8 +144,10 @@ export class BattleScene extends Phaser.Scene {
 
   update(_time: number, deltaMs: number): void {
     const dt = deltaMs / 1000;
-    this.sim.update(dt);
+    // M2 A 히트스톱: 멈춘 동안 core에 시간을 넘기지 않음 (core 시계 통째로 정지 — 결과 그대로)
+    this.sim.update(this.hitstop.consume(deltaMs) / 1000);
     this.handleEvents(this.sim.drainEvents());
+    if (this.comboText?.visible && this.time.now >= this.comboHideAt) this.comboText.setVisible(false);
     this.syncViews();
     this.updateDebris(dt);
     this.strip.update(dt);
@@ -271,6 +287,7 @@ export class BattleScene extends Phaser.Scene {
     this.router.addButton({ id: 'nestBack', rect: nestBackButtonRect(this.L), mode: 'nest', action: { type: 'closeNest', via: 'button' } });
     const sample = (p: Phaser.Input.Pointer, up: boolean) => ({ id: p.id, x: p.x, y: p.y, t: up ? p.upTime : p.downTime });
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
+      this.sfx.unlock(); // 첫 탭에서 소리 켬 (H-10 ⑥-5)
       this.dispatch(this.router.down(sample(p, false)));
       this.refreshPressed();
     });
@@ -342,23 +359,38 @@ export class BattleScene extends Phaser.Scene {
           if (e.kind === 'strong') this.dustRing();
           break;
         case 'strike': {
-          this.ant.strike(e.arm);
+          const on = this.fxOn;
+          const final = e.hpLeft <= 0; // 마지막 일격
+          // E 펀치 과장 (끔 = M1 팔 찌르기)
+          this.fxCount += this.ant.strike(e.arm, on.punch ? FX.punch.stretch : FX.arm.stretch, FX.punch.ms, on.punch ? FX.punch.fist_scale : null);
+          if (on.punch) this.fxCount += 1;
           const b = this.sim.building;
           if (this.buildingView && b) {
-            this.buildingView.shake();
+            this.buildingView.setCrackSteps(FX.crack.steps);
+            this.buildingView.shake(this.px(FX.building_shake.px), FX.building_shake.ms);
             this.buildingView.setHp(e.hpLeft, b.maxHp);
+            if (on.flash) this.fxCount += 1 + Number(this.buildingView.flash(FX.flash.alpha, FX.flash.ms)); // B
           }
           const y = this.ant.root.y - this.cfg.battle.ant.height_ratio * this.L.battle.height;
-          this.floatText(this.L.width / 2 + this.px(Phaser.Math.Between(-120, 120)), y, `${e.damage}`, COLOR.damage, this.px(44));
+          this.floatText(this.L.width / 2 + this.px(Phaser.Math.Between(-120, 120)), y, `${e.damage}`, COLOR.damage, this.px(FX.damage.text_px), 900, FX.damage.ms, FX.damage.pop_scale);
+          if (on.hitstop) { this.hitstop.add(final ? FX.hitstop.final_ms : FX.hitstop.hit_ms, FX.hitstop.max_ms); this.fxCount += 1; } // A
+          if (on.shake && !final) { this.cameras.main.shake(FX.camera.hit_ms, FX.camera.hit_intensity); this.fxCount += 1; } // C (마지막 일격은 destroy에서 크게)
+          if (on.combo) this.showCombo(e.combo); // D
+          if (on.hitDebris) this.burstHitDebris(y); // F
+          if (on.sfx && this.sfx.created) { if (final) this.sfx.final(); else this.sfx.hit(e.combo); this.fxCount += 1; } // G
           break;
         }
         case 'destroy':
           this.burstDebris(e.debrisReward);
           this.removeBuildingView(false);
-          this.cameras.main.shake(140, 0.006);
-          this.floatText(this.L.width / 2, battleToScreenY(this.L, e.y) - this.px(140), t('fx.crumble'), '#ffe08a', this.px(110), 900);
+          if (this.fxOn.shake) { this.cameras.main.shake(FX.camera.final_ms, FX.camera.final_intensity); this.fxCount += 1; } // C 크게
+          else this.cameras.main.shake(FX.camera.destroy_ms, FX.camera.destroy_intensity); // M1
+          this.crumbleText(battleToScreenY(this.L, e.y) - this.px(140));
+          if (this.fxOn.sfx && this.sfx.created) { this.sfx.crumble(); this.fxCount += 1; } // G
+          this.comboText?.setVisible(false);
           break;
         case 'land':
+          this.comboText?.setVisible(false);
           this.ant.hit();
           this.cameras.main.shake(260, 0.014);
           this.floatText(this.L.width / 2, this.L.groundY - this.cfg.battle.ant.height_ratio * this.L.battle.height * 2.2, `-${e.damage}`, COLOR.hurt, this.px(72), 900);
@@ -449,12 +481,74 @@ export class BattleScene extends Phaser.Scene {
     this.tweens.add({ targets: ring, scaleX: 3, scaleY: 2, alpha: 0, duration: 320, onComplete: () => ring.destroy() });
   }
 
-  private floatText(x: number, y: number, text: string, color: string, size: number, weight = 900): void {
+  private floatText(x: number, y: number, text: string, color: string, size: number, weight = 900, ms = 750, popScale = 1.25): Phaser.GameObjects.Text {
     const tx = this.add
       .text(x, y, text, { fontFamily: FONT, fontSize: `${size}px`, color, fontStyle: `${weight}`, stroke: COLOR.damageStroke, strokeThickness: Math.max(this.px(6), size / 7) })
       .setOrigin(0.5)
       .setDepth(DEPTH.fx);
-    this.tweens.add({ targets: tx, y: y - this.px(110), alpha: { from: 1, to: 0 }, scale: { from: 1.25, to: 1 }, duration: 750, ease: 'Quad.easeOut', onComplete: () => tx.destroy() });
+    this.tweens.add({ targets: tx, y: y - this.px(110), alpha: { from: 1, to: 0 }, scale: { from: popScale, to: 1 }, duration: ms, ease: 'Quad.easeOut', onComplete: () => tx.destroy() });
+    return tx;
+  }
+
+  /** "와르르!" — 대비 켬이면 어두운 받침 판 + 굵은 테두리 (잼병 L-05) */
+  private crumbleText(y: number): void {
+    const c = FX.crumble_text;
+    if (!this.fxOn.contrast) {
+      this.floatText(this.L.width / 2, y, t('fx.crumble'), '#ffe08a', this.px(c.px), 900, c.ms); // M1
+      return;
+    }
+    const tx = this.add
+      .text(0, 0, t('fx.crumble'), { fontFamily: FONT, fontSize: `${Math.round(this.px(c.px))}px`, color: '#ffe08a', fontStyle: '900', stroke: '#2a1a0c', strokeThickness: this.px(c.stroke_px) })
+      .setOrigin(0.5)
+      .setShadow(0, this.px(6), '#000000', this.px(10), true, true);
+    const pad = this.px(24);
+    const plate = this.add.graphics();
+    plate.fillStyle(0x000000, c.plate_alpha);
+    plate.fillRoundedRect(-tx.width / 2 - pad, -tx.height / 2 - pad / 2, tx.width + pad * 2, tx.height + pad, this.px(28));
+    const box = this.add.container(this.L.width / 2, y, [plate, tx]).setDepth(DEPTH.fx);
+    this.fxCount += 1;
+    this.tweens.add({ targets: box, y: y - this.px(110), alpha: { from: 1, to: 0 }, scale: { from: 1.25, to: 1 }, duration: c.ms, ease: 'Quad.easeOut', onComplete: () => box.destroy(true) });
+  }
+
+  /** M2 D — "N HIT!" (2타부터 · 칠 때마다 튕김 · 마지막 타격 뒤 combo.ms 지나면 숨김) */
+  private showCombo(combo: number): void {
+    const c = FX.combo;
+    if (combo < c.min_show) return;
+    if (!this.comboText) {
+      this.comboText = this.add
+        .text(0, 0, '', { fontFamily: FONT, fontSize: `${Math.round(this.px(c.text_px))}px`, color: '#ffffff', fontStyle: '900', stroke: '#b3382a', strokeThickness: this.px(10) })
+        .setOrigin(0, 0.5)
+        .setDepth(DEPTH.fx);
+      this.fxCount += 1;
+    }
+    const b = this.buildingView;
+    const bw = this.cfg.battle.building.width_ratio * this.L.width;
+    const x = this.L.width / 2 + bw / 2 - this.px(40);
+    const y = (b ? b.root.y : this.L.groundY) - this.px(40);
+    const tx = this.comboText;
+    tx.setText(t('fx.combo', { n: combo })).setPosition(Math.min(x, this.L.width - tx.width - this.px(16)), y).setVisible(true).setAlpha(1);
+    this.tweens.killTweensOf(tx);
+    tx.setScale(c.pop_scale);
+    this.tweens.add({ targets: tx, scale: 1, duration: 140, ease: 'Back.easeOut' });
+    this.comboHideAt = this.time.now + c.ms;
+    this.fxCount += 1;
+  }
+
+  /** M2 F — 타격점(건물 밑면)에서 작은 조각 · 먼지 */
+  private burstHitDebris(y: number): void {
+    const d = FX.hit_debris;
+    for (let i = 0; i < d.count; i++) {
+      const size = this.px(d.size_px) * Phaser.Math.FloatBetween(0.6, 1.2);
+      const dust = i % 2 === 1;
+      const o = dust
+        ? this.add.circle(this.L.width / 2, y, size * 0.7, 0xffffff, 0.8)
+        : this.add.rectangle(this.L.width / 2, y, size, size, this.buildingView?.color ?? 0xcccccc).setStrokeStyle(2, COLOR.buildingDark);
+      o.setDepth(DEPTH.fx - 1);
+      const ang = Phaser.Math.FloatBetween(Math.PI * 0.15, Math.PI * 0.85); // 아래쪽 반원으로 튐
+      const sp = this.px(d.speed_px) * Phaser.Math.FloatBetween(0.6, 1.1) * (d.life_ms / 1000);
+      this.tweens.add({ targets: o, x: o.x + Math.cos(ang) * sp * (i % 2 ? 1 : -1), y: o.y + Math.sin(ang) * sp, alpha: 0, angle: Phaser.Math.Between(-180, 180), duration: d.life_ms, ease: 'Quad.easeOut', onComplete: () => o.destroy() });
+      this.fxCount += 1;
+    }
   }
 
   private showToast(text: string, color = '#ffffff'): void {

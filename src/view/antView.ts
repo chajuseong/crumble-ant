@@ -15,6 +15,9 @@ export class AntView {
   private readonly h: number;
   private squashTween: Phaser.Tweens.Tween | null = null;
   private dizzy: Phaser.GameObjects.Text | null = null;
+  private readonly fists: (Phaser.GameObjects.Arc | null)[] = [null, null, null, null];
+  private readonly armLen: number;
+  private readonly armW: number;
 
   constructor(scene: Phaser.Scene, x: number, y: number, width: number, height: number) {
     this.scene = scene;
@@ -38,6 +41,8 @@ export class AntView {
     // 팔 4개: 슬롯 1·2 = 위쪽 (왼 · 오), 3·4 = 아래쪽 (왼 · 오). 쉬는 자세는 위로 벌린 V
     const armLen = height * 0.36;
     const armW = width * 0.075;
+    this.armLen = armLen;
+    this.armW = armW;
     const slots = [
       { side: -1, y: bodyY - bodyH * 0.25, angle: -35 },
       { side: 1, y: bodyY - bodyH * 0.25, angle: 35 },
@@ -71,15 +76,41 @@ export class AntView {
     this.root.y = y;
   }
 
-  /** 팔 슬롯 (1~4) 위로 찌르기 */
-  strike(slot: number): void {
+  /**
+   * 팔 슬롯 (1~4) 위로 찌르기. stretch · ms = fx_config (E 끔 = arm.stretch, 켬 = punch.stretch)
+   * fistScale이 있으면 (M2 E) 팔 끝 주먹이 커졌다 돌아옴. 반환 = 이번에 새로 만든 연출 객체 수
+   */
+  strike(slot: number, stretch: number, ms: number, fistScale: number | null = null): number {
     const i = slot - 1;
     const arm = this.arms[i];
     const rest = this.armRest[i];
-    if (!arm || !rest) return;
+    if (!arm || !rest) return 0;
     this.scene.tweens.killTweensOf(arm);
-    arm.setAngle(rest.angle * 0.15).setScale(1, 1.35);
-    this.scene.tweens.add({ targets: arm, angle: rest.angle, scaleY: 1, duration: 110, ease: 'Quad.easeOut' });
+    arm.setAngle(rest.angle * 0.15).setScale(1, stretch);
+    this.scene.tweens.add({ targets: arm, angle: rest.angle, scaleY: 1, duration: ms, ease: 'Quad.easeOut' });
+    if (fistScale === null) {
+      this.fists[i]?.setVisible(false);
+      return 0;
+    }
+    let created = 0;
+    let fist = this.fists[i];
+    if (!fist) {
+      fist = this.scene.add.circle(0, 0, this.armW * 0.9, COLOR.armSlot[i]!).setStrokeStyle(3, COLOR.antBody);
+      this.body.add(fist);
+      this.fists[i] = fist;
+      created = 1;
+    }
+    // 주먹 = 팔 끝 (팔 원점은 어깨, 길이 방향 = 위). 늘어난 팔 끝을 따라감
+    const place = () => {
+      const a = Phaser.Math.DegToRad(arm.angle);
+      const len = this.armLen * arm.scaleY;
+      fist!.setPosition(arm.x + Math.sin(a) * len, arm.y - Math.cos(a) * len);
+    };
+    this.scene.tweens.killTweensOf(fist);
+    fist.setVisible(true).setScale(fistScale);
+    place();
+    this.scene.tweens.add({ targets: fist, scale: 1, duration: ms, ease: 'Quad.easeOut', onUpdate: place, onComplete: () => fist!.setVisible(false) });
+    return created;
   }
 
   /** 점프 시작 — 늘어나기 */
