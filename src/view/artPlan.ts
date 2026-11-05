@@ -19,6 +19,8 @@ export interface ArtConfig {
   hit_face_ms: number;
   /** 머리만 따로 배율 (M3-C A — 표정 가독성, H-22). 없으면 1 */
   head_scale?: number;
+  /** M3-D 충격 별 그림 (art/game/fx/) — null이면 도형 별 */
+  impact_file?: string | null;
 }
 export interface ArtPart {
   skin_id: string;

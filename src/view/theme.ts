@@ -40,6 +40,7 @@ export const COLOR = {
   damage: '#ffffff',
   damageStroke: '#3b2a1a',
   hurt: '#ff6b5b',
+  impact: 0xffd23f,
   popup: '#ffe08a',
   nestBg: 0x3a2717,
   nestDeep: 0x24160c,
