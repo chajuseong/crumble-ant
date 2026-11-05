@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { AntRig } from './antRig';
 import type { ArtPlan, Face } from './artPlan';
-import { composePose, MOTION, type MotionInput, phasePose, blendPose, type Pose, type PunchSize, restPose, slotSide, strikeDuration } from './antMotion';
+import { blendPose, composePose, hangDrop, MOTION, type MotionInput, phasePose, type Pose, type PunchSize, restPose, slotSide, strikeDuration } from './antMotion';
 import { COLOR, FONT } from './theme';
 import { t } from './text';
 
@@ -45,6 +45,8 @@ export class AntView {
   private lastPhase: AntMotionState['phase'] = 'ground';
   private readonly mi: Omit<MotionInput, 'phase' | 'contact' | 'groundTimer' | 'jumpPending' | 't'> = { jumpAt: null, jumpStrong: false, landAt: null, strikes: [null, null, null, null], tilt: null };
   private punch: PunchSize = { stretch: 1, socket: 1 };
+  /** CA-002 지금 내린 양 (개미 키 단위 · 확인용) */
+  drop = 0;
   /** 팔 기본 각도 크기 (슬롯 1 ~ 4) — 도형 팔과 같은 값 */
   private readonly restAbs: number[];
 
@@ -220,15 +222,20 @@ export class AntView {
   /**
    * M3-C — 매 프레임. dtMs = 벽시계 · frozen = 히트스톱 중 (공격 모션도 같이 멈춤 — H-21 Q3)
    * 반환 = 이번 프레임에 땅에 닿았는가 (phase fall → ground — H-21 Q1, 착지 먼지는 장면이 그림)
+   * gap · feetRoom = (건물 밑면 − 발) · 발 높이 ÷ 개미 키 (core 값) — CA-002 그림 머리끝이 건물 밑면을 넘지 않게 (떨어지는 건물이 없으면 gap = Infinity)
    */
-  updateMotion(dtMs: number, st: AntMotionState, jumpPending: boolean, frozen: boolean): boolean {
+  updateMotion(dtMs: number, st: AntMotionState, jumpPending: boolean, frozen: boolean, gap = Infinity, feetRoom = 0): boolean {
     if (!this.motionOn) return false;
     if (!frozen) this.motionT += dtMs / 1000;
     const touchdown = this.lastPhase === 'fall' && st.phase === 'ground';
     this.lastPhase = st.phase;
     if (touchdown) this.mi.landAt = this.motionT;
     if (!frozen) this.base = blendPose(this.base, phasePose(MOTION, st, this.restAbs), dtMs, MOTION.blend_ms);
-    this.applyPose(composePose(MOTION, this.base, this.motionInput({ ...st, jumpPending }), this.restAbs, this.punch));
+    const pose = composePose(MOTION, this.base, this.motionInput({ ...st, jumpPending }), this.restAbs, this.punch);
+    // CA-002 (I-15): 그림 모드만 — 그림 머리끝 = 건물 밑면 (도형은 판정 키와 크기가 같아서 그대로)
+    this.drop = this.rig ? hangDrop(this.rig.topRatio, gap, feetRoom) : 0;
+    pose.dy -= this.drop;
+    this.applyPose(pose);
     return touchdown;
   }
 

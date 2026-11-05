@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { artArm, blendPose, composePose, MOTION, type MotionInput, phasePose, restPose, strikeArm, strikeDuration, strikePhases } from '../view/antMotion';
+import { artArm, blendPose, composePose, hangDrop, MOTION, type MotionInput, phasePose, restPose, strikeArm, strikeDuration, strikePhases } from '../view/antMotion';
 
 /** M3-C 공격 · 점프 모션 (I-14 · H-21) — 순수 함수. 값 = fx_config motion.* */
 const REST = [35, 35, 70, 70];
@@ -114,5 +114,19 @@ describe('M3-C 그림 모드 팔 (고무 팔 고침 — H-21 Q6)', () => {
     const cap = MOTION.strike.art_stretch_max;
     expect(artArm(MOTION, 1.8)).toEqual({ stretch: cap, thrust: (1.8 - cap) * MOTION.strike.art_thrust });
     expect(artArm(MOTION, 1)).toEqual({ stretch: 1, thrust: 0 });
+  });
+});
+
+describe('CA-002 그림 머리끝이 건물 밑면을 넘지 않음 (I-15)', () => {
+  it('매달림 (gap = 1): 내리는 양 = 그림 머리끝 − 판정 머리 · 땅 밑으로는 안 내림 · 그림이 판정보다 작으면 0', () => {
+    expect(hangDrop(1.87, 1, 5)).toBeCloseTo(0.87, 10);
+    expect(hangDrop(1.87, 1, 0.3)).toBe(0.3); // 건물이 낮아 발 아래 여유가 0.3뿐
+    expect(hangDrop(0.9, 1, 5)).toBe(0);
+  });
+
+  it('다가갈 때 · 떨어질 때: 겹치는 만큼만 (gap이 머리끝보다 크면 0) → 들어가고 나오는 것이 이어짐', () => {
+    expect(hangDrop(1.87, 1.5, 5)).toBeCloseTo(0.37, 10);
+    expect(hangDrop(1.87, 1.87, 5)).toBe(0);
+    expect(hangDrop(1.87, Infinity, 5)).toBe(0); // 떨어지는 건물이 없음
   });
 });

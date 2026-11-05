@@ -69,6 +69,15 @@ const lerp = (a: number, b: number, p: number) => a + (b - a) * p;
 
 export const restPose = (): Pose => ({ dy: 0, sx: 1, sy: 1, tilt: 0, legs: [0, 0], arms: Array.from({ length: SLOT_COUNT }, () => ({ out: 0, stretch: 1, socket: 1, spin: 0 })) });
 
+/**
+ * CA-002 (I-15): 그림을 내리는 양 (개미 키 단위) — 그림 머리끝이 건물 밑면을 넘지 않게. 매 프레임 core 값으로 바로 계산 (늦게 따라오지 않음).
+ * topRatio = 그림 머리끝 높이 ÷ 개미 키 (그림 배율 · 머리 배율 포함) · gap = (건물 밑면 − 발) ÷ 개미 키 (매달리면 1 = 판정 머리)
+ * feetRoom = 발 높이 ÷ 개미 키 (땅 밑으로는 안 내림). 다가갈 때 · 떨어질 때도 겹치는 만큼만 → 들어가고 나오는 것이 이어짐
+ */
+export function hangDrop(topRatio: number, gap: number, feetRoom: number): number {
+  return Math.max(0, Math.min(topRatio - gap, topRatio - 1, feetRoom));
+}
+
 /** 단계 자세 (웅크림 · 상승 · 매달림 · 하강) — 단계가 바뀌면 blendPose로 이어 붙임 */
 export function phasePose(cfg: MotionConfig, inp: Pick<MotionInput, 'phase' | 'contact'>, rest: RestAngles): Pose {
   const p = restPose();
