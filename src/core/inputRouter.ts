@@ -21,7 +21,9 @@ export type InputAction =
   | { type: 'challenge' }
   | { type: 'menu'; id: string }
   | { type: 'openNest'; via: 'tap' | 'swipe_down' | 'button' }
-  | { type: 'closeNest'; via: 'button' | 'swipe_up' };
+  | { type: 'closeNest'; via: 'button' | 'swipe_up' }
+  /** M3-E HUD 배속 버튼 — 배속 값은 view가 들고 있음 (core는 dt만 받음) */
+  | { type: 'cycleSpeed' };
 
 export interface Rect {
   x: number;

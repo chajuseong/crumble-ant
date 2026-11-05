@@ -109,8 +109,12 @@ export function blendPose(from: Pose, to: Pose, dtMs: number, blendMs: number): 
   };
 }
 
-/** 공격 모션 길이 (초) = 타격 간격 × span — 공격속도 강화를 따라 줄어듦 */
-export const strikeDuration = (cfg: MotionConfig, intervalS: number): number => intervalS * cfg.strike.span;
+/**
+ * 공격 모션 길이 (초 · 모션 시계 = 게임 시간) = 타격 간격 × span — 공격속도 강화를 따라 줄어듦.
+ * M3-E: 벽시계로 min_wall_ms보다 짧아지지 않게 (×3에서도 보이게) — 게임 시간으로는 min_wall_ms × 배속
+ */
+export const strikeDuration = (cfg: MotionConfig, intervalS: number, speed = 1): number =>
+  Math.max(intervalS * cfg.strike.span, ((cfg.strike.min_wall_ms ?? 0) / 1000) * speed);
 
 /** 공격 3단계 시간 (ms). 당기기가 min_pull_ms보다 짧으면 생략 → 복귀에 더함 */
 export function strikePhases(cfg: MotionConfig, durS: number): { pull: number; thrust: number; ret: number } {
