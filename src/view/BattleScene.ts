@@ -15,6 +15,7 @@ import { FX, type FxToggles, loadToggles } from './fx';
 import { createFxPanel } from './fxPanel';
 import { HitstopClock } from './hitstop';
 import { dropsChunks, hitstopMs, impactScale, type StrikeKind, strikeKind } from './hitFeel';
+import { hitSoundTurn, lightFx, loadSpeed, nextSpeed, saveSpeed } from './speed';
 import { Sfx } from './sfx';
 import type { NestScene } from './NestScene';
 
@@ -95,6 +96,12 @@ export class BattleScene extends Phaser.Scene {
   /** M2 연출 객체 · 호출 수 (전부 끔이면 0이어야 함 — 완료 조건 ③) */
   fxCount = 0;
   private scaleK = 1;
+  // ── M3-E 배속 (I-17 · H-28) — view만 들고 있음, core는 dt × 배속만 받음 ──
+  speed = 1;
+  private speedText!: Phaser.GameObjects.Text;
+  private speedBg!: Phaser.GameObjects.Rectangle;
+  /** 실제 배속 (게임 시간 ÷ 벽시계 — 느린 기기에서 상한에 걸리는지 · ?debug) */
+  private realSpeed = 1;
   // ── M3 아트 (I-11 · H-12) — 그림이 없거나 끄면 도형 (= M2 화면) ──
   private artSettings!: ArtSettings;
   /** 지금 그리는 계획 (smoke · 검수용으로 읽음) */
@@ -156,6 +163,8 @@ export class BattleScene extends Phaser.Scene {
     this.createMenu();
 
     this.createHud();
+    this.createSpeedButton();
+    this.setSpeed(loadSpeed());
     this.createChallengeButton();
     this.createInput();
     createFxPanel(this.fxOn, (t) => {
@@ -185,13 +194,17 @@ export class BattleScene extends Phaser.Scene {
     this.refreshHud();
   }
 
-  update(_time: number, deltaMs: number): void {
+  update(_time: number, wallMs: number): void {
+    // M3-E 배속: 게임 시간만 빨라짐 — core는 고정 스텝 그대로 dt만 더 받음 · 연출(잔해 · 일개미 · 모션 · 히트스톱)도 같은 배속
+    const deltaMs = wallMs * this.speed;
     const dt = deltaMs / 1000;
+    const t0 = this.sim.time;
     // M2 A 히트스톱: 멈춘 동안 core에 시간을 넘기지 않음 (core 시계 통째로 정지 — 결과 그대로)
     this.sim.update(this.hitstop.consume(deltaMs) / 1000);
+    if (wallMs > 0 && !this.hitstop.stopped) this.realSpeed += ((this.sim.time - t0) / (wallMs / 1000) - this.realSpeed) * 0.1;
     this.handleEvents(this.sim.drainEvents());
     // M3-C 모션 — core 상태를 읽어 자세만 그림 (히트스톱 중엔 공격 모션도 멈춤 · 땅에 닿으면 먼지 고리)
-    if (this.ant.updateMotion(deltaMs, this.sim.ant, this.sim.building?.state === 'falling', this.fxOn.hitstop && this.hitstop.stopped, this.hangGap(), this.sim.ant.y / this.cfg.battle.ant.height_ratio)) {
+    if (this.ant.updateMotion(deltaMs, this.sim.ant, this.sim.building?.state === 'falling', this.hitstop.stopped, this.hangGap(), this.sim.ant.y / this.cfg.battle.ant.height_ratio)) {
       this.dustRing();
       this.fxCount += 1;
     }
@@ -361,6 +374,9 @@ export class BattleScene extends Phaser.Scene {
           this.router.setMode('nest');
           this.scene.launch('nest', { config: this.cfg });
           break;
+        case 'cycleSpeed':
+          this.setSpeed(nextSpeed(this.speed));
+          break;
         case 'closeNest': {
           this.router.setMode('battle');
           const nest = this.scene.get('nest') as NestScene;
@@ -426,20 +442,21 @@ export class BattleScene extends Phaser.Scene {
           }
           const y = this.ant.root.y - this.cfg.battle.ant.height_ratio * this.L.battle.height;
           this.floatText(this.L.width / 2 + this.px(Phaser.Math.Between(-120, 120)), y, `${e.damage}`, COLOR.damage, this.px(FX.damage.text_px), 900, FX.damage.ms, FX.damage.pop_scale);
-          if (on.hitstop || fin) { this.hitstop.add(hitstopMs(kind, interval), FX.hitstop.max_ms); this.fxCount += 1; } // A · A' (일반 = 간격 × hit_ratio_max 이하)
-          if (fin) { this.cameras.main.shake(FX.finisher.camera_ms, FX.finisher.camera_intensity); this.fxCount += 1; } // A' 큰 흔들림
-          else if (on.shake && !final) { this.cameras.main.shake(FX.camera.hit_ms, FX.camera.hit_intensity); this.fxCount += 1; } // C (마지막 일격은 destroy에서 크게)
+          const light = lightFx(this.speed) && kind === 'hit'; // M3-E ×2 이상: 일반 타격 멈춤 · 흔들림 끔 (H-28 ②)
+          if ((on.hitstop && !light) || fin) { this.hitstop.add(hitstopMs(kind, interval), FX.hitstop.max_ms); this.fxCount += 1; } // A · A' (일반 = 간격 × hit_ratio_max 이하)
+          if (fin) { this.shake(FX.finisher.camera_ms, FX.finisher.camera_intensity); this.fxCount += 1; } // A' 큰 흔들림
+          else if (on.shake && !final && !light) { this.shake(FX.camera.hit_ms, FX.camera.hit_intensity); this.fxCount += 1; } // C (마지막 일격은 destroy에서 크게)
           if (on.impact) this.impact(kind, e.arm, stretch); // B' 충격 별 · 건물 밀림 · 큰 조각
           if (on.combo) this.showCombo(e.combo); // D
           if (on.hitDebris) this.burstHitDebris(y); // F
-          if (on.sfx && this.sfx.created) { if (final) this.sfx.final(); else if (fin) this.sfx.finisher(); else this.sfx.hit(e.combo); this.fxCount += 1; } // G · A' 마무리 "쾅"
+          if (on.sfx && this.sfx.created) { if (final) this.sfx.final(); else if (fin) this.sfx.finisher(); else if (hitSoundTurn(e.combo, this.speed)) this.sfx.hit(e.combo); this.fxCount += 1; } // G · A' 마무리 "쾅"
           break;
         }
         case 'destroy':
           this.burstDebris(e.debrisReward);
           this.removeBuildingView(false);
-          if (this.fxOn.shake) { this.cameras.main.shake(FX.camera.final_ms, FX.camera.final_intensity); this.fxCount += 1; } // C 크게
-          else this.cameras.main.shake(FX.camera.destroy_ms, FX.camera.destroy_intensity); // M1
+          if (this.fxOn.shake) { this.shake(FX.camera.final_ms, FX.camera.final_intensity); this.fxCount += 1; } // C 크게
+          else this.shake(FX.camera.destroy_ms, FX.camera.destroy_intensity); // M1
           this.crumbleText(battleToScreenY(this.L, e.y) - this.px(140));
           if (this.fxOn.sfx && this.sfx.created) { this.sfx.crumble(); this.fxCount += 1; } // G
           this.comboText?.setVisible(false);
@@ -447,7 +464,7 @@ export class BattleScene extends Phaser.Scene {
         case 'land':
           this.comboText?.setVisible(false);
           this.ant.hit(ART_DATA.config.hit_face_ms);
-          this.cameras.main.shake(260, 0.014);
+          this.shake(260, 0.014);
           this.floatText(this.L.width / 2, this.L.groundY - this.cfg.battle.ant.height_ratio * this.L.battle.height * 2.2, `-${e.damage}`, COLOR.hurt, this.px(72), 900);
           break;
         case 'antDown':
@@ -535,6 +552,40 @@ export class BattleScene extends Phaser.Scene {
   private hangGap(): number {
     const b = this.sim.building;
     return b && b.state === 'falling' ? (b.y - this.sim.ant.y) / this.cfg.battle.ant.height_ratio : Infinity;
+  }
+
+  /** 화면 흔들림 — 시간은 배속만큼 짧게 (M3-E) */
+  private shake(ms: number, intensity: number): void {
+    this.cameras.main.shake(ms / this.speed, intensity);
+  }
+
+  /** M3-E 배속 바꾸기 — 트윈 · 타이머 · 모션 최소 길이도 같은 배속 · 이 브라우저에 기억 */
+  setSpeed(v: number): void {
+    this.speed = v;
+    this.tweens.timeScale = v;
+    this.time.timeScale = v;
+    this.ant.speed = v;
+    this.speedText?.setText(t('hud.speed', { n: v }));
+    this.speedBg?.setFillStyle(v > 1 ? COLOR.challenge : COLOR.menuBg, v > 1 ? 0.9 : 0.35);
+    saveSpeed(v);
+  }
+
+  /** M3-E HUD 오른쪽 아래 (자동 진행 표시 왼쪽) [×1] 버튼 — InputRouter 버튼이라 강점프와 안 겹침 */
+  private createSpeedButton(): void {
+    const { L } = this;
+    const h = L.hud.height;
+    const probe = this.add.text(0, 0, t('hud.auto_on'), { fontFamily: FONT, fontSize: `${Math.round(h * 0.2)}px`, fontStyle: '900' });
+    const probe2 = this.add.text(0, 0, t('hud.auto_off'), { fontFamily: FONT, fontSize: `${Math.round(h * 0.2)}px`, fontStyle: '900' });
+    const autoW = Math.max(probe.width, probe2.width);
+    probe.destroy();
+    probe2.destroy();
+    const bw = h * 0.62;
+    const bh = h * 0.3;
+    const cx = L.width - this.px(36) - autoW - this.px(18) - bw / 2;
+    const cy = h * 0.78;
+    this.speedBg = this.add.rectangle(cx, cy, bw, bh, COLOR.menuBg, 0.35).setStrokeStyle(this.px(3), 0xffffff, 0.6).setDepth(DEPTH.hud);
+    this.speedText = this.add.text(cx, cy, '', { fontFamily: FONT, fontSize: `${Math.round(bh * 0.7)}px`, fontStyle: '900', color: COLOR.hudText }).setOrigin(0.5).setDepth(DEPTH.hud);
+    this.router.addButton({ id: 'speed', rect: { x: cx - bw / 2, y: cy - bh / 2 - this.px(10), w: bw, h: bh + this.px(20) }, mode: 'battle', action: { type: 'cycleSpeed' }, priority: 20 });
   }
 
   private dustRing(): void {
@@ -710,6 +761,7 @@ export class BattleScene extends Phaser.Scene {
     const a = sim.ant;
     const b = sim.building;
     return [
+      `speed ×${this.speed} (실제 ×${this.realSpeed.toFixed(2)})`,
       `t=${sim.time.toFixed(1)} stage=${sim.stage.stage} ${sim.stage.destroyed}/${sim.stage.toClear} auto=${sim.stage.autoAdvance} chal=${sim.stage.challenging}`,
       `ant ${a.phase} y=${a.y.toFixed(3)} hp=${a.hp} contact=${a.contact} nextArm=${a.nextArm + 1}`,
       b ? `bld#${b.id} ${b.state} y=${b.y.toFixed(3)} hp=${b.hp}/${b.maxHp}` : `bld - spawnIn=${sim.spawnTimer.toFixed(2)}`,

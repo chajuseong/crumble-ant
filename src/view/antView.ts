@@ -45,6 +45,8 @@ export class AntView {
   private lastPhase: AntMotionState['phase'] = 'ground';
   private readonly mi: Omit<MotionInput, 'phase' | 'contact' | 'groundTimer' | 'jumpPending' | 't'> = { jumpAt: null, jumpStrong: false, landAt: null, strikes: [null, null, null, null], tilt: null };
   private punch: PunchSize = { stretch: 1, socket: 1 };
+  /** M3-E 배속 — 공격 모션 최소 길이(벽시계)를 게임 시간으로 바꿀 때 */
+  speed = 1;
   /** CA-002 지금 내린 양 (개미 키 단위 · 확인용) */
   drop = 0;
   /** 팔 기본 각도 크기 (슬롯 1 ~ 4) — 도형 팔과 같은 값 */
@@ -162,7 +164,7 @@ export class AntView {
    */
   strike(slot: number, stretch: number, ms: number, fistScale: number | null = null, intervalS = 0): number {
     if (this.motionOn) {
-      const dur = strikeDuration(MOTION, intervalS > 0 ? intervalS : ms / 1000);
+      const dur = strikeDuration(MOTION, intervalS > 0 ? intervalS : ms / 1000, this.speed);
       this.mi.strikes[slot - 1] = { at: this.motionT, dur };
       this.mi.tilt = { at: this.motionT, sign: slotSide(slot), dur };
       this.punch = { stretch, socket: fistScale ?? 1 };

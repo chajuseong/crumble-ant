@@ -39,6 +39,8 @@ try {
 }
 const url = server.resolvedUrls.local[0];
 const ctx = await browser.newContext({ viewport: VIEW, isMobile: true, hasTouch: true });
+// M3-E: SMOKE_SPEED=3 → 배속을 고른 채로 확인 (브라우저 키 crumble-ant.speed)
+if (process.env.SMOKE_SPEED) await ctx.addInitScript((v) => { try { localStorage.setItem("crumble-ant.speed", v); } catch {} }, process.env.SMOKE_SPEED);
 const page = await ctx.newPage();
 page.setDefaultTimeout(10000);
 const errors = [];
@@ -76,6 +78,7 @@ try {
     return { colors: colors.size };
   }, png.toString("base64"));
   // M2 G: 첫 탭 전에는 소리 객체(AudioContext)를 만들지 않음 (브라우저 정책 · 콘솔 경고 방지)
+  result.speed = await page.evaluate(() => window.__game?.scene.getScene("battle")?.speed ?? null);
   result.audio_before_tap = await page.evaluate(() => window.__game?.scene.getScene("battle")?.sfx?.created ?? null);
   // M3: 개미 그림 상태 — art/game 그림이 다 있으면 그림, 없으면 도형 폴백 (docs/art.md §5). 계획과 실제 그린 쪽이 같아야 함
   result.art = await page.evaluate(() => {
@@ -100,6 +103,7 @@ result.checks = {
   battle_drawn: { ok: drawn.colors > MIN_COLORS, colors: drawn.colors, min: MIN_COLORS },
   no_audio_before_tap: { ok: result.audio_before_tap === false, created: result.audio_before_tap },
   art_state: { ok: !!result.art && result.art.drawn === result.art.mode && (result.art.mode === "image" ? result.art.missing === 0 : result.art.reason !== null), ...(result.art ?? {}) },
+  speed: { ok: result.speed === Number(process.env.SMOKE_SPEED || 1), speed: result.speed },
   battle_runs: { ok: Number.isFinite(after) && after > before, destroyed_before: before, destroyed_after: after, rise_ms: result.ms.rise, limit_ms: RUN_MS },
 };
 result.ok = Object.values(result.checks).every((c) => c.ok);
