@@ -1,5 +1,5 @@
 // 배포 빌드 화면 확인 — ① 콘솔 오류 0 ② 전투 구역이 그려짐 ③ 전투가 돎 = 건물 파괴 수가 오름 (docs/dev.md §7 M1 ⑤)
-//   + M2 첫 탭 전 소리 객체 없음 · M3 개미 그림 상태 (그림 다 있음 = 그림 / 없음 = 도형 폴백)
+//   + M2 첫 탭 전 소리 객체 없음 · M3 개미 그림 상태 (그림 다 있음 = 그림 / 없음 = 도형 폴백) · M4 강화 패널 열기 · 구매 1회
 // 사용: npm run build → npm run smoke
 //   브라우저: CI는 러너에 깔린 Chrome (channel "chrome"). 다른 브라우저는 SMOKE_CHROME=<실행 파일 경로>
 // 결과: 통과 exit 0 / 실패 exit 1 — ci-smoke/에 스크린샷 · result.json (CI는 실패 때 Actions 산출물로 남김)
@@ -78,6 +78,18 @@ try {
     return { colors: colors.size };
   }, png.toString("base64"));
   // M2 G: 첫 탭 전에는 소리 객체(AudioContext)를 만들지 않음 (브라우저 정책 · 콘솔 경고 방지)
+  // M4: 재화가 들어오면 강화 패널을 열고 가장 싼 강화 1번 구매 (콘솔 오류 0 · Lv 1 · 재화 줄어듦)
+  result.upgrade = await page.evaluate(async () => {
+    const s = window.__game.scene.getScene("battle");
+    const deadline = performance.now() + 15000;
+    while (s.sim.wallet < 60 && performance.now() < deadline) await new Promise((r) => setTimeout(r, 200));
+    const before = s.sim.wallet;
+    s.openUpgrade();
+    s.dispatch([{ type: "buyUpgrade", id: "attack_power" }]);
+    const r = { open: s.upgradePanel.isOpen, before, after: s.sim.wallet, level: s.sim.levels.attack_power };
+    s.dispatch([{ type: "closeUpgrade", via: "button" }]);
+    return r;
+  });
   result.speed = await page.evaluate(() => window.__game?.scene.getScene("battle")?.speed ?? null);
   result.audio_before_tap = await page.evaluate(() => window.__game?.scene.getScene("battle")?.sfx?.created ?? null);
   // M3: 개미 그림 상태 — art/game 그림이 다 있으면 그림, 없으면 도형 폴백 (docs/art.md §5). 계획과 실제 그린 쪽이 같아야 함
@@ -103,6 +115,7 @@ result.checks = {
   battle_drawn: { ok: drawn.colors > MIN_COLORS, colors: drawn.colors, min: MIN_COLORS },
   no_audio_before_tap: { ok: result.audio_before_tap === false, created: result.audio_before_tap },
   art_state: { ok: !!result.art && result.art.drawn === result.art.mode && (result.art.mode === "image" ? result.art.missing === 0 : result.art.reason !== null), ...(result.art ?? {}) },
+  upgrade: { ok: !!result.upgrade && result.upgrade.open && result.upgrade.level === 1 && result.upgrade.after < result.upgrade.before, ...(result.upgrade ?? {}) },
   speed: { ok: result.speed === Number(process.env.SMOKE_SPEED || 1), speed: result.speed },
   battle_runs: { ok: Number.isFinite(after) && after > before, destroyed_before: before, destroyed_after: after, rise_ms: result.ms.rise, limit_ms: RUN_MS },
 };

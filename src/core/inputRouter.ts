@@ -9,12 +9,13 @@
  *   2. 구역 규칙
  *      - battle 모드: 전투 구역 down = 강점프 (즉시) / 띠에서 시작한 탭 · 아래 스와이프 = 개미굴 / HUD = 없음
  *      - nest 모드: 위로 스와이프 = 전투로 복귀 (전투 구역 탭은 받지 않음)
+ *      - upgrade 모드 (M4 강화 패널): 패널 버튼만 · 패널 바깥 탭 = 닫기 (강점프 안 됨 — H-17 질문 6)
  */
 import type { InputConfig } from './config';
 import { classifyStripGesture, isSwipeUp } from './input';
 import { type Layout, zoneAt } from './layout';
 
-export type RouterMode = 'battle' | 'nest';
+export type RouterMode = 'battle' | 'nest' | 'upgrade';
 
 export type InputAction =
   | { type: 'strongJump' }
@@ -23,7 +24,11 @@ export type InputAction =
   | { type: 'openNest'; via: 'tap' | 'swipe_down' | 'button' }
   | { type: 'closeNest'; via: 'button' | 'swipe_up' }
   /** M3-E HUD 배속 버튼 — 배속 값은 view가 들고 있음 (core는 dt만 받음) */
-  | { type: 'cycleSpeed' };
+  | { type: 'cycleSpeed' }
+  /** M4 강화 패널 */
+  | { type: 'buyUpgrade'; id: string }
+  | { type: 'closeUpgrade'; via: 'button' | 'outside' }
+  | { type: 'resetSave' };
 
 export interface Rect {
   x: number;
@@ -56,7 +61,7 @@ interface DownRecord {
   t: number;
   button: ButtonDef | null;
   /** 이 포인터가 어떤 제스처 후보인가 */
-  gesture: 'strip' | 'nest' | null;
+  gesture: 'strip' | 'nest' | 'outside' | null;
 }
 
 export const inRect = (r: Rect, x: number, y: number): boolean => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
@@ -96,6 +101,10 @@ export class InputRouter {
       rec.gesture = 'nest';
       return [];
     }
+    if (this.mode === 'upgrade') {
+      rec.gesture = 'outside'; // 패널 버튼이 아닌 곳 = 닫기 후보 (뗄 때)
+      return [];
+    }
     switch (zoneAt(this.layout, p.y)) {
       case 'battle':
         return [{ type: 'strongJump' }]; // 반응성을 위해 손가락이 닿는 순간 발동
@@ -123,6 +132,7 @@ export class InputRouter {
       const g = classifyStripGesture(this.layout, this.cfg, trace);
       if (g !== 'none') return [{ type: 'openNest', via: g }];
     }
+    if (rec.gesture === 'outside' && this.mode === 'upgrade') return [{ type: 'closeUpgrade', via: 'outside' }];
     if (rec.gesture === 'nest' && this.mode === 'nest' && isSwipeUp(this.layout, this.cfg, trace)) {
       return [{ type: 'closeNest', via: 'swipe_up' }];
     }

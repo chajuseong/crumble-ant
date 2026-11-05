@@ -5,6 +5,7 @@
 import Phaser from 'phaser';
 import { BattleScene, type BattleSceneData } from './BattleScene';
 import { loadGameConfig } from './gameData';
+import { loadStart } from './saveStore';
 import { NestScene } from './NestScene';
 import { COLOR } from './theme';
 
@@ -18,6 +19,9 @@ if (errors.length) {
     config,
     startStage: Math.max(1, Number(params.get('stage')) || 1), // ?stage=N — 검수용 시작 스테이지 (디버그)
     debug: params.has('debug'), // ?debug — 상태 오버레이 (디버그)
+    // M4 저장: ?stage로 시작하면 저장을 읽지도 쓰지도 않음 (검수용 — 저장을 덮어쓰지 않게)
+    start: params.has('stage') ? null : loadStart(config),
+    save: !params.has('stage'),
   };
   const game = new Phaser.Game({
     type: Phaser.AUTO,

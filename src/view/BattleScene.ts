@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { BattleSim, type BattleEvent } from '../core/battle';
+import { BattleSim, type BattleEvent, type BattleStart } from '../core/battle';
 import type { GameConfig } from '../core/config';
 import { type InputAction, InputRouter } from '../core/inputRouter';
 import { battleToScreenY, computeLayout, type Layout, nestBackButtonRect } from '../core/layout';
@@ -16,6 +16,8 @@ import { createFxPanel } from './fxPanel';
 import { HitstopClock } from './hitstop';
 import { dropsChunks, hitstopMs, impactScale, type StrikeKind, strikeKind } from './hitFeel';
 import { hitSoundTurn, lightFx, loadSpeed, nextSpeed, saveSpeed } from './speed';
+import { SaveWriter } from './saveStore';
+import { UpgradePanel } from './upgradePanel';
 import { Sfx } from './sfx';
 import type { NestScene } from './NestScene';
 
@@ -23,6 +25,10 @@ export interface BattleSceneData {
   config: GameConfig;
   startStage: number;
   debug: boolean;
+  /** M4 저장에서 읽은 시작 상태 (없으면 새로 시작) */
+  start?: BattleStart | null;
+  /** M4 저장 켜기 (?stage 디버그 시작이면 끔 — 저장을 덮어쓰지 않게) */
+  save?: boolean;
 }
 
 interface Debris {
@@ -102,6 +108,10 @@ export class BattleScene extends Phaser.Scene {
   private speedBg!: Phaser.GameObjects.Rectangle;
   /** 실제 배속 (게임 시간 ÷ 벽시계 — 느린 기기에서 상한에 걸리는지 · ?debug) */
   private realSpeed = 1;
+  // ── M4 강화 · 재화 · 저장 (I-12 · H-17) ──
+  private hudDebris!: Phaser.GameObjects.Text;
+  upgradePanel!: UpgradePanel;
+  private saver!: SaveWriter;
   // ── M3 아트 (I-11 · H-12) — 그림이 없거나 끄면 도형 (= M2 화면) ──
   private artSettings!: ArtSettings;
   /** 지금 그리는 계획 (smoke · 검수용으로 읽음) */
@@ -120,7 +130,8 @@ export class BattleScene extends Phaser.Scene {
   init(data: BattleSceneData): void {
     this.cfg = data.config;
     this.debug = data.debug;
-    this.sim = new BattleSim(this.cfg, data.startStage);
+    this.sim = new BattleSim(this.cfg, data.startStage, data.start ?? null);
+    this.saver = new SaveWriter(this.sim, data.save ?? false);
     this.L = computeLayout(this.cfg.layout, this.scale.width, this.scale.height);
     this.router = new InputRouter(this.L, this.cfg.input);
     this.scaleK = this.L.width / DESIGN_WIDTH;
@@ -165,6 +176,11 @@ export class BattleScene extends Phaser.Scene {
     this.createHud();
     this.createSpeedButton();
     this.setSpeed(loadSpeed());
+    this.upgradePanel = new UpgradePanel(this, this.sim, L, (n) => this.px(n), this.router, DEPTH.fx + 5);
+    // M4 저장 — 화면을 떠날 때 바로
+    const flush = () => this.saver.flush(this.time.now);
+    window.addEventListener('pagehide', flush);
+    document.addEventListener('visibilitychange', () => document.visibilityState === 'hidden' && flush());
     this.createChallengeButton();
     this.createInput();
     createFxPanel(this.fxOn, (t) => {
@@ -218,6 +234,8 @@ export class BattleScene extends Phaser.Scene {
     }
     this.refreshHud();
     if (this.debugText) this.debugText.setText(this.debugLines());
+    this.saver.tick(this.time.now);
+    this.upgradePanel.refresh();
     this.markForSmoke();
   }
 
@@ -273,7 +291,7 @@ export class BattleScene extends Phaser.Scene {
         .setOrigin(0.5)
         .setDepth(DEPTH.menu);
       this.menuGfx.set(label, g);
-      const action = nest ? ({ type: 'openNest', via: 'button' } as const) : ({ type: 'menu', id: label } as const);
+      const action = nest ? ({ type: 'openNest', via: 'button' } as const) : ({ type: 'menu', id: key } as const);
       this.router.addButton({ id: `menu:${label}`, rect: { x, y, w, h }, mode: 'battle', action, priority: 10 });
     });
   }
@@ -305,6 +323,12 @@ export class BattleScene extends Phaser.Scene {
     this.hudAuto = this.add
       .text(L.width - this.px(36), h * 0.78, '', { fontFamily: FONT, fontSize: `${Math.round(h * 0.2)}px`, color: COLOR.autoOn, fontStyle: '900' })
       .setOrigin(1, 0.5)
+      .setDepth(DEPTH.hud);
+    // M4 HUD 잔해 — 왼쪽 둘째 줄 (진행 점 오른쪽 · 5개 자리 뒤)
+    const pr = h * 0.07;
+    this.hudDebris = this.add
+      .text(this.px(36) + pr * 15 + this.px(10), h * 0.78, '', { fontFamily: FONT, fontSize: `${Math.round(h * 0.22)}px`, color: COLOR.popup, fontStyle: '900' })
+      .setOrigin(0, 0.5)
       .setDepth(DEPTH.hud);
   }
 
@@ -368,7 +392,24 @@ export class BattleScene extends Phaser.Scene {
           this.sim.challenge();
           break;
         case 'menu':
-          this.showToast(t('toast.menu_wip', { label: a.id }));
+          if (a.id === 'menu.upgrade') this.openUpgrade();
+          else this.showToast(t('toast.menu_wip', { label: t(a.id) }));
+          break;
+        case 'buyUpgrade': {
+          const r = this.sim.buyUpgrade(a.id);
+          this.upgradePanel.feedback(a.id, r);
+          if (r === 'short') this.showToast(t('upgrade.short'), COLOR.hurt);
+          break;
+        }
+        case 'closeUpgrade':
+          this.upgradePanel.close();
+          this.router.setMode('battle');
+          break;
+        case 'resetSave':
+          if (this.upgradePanel.armReset()) {
+            SaveWriter.reset();
+            location.reload(); // 테스트 빌드 [기록 지우기] — 두 번째 누름에서 (H-17 질문 7)
+          }
           break;
         case 'openNest':
           this.router.setMode('nest');
@@ -398,7 +439,16 @@ export class BattleScene extends Phaser.Scene {
   private handleEvents(events: BattleEvent[]): void {
     for (const e of events) {
       switch (e.type) {
+        case 'deposit': // M4 실제 재화 도착 — 굴 입구 "+N" · HUD 잔해 튐
+          this.strip.popup(e.amount);
+          this.popDebris();
+          this.saver.request(this.time.now);
+          break;
+        case 'upgrade':
+          this.saver.request(this.time.now);
+          break;
         case 'stageStart':
+          this.saver.request(this.time.now);
           this.removeBuildingView(false);
           if (e.reason === 'retreat') this.showToast(t('toast.retreat', { n: e.stage }), COLOR.hurt);
           else if (e.reason === 'restart') this.showToast(t('toast.restart'));
@@ -428,7 +478,7 @@ export class BattleScene extends Phaser.Scene {
           // M3-D: 마지막 일격 > 4연타 마무리 (core combo) > 일반 — A' 끔이면 마무리 없음
           const kind: StrikeKind = strikeKind(e.combo, e.hpLeft, on.finisher);
           const fin = kind === 'finisher';
-          const interval = this.cfg.battle.strike_interval_s;
+          const interval = this.sim.stats.strikeIntervalS; // M4: 공격속도 강화 반영 (core 값)
           // E 펀치 과장 (끔 = M1 팔 찌르기) · 마무리 팔은 더 길게 (A')
           const stretch = (on.punch ? FX.punch.stretch : FX.arm.stretch) * (fin ? FX.finisher.stretch_mult : 1);
           this.fxCount += this.ant.strike(e.arm, stretch, FX.punch.ms, on.punch ? FX.punch.fist_scale : null, interval);
@@ -542,7 +592,7 @@ export class BattleScene extends Phaser.Scene {
           const obj = d.obj;
           this.debris.splice(i, 1);
           this.tweens.add({ targets: obj, y: groundY + this.px(30), scale: 0.3, alpha: 0, duration: 160, onComplete: () => obj.destroy() });
-          this.strip.spawnCarrier(obj.x, d.amount);
+          this.strip.spawnCarrier(obj.x, 0); // M4: "+N"은 core deposit 때 한 번에 (재화가 실제로 들어오는 때)
         }
       }
     }
@@ -552,6 +602,13 @@ export class BattleScene extends Phaser.Scene {
   private hangGap(): number {
     const b = this.sim.building;
     return b && b.state === 'falling' ? (b.y - this.sim.ant.y) / this.cfg.battle.ant.height_ratio : Infinity;
+  }
+
+  /** M4 재화 도착 — HUD 숫자가 톡 튐 (dev.md §5 0.2초) */
+  private popDebris(): void {
+    this.tweens.killTweensOf(this.hudDebris);
+    this.hudDebris.setScale(1.3);
+    this.tweens.add({ targets: this.hudDebris, scale: 1, duration: 200, ease: 'Back.easeOut' });
   }
 
   /** 화면 흔들림 — 시간은 배속만큼 짧게 (M3-E) */
@@ -740,6 +797,7 @@ export class BattleScene extends Phaser.Scene {
     this.hudHpFill.fillColor = ratio > 0.3 ? COLOR.hpFill : COLOR.hpLow;
     this.hudHpText.setText(`${Math.ceil(a.hp)} / ${a.maxHp}`);
     this.hudAuto.setText(t(s.autoAdvance ? 'hud.auto_on' : 'hud.auto_off'));
+    this.hudDebris.setText(t('hud.debris', { n: sim.wallet }));
     this.hudAuto.setColor(s.autoAdvance ? COLOR.autoOn : COLOR.autoOff);
 
     const show = sim.challengeAvailable;
@@ -748,6 +806,13 @@ export class BattleScene extends Phaser.Scene {
   }
 
   /** scripts/ci_smoke.mjs 확인용 — core 값을 DOM에 남긴다 (view가 세지 않음: 파괴 수는 core 누적값) */
+  /** M4 [강화] → 패널 (전투는 뒤에서 계속 · 강점프 막힘) */
+  openUpgrade(): void {
+    if (this.upgradePanel.isOpen) return;
+    this.router.setMode('upgrade');
+    this.upgradePanel.open();
+  }
+
   private markForSmoke(): void {
     this.frames += 1;
     if (this.frames % 10 !== 0) return;

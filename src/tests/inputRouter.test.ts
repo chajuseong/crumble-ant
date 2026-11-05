@@ -102,3 +102,18 @@ describe('InputRouter — nest 모드', () => {
     expect(r.up({ id: 1, x: 545, y: 1300, t: 200 })).toEqual([{ type: 'closeNest', via: 'swipe_up' }]);
   });
 });
+
+describe('M4 upgrade 모드 (강화 패널)', () => {
+  it('패널 버튼만 받고 · 바깥 탭 = 닫기 · 전투 구역을 눌러도 강점프 안 됨', () => {
+    const cfg = makeConfig();
+    const L = computeLayout(cfg.layout, cfg.layout.frame_width, cfg.layout.frame_height);
+    const r = new InputRouter(L, cfg.input);
+    r.addButton({ id: 'buy:attack_power', rect: { x: 100, y: 1000, w: 200, h: 80 }, mode: 'upgrade', action: { type: 'buyUpgrade', id: 'attack_power' } });
+    r.setMode('upgrade');
+    const y = L.battle.top + L.battle.height * 0.3;
+    expect(r.down({ id: 1, x: 360, y, t: 0 })).toEqual([]);
+    expect(r.up({ id: 1, x: 360, y, t: 50 })).toEqual([{ type: 'closeUpgrade', via: 'outside' }]);
+    expect(r.down({ id: 2, x: 150, y: 1030, t: 100 })).toEqual([]);
+    expect(r.up({ id: 2, x: 150, y: 1030, t: 150 })).toEqual([{ type: 'buyUpgrade', id: 'attack_power' }]);
+  });
+});
