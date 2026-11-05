@@ -9,7 +9,7 @@
  *   2. 구역 규칙
  *      - battle 모드: 전투 구역 down = 강점프 (즉시) / 띠에서 시작한 탭 · 아래 스와이프 = 개미굴 / HUD = 없음
  *      - nest 모드: 위로 스와이프 = 전투로 복귀 (전투 구역 탭은 받지 않음)
- *      - upgrade 모드 (M4 강화 패널): 패널 버튼만 · 패널 바깥 탭 = 닫기 (강점프 안 됨 — H-17 질문 6)
+ *      - upgrade 모드 (M4 강화 패널): 패널 버튼만 · 패널 바깥 탭 = 닫기 (강점프 안 됨 — H-17 질문 6) · 패널 안 빈 곳 = 무시 (CA-003)
  */
 import type { InputConfig } from './config';
 import { classifyStripGesture, isSwipeUp } from './input';
@@ -70,6 +70,8 @@ export class InputRouter {
   mode: RouterMode = 'battle';
   private readonly buttons: ButtonDef[] = [];
   private readonly downs = new Map<number, DownRecord>();
+  /** 모드별 막는 영역 — 버튼이 아닌 곳을 눌러도 아무 일 없음 (CA-003: 강화 패널 안 빈 곳) */
+  private readonly blockers: { mode: RouterMode; rect: Rect }[] = [];
 
   constructor(
     private readonly layout: Layout,
@@ -79,6 +81,11 @@ export class InputRouter {
   addButton(def: ButtonDef): void {
     this.buttons.push(def);
     this.buttons.sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
+  }
+
+  /** 이 모드에서 rect 안 (버튼 밖)은 무시 — 패널 바깥만 닫기 등 */
+  addBlocker(mode: RouterMode, rect: Rect): void {
+    this.blockers.push({ mode, rect });
   }
 
   setMode(mode: RouterMode): void {
@@ -102,7 +109,8 @@ export class InputRouter {
       return [];
     }
     if (this.mode === 'upgrade') {
-      rec.gesture = 'outside'; // 패널 버튼이 아닌 곳 = 닫기 후보 (뗄 때)
+      // 패널 안 빈 곳 = 무시 (CA-003) · 패널 바깥 = 닫기 후보 (뗄 때)
+      if (!this.blockers.some((b) => b.mode === this.mode && inRect(b.rect, p.x, p.y))) rec.gesture = 'outside';
       return [];
     }
     switch (zoneAt(this.layout, p.y)) {

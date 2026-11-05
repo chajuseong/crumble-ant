@@ -50,6 +50,7 @@ export class UpgradePanel {
     this.root = scene.add.container(0, 0).setDepth(depth).setVisible(false);
     const bg = scene.add.rectangle(x, this.top, w, h, COLOR.hudBg, 0.96).setOrigin(0).setStrokeStyle(px(4), 0xffffff, 0.35);
     this.root.add(bg);
+    router.addBlocker('upgrade', { x, y: this.top, w, h }); // CA-003: 패널 안 빈 곳 탭 = 무시 (바깥만 닫기)
     const headH = h * 0.13;
     const footH = h * 0.1;
     const font = (size: number, color: string = COLOR.hudText) => ({ fontFamily: FONT, fontSize: `${Math.round(size)}px`, color, fontStyle: '900' as const });

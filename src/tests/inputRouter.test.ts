@@ -117,3 +117,21 @@ describe('M4 upgrade 모드 (강화 패널)', () => {
     expect(r.up({ id: 2, x: 150, y: 1030, t: 150 })).toEqual([{ type: 'buyUpgrade', id: 'attack_power' }]);
   });
 });
+
+describe('CA-003 강화 패널 안 빈 곳 탭 = 무시 (바깥만 닫기)', () => {
+  it('패널 rect 안 버튼 밖 → 아무 일 없음 · 패널 밖 → 닫기 · 버튼 → 구매', () => {
+    const cfg = makeConfig();
+    const L = computeLayout(cfg.layout, cfg.layout.frame_width, cfg.layout.frame_height);
+    const r = new InputRouter(L, cfg.input);
+    const panel = { x: 20, y: 700, w: 680, h: 700 };
+    r.addBlocker('upgrade', panel);
+    r.addButton({ id: 'buy:attack_power', rect: { x: 450, y: 800, w: 200, h: 80 }, mode: 'upgrade', action: { type: 'buyUpgrade', id: 'attack_power' } });
+    r.setMode('upgrade');
+    const tap = (id: number, x: number, y: number) => [...r.down({ id, x, y, t: 0 }), ...r.up({ id, x, y, t: 40 })];
+    expect(tap(1, 100, 900)).toEqual([]); // 패널 안 · 카드 이름 근처 (버튼 아님)
+    expect(tap(2, 360, 300)).toEqual([{ type: 'closeUpgrade', via: 'outside' }]); // 패널 위 전투 구역
+    expect(tap(3, 500, 840)).toEqual([{ type: 'buyUpgrade', id: 'attack_power' }]);
+    r.setMode('battle');
+    expect(tap(4, 100, 900).some((a) => a.type === 'closeUpgrade')).toBe(false); // battle 모드에는 영향 없음
+  });
+});
