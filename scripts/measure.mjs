@@ -1,6 +1,7 @@
 // 임시 수치 측정 — 스테이지별로 "자동만" vs "강점프 연타(지면에 닿을 때마다 탭)"를 비교 (PR #2 scripts/measure.ts를 옮김)
 // 밸런싱이 아니라, 데이터 임시값으로 코어 루프가 의도대로 갈리는지(수동 효율 > 자동) · 이식 전후 결과가 같은지 확인하는 용도
 // 사용: npm run measure   (CI에는 넣지 않음 — H-05 ⑤-3. 결과는 PR 본문에)
+//       npm run measure -- --upgrades  M4 강화 진행 표 (자동만 · 강점프 연타 — 살 수 있는 가장 싼 강화를 바로 구매 · 강화하면 [도전]) + 단일 강화 퇴보 검사
 //       npm run measure -- --hitstop   히트스톱으로 늘어나는 벽시계 시간 (스테이지 1 · 5 · 7) — M2 (일반 · 마지막) vs M3-D (+ 4연타 마무리 · 일반 ≤ 간격 × hit_ratio_max)
 // core(TypeScript)는 Vite로 불러온다 — 따로 빌드 도구를 늘리지 않음
 import fs from "node:fs";
@@ -10,10 +11,11 @@ import { createServer } from "vite";
 const server = await createServer({ server: { middlewareMode: true, hmr: false }, appType: "custom", logLevel: "silent", optimizeDeps: { noDiscovery: true } });
 try {
   const { BattleSim } = await server.ssrLoadModule("/src/core/battle.ts");
+  const { upgradeCost } = await server.ssrLoadModule("/src/core/economy.ts");
   const { buildingForStage, validateConfig } = await server.ssrLoadModule("/src/core/config.ts");
   const { fromData } = await server.ssrLoadModule("/src/core/data.ts");
   const read = (f) => JSON.parse(fs.readFileSync(path.join("src/data", `${f}.json`), "utf-8"));
-  const config = fromData({ buildings: read("buildings"), stages: read("stages"), game_config: read("game_config"), ui_strings: read("ui_strings") });
+  const config = fromData({ buildings: read("buildings"), stages: read("stages"), game_config: read("game_config"), ui_strings: read("ui_strings"), upgrades: read("upgrades") });
   const errors = validateConfig(config);
   if (errors.length) throw new Error(`데이터 오류:\n${errors.join("\n")}`);
 
@@ -85,6 +87,62 @@ try {
       const g = gameS / n, st = stopMs / n / 1000, sd = stopD / n / 1000;
       console.log(`${String(stage).padStart(5)} | ${policy === "auto" ? "자동  " : "강점프"} | ${g.toFixed(2).padStart(6)}초 | ${(strikes / n).toFixed(1).padStart(5)} | ${(fins / n).toFixed(1)} | ${st.toFixed(2)} → ${sd.toFixed(2)}초 | +${((st / g) * 100).toFixed(1)}% → +${((sd / g) * 100).toFixed(1)}%`);
     }
+  }
+  if (process.argv.includes("--upgrades")) {
+    // M4 (H-17 ⑤): core의 buyUpgrade · deposit 그대로 — 측정은 구매 순서만 흉내
+    const rows = config.upgrades.rows;
+    const progression = (policy, minutes) => {
+      const sim = new BattleSim(structuredClone(config), 1);
+      const first = {};
+      let buys = 0, earned = 0;
+      for (let i = 0; i < minutes * 60 * 60; i++) {
+        if (policy === "strong" && sim.ant.phase === "ground") sim.tapStrongJump();
+        sim.update(1 / 60);
+        for (const e of sim.drainEvents()) {
+          if (e.type === "deposit") earned += e.amount;
+          if (e.type === "stageClear" && !(e.stage in first)) first[e.stage] = { min: sim.time / 60, buys, earned, lv: rows.map((r) => sim.levels[r.upgrade_id]).join("/") };
+        }
+        let bought = false;
+        for (;;) {
+          const c = rows.map((r) => ({ id: r.upgrade_id, lv: sim.levels[r.upgrade_id], row: r })).filter((x) => x.lv < x.row.max_level)
+            .map((x) => ({ id: x.id, cost: upgradeCost(x.row, x.lv) })).sort((a, b) => a.cost - b.cost || (a.id < b.id ? -1 : 1))[0];
+          if (!c || sim.buyUpgrade(c.id) !== "ok") break;
+          buys++; bought = true;
+        }
+        if (bought && sim.challengeAvailable) sim.challenge();
+      }
+      return { first, levels: rows.map((r) => sim.levels[r.upgrade_id]).join("/"), wallet: sim.wallet, earned };
+    };
+    console.log(`\nM4 강화 진행 (60분 · 살 수 있는 가장 싼 강화를 바로 · 강화하면 [도전] · 재화 = deposit) — Lv 순서 ${rows.map((r) => r.upgrade_id).join("/")}`);
+    console.log("첫 클리어 | 자동만: 분 | 강화 횟수 | 누적 잔해 | 그때 Lv | 강점프 연타: 분");
+    const a = progression("auto", 60), b = progression("strong", 60);
+    for (let st = 1; st <= config.stages.rows.length; st++) {
+      const x = a.first[st], y = b.first[st];
+      console.log(`stage ${st} | ${x ? x.min.toFixed(1) : "—"} | ${x ? x.buys : "—"} | ${x ? x.earned : "—"} | ${x ? x.lv : "—"} | ${y ? y.min.toFixed(1) : "—"}`);
+    }
+    console.log(`60분 끝 (자동): Lv ${a.levels} · 남은 잔해 ${a.wallet} · 번 잔해 ${a.earned}`);
+    // 단일 강화 Lv 0 ~ max: 스테이지 3 ~ 8 자동 파괴율이 내려가는 경우 (H-17 · I-13 — 0건이어야 함)
+    const bad = [];
+    for (const r of rows) {
+      const prev = {};
+      for (let lv = 0; lv <= r.max_level; lv++) {
+        for (let st = 3; st <= config.stages.rows.length; st++) {
+          const cfg = structuredClone(config);
+          cfg.battle.ant.max_hp = 1e12;
+          cfg.stages.rows = cfg.stages.rows.map((x) => ({ ...x, buildings_to_clear: 1e9 }));
+          const sim = new BattleSim(cfg, st, { stage: st, autoAdvance: true, debris: 0, levels: { [r.upgrade_id]: lv } });
+          let d = 0, l = 0;
+          for (let t = 0; t < 3600 && d + l < 20; t += 1 / 60) {
+            sim.update(1 / 60);
+            for (const e of sim.drainEvents()) { if (e.type === "destroy") d++; else if (e.type === "land") l++; }
+          }
+          const rate = d / (d + l);
+          if (prev[st] !== undefined && rate < prev[st] - 1e-9) bad.push(`${r.upgrade_id} Lv${lv} 스테이지 ${st}: ${(prev[st] * 100).toFixed(0)}% → ${(rate * 100).toFixed(0)}%`);
+          prev[st] = rate;
+        }
+      }
+    }
+    console.log(`단일 강화 퇴보: ${bad.length ? bad.join(" · ") : "0건"}`);
   }
 } finally {
   await server.close();
