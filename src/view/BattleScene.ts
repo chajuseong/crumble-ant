@@ -154,8 +154,12 @@ export class BattleScene extends Phaser.Scene {
     this.createHud();
     this.createChallengeButton();
     this.createInput();
-    createFxPanel(this.fxOn, (t) => (this.fxOn = t), () => this.sfx.unlock());
+    createFxPanel(this.fxOn, (t) => {
+      this.fxOn = t;
+      this.ant.setMotion(t.motion);
+    }, () => this.sfx.unlock());
     this.applyArt();
+    this.ant.setMotion(this.fxOn.motion);
     const artPanel = createArtPanel(
       ART_DATA,
       this.artSettings,
@@ -182,6 +186,11 @@ export class BattleScene extends Phaser.Scene {
     // M2 A 히트스톱: 멈춘 동안 core에 시간을 넘기지 않음 (core 시계 통째로 정지 — 결과 그대로)
     this.sim.update(this.hitstop.consume(deltaMs) / 1000);
     this.handleEvents(this.sim.drainEvents());
+    // M3-C 모션 — core 상태를 읽어 자세만 그림 (히트스톱 중엔 공격 모션도 멈춤 · 땅에 닿으면 먼지 고리)
+    if (this.ant.updateMotion(deltaMs, this.sim.ant, this.sim.building?.state === 'falling', this.fxOn.hitstop && this.hitstop.stopped)) {
+      this.dustRing();
+      this.fxCount += 1;
+    }
     if (this.comboText?.visible && this.time.now >= this.comboHideAt) this.comboText.setVisible(false);
     this.syncViews();
     this.updateDebris(dt);
@@ -397,7 +406,7 @@ export class BattleScene extends Phaser.Scene {
           const on = this.fxOn;
           const final = e.hpLeft <= 0; // 마지막 일격
           // E 펀치 과장 (끔 = M1 팔 찌르기)
-          this.fxCount += this.ant.strike(e.arm, on.punch ? FX.punch.stretch : FX.arm.stretch, FX.punch.ms, on.punch ? FX.punch.fist_scale : null);
+          this.fxCount += this.ant.strike(e.arm, on.punch ? FX.punch.stretch : FX.arm.stretch, FX.punch.ms, on.punch ? FX.punch.fist_scale : null, this.cfg.battle.strike_interval_s);
           if (on.punch) this.fxCount += 1;
           const b = this.sim.building;
           if (this.buildingView && b) {

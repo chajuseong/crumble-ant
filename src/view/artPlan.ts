@@ -17,6 +17,8 @@ export interface ArtConfig {
   weapon_scale: number;
   weapon_scale_max: number;
   hit_face_ms: number;
+  /** 머리만 따로 배율 (M3-C A — 표정 가독성, H-22). 없으면 1 */
+  head_scale?: number;
 }
 export interface ArtPart {
   skin_id: string;
@@ -91,6 +93,7 @@ export interface ArtPlan {
   slots: (ArtWeapon | null)[];
   drawScale: number;
   weaponScale: number;
+  headScale: number;
   showPivots: boolean;
 }
 
@@ -176,6 +179,7 @@ export function resolveArtPlan(data: ArtData, settings: ArtSettings, available: 
     slots,
     drawScale: settings.drawScale,
     weaponScale: settings.weaponScale,
+    headScale: data.config.head_scale ?? 1,
     showPivots: settings.showPivots,
   };
 }

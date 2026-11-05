@@ -6,7 +6,7 @@ const ALL = new Set(neededFiles());
 const without = (...files: string[]) => new Set([...ALL].filter((f) => !files.includes(f)));
 
 describe('M3 아트 계획 (폴백)', () => {
-  it('파일이 다 있으면 그림 · 기본 장착 = 시트 (망치 · 드릴 · 가시 철퇴 · 렌치)', () => {
+  it('파일이 다 있으면 그림 · 기본 장착 = 시트 (망치 · 드릴 · 철퇴 · 렌치)', () => {
     const plan = resolveArtPlan(ART_DATA, defaultSettings(), ALL);
     expect(plan.mode).toBe('image');
     expect(plan.reason).toBeNull();

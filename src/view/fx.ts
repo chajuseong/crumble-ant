@@ -16,6 +16,7 @@ export const FX_TOGGLES = [
   { id: 'hitDebris', label: 'F 타격 파편' },
   { id: 'sfx', label: 'G 효과음' },
   { id: 'contrast', label: '"와르르!" 대비' },
+  { id: 'motion', label: 'M3-C 모션 (공격 · 점프)' },
 ] as const;
 
 export type FxToggleId = (typeof FX_TOGGLES)[number]['id'];
