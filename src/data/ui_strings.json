@@ -4,7 +4,8 @@
     "hp": "HP",
     "auto_on": "자동 진행 ON ▶",
     "auto_off": "자동 진행 OFF ■",
-    "debris": "잔해 {n}"
+    "debris": "잔해 {n}",
+    "speed": "×{n}"
   },
   "challenge": {
     "title": "도전!",

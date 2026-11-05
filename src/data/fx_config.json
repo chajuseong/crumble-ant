@@ -101,7 +101,8 @@
       "min_pull_ms": 16,
       "body_tilt_deg": 6,
       "art_stretch_max": 1.1,
-      "art_thrust": 0.6
+      "art_thrust": 0.6,
+      "min_wall_ms": 33
     },
     "strong_scale": 1.4
   },
@@ -124,5 +125,9 @@
     "ms": 140,
     "push_px": 8,
     "push_ms": 90
+  },
+  "speed_fx": {
+    "light_from": 2,
+    "hit_sfx_every": 3
   }
 }

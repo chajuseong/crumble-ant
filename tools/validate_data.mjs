@@ -67,6 +67,7 @@ const CONFIG_KEYS = [
   ["strip.popup_duration_s", "num", { gt: 0 }],
   ["economy.carry_delay_s", "num", { min: 0 }],
   ["economy.start_debris", "int", { min: 0 }],
+  ["speed.levels", "levels"],
 ];
 
 // fx_config 필수 키 (M2 타격 연출 — view만 읽음, core 결과와 무관)
@@ -107,6 +108,8 @@ const FX_KEYS = [
   ["finisher.sfx_hz", "num", { gt: 0 }], ["finisher.sfx_ms", "int", { gt: 0 }],
   ["impact.star_px", "num", { gt: 0 }], ["impact.inner_ratio", "num", { gt: 0, max: 1 }], ["impact.points", "int", { min: 3 }], ["impact.ms", "int", { min: 0 }],
   ["impact.push_px", "num", { min: 0 }], ["impact.push_ms", "int", { min: 0 }],
+  // M3-E 배속 (H-28)
+  ["speed_fx.light_from", "num", { gt: 1 }], ["speed_fx.hit_sfx_every", "int", { min: 1 }], ["motion.strike.min_wall_ms", "int", { min: 0 }],
 ];
 
 // ui_strings 필수 키 (view가 읽는 것)
@@ -118,6 +121,7 @@ const UI_KEYS = [
   "fx.crumble", "fx.combo", "ant.down", "nest.title", "nest.sub", "nest.back",
   "hud.debris", "upgrade.title", "upgrade.level", "upgrade.max", "upgrade.short", "upgrade.close", "upgrade.reset", "upgrade.reset_confirm",
   "upgrade.fx.attack_power", "upgrade.fx.attack_speed", "upgrade.fx.jump_power", "upgrade.fx.move_speed",
+  "hud.speed",
   "upgrade.now.attack_power", "upgrade.now.attack_speed", "upgrade.now.jump_power", "upgrade.now.move_speed",
 ];
 
@@ -145,6 +149,12 @@ function checkValue(where, v, kind, o = {}, errors) {
   switch (kind) {
     case "int": if (!Number.isInteger(v)) return errors.push(`${where}: 정수여야 함 (${JSON.stringify(v)})`); return checkRange(where, v, o, errors);
     case "num": if (!isNum(v)) return errors.push(`${where}: 숫자여야 함 (${JSON.stringify(v)})`); return checkRange(where, v, o, errors);
+    case "levels":
+      // M3-E 배속 단계: 1개 이상 · 모두 > 0 · 오름차순 · 첫 값 = 1 (기본 ×1)
+      if (!Array.isArray(v) || v.length === 0 || !v.every(isNum)) return errors.push(`${where}: 숫자 1개 이상 (쉼표)`);
+      if (v[0] !== 1) errors.push(`${where}: 첫 값 = 1 (기본 ×1) (${v[0]})`);
+      if (v.some((x, i) => x <= 0 || (i > 0 && x <= v[i - 1]))) errors.push(`${where}: 0보다 크고 오름차순 (${v.join(",")})`);
+      return;
     case "bool": if (typeof v !== "boolean") errors.push(`${where}: TRUE/FALSE여야 함 (${JSON.stringify(v)})`); return;
     case "str":
       if (typeof v !== "string" || v === "") return errors.push(`${where}: 빈 문자열 불가`);

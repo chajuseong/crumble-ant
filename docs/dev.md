@@ -1,6 +1,7 @@
 # 와르르 개미 — 개발 기준 문서 (단일 기준)
 
-> 문서 버전: v0.11 (2026-11-05) — M3-D 공격 손맛 데이터: fx_config finisher.* · impact.* · hitstop.hit_ratio_max · art_config.impact_file · 연출 · 완료 조건 (H-27)
+> 문서 버전: v0.12 (2026-11-05) — M3-E 배속 데이터: speed.levels · speed_fx.* · motion.strike.min_wall_ms · hud.speed · 입력 · 연출 · 완료 조건 (H-28) · M3-D 머지 기록
+> v0.11 (2026-11-05) — M3-D 공격 손맛 데이터: fx_config finisher.* · impact.* · hitstop.hit_ratio_max · art_config.impact_file · 연출 · 완료 조건 (H-27)
 > v0.10 (2026-11-04) — M3-C 모션 데이터: fx_config motion.* · art_config 기본값 (그림 ×1.5 · 무기 ×1.3 · 머리 ×1.3 · 표정 900ms) · 연출 · 완료 조건 (H-21 · H-22)
 > v0.9 (2026-11-04) — M4 강화 데이터: upgrades 시트 · economy 키 · 문구 · 이벤트 · 연출 · 완료 조건 (H-17 · I-13) · M3 B 머지 기록
 > v0.8 (2026-11-04) — §3-5 아트 좌표 = art/game 납품본 측정값 · 무기 이름 = README
@@ -96,6 +97,7 @@ art/production/ (원본) · art/game/ (게임용) — 아트가 들어올 때 �
 | strip.popup_rise_ratio · popup_duration_s | float | 운반 팝업 높이 · 시간 | 0.5 · 0.8 |
 | economy.carry_delay_s | float | 파괴 → 재화 도착까지 (core 예약 — 평균 운반 시간: 날아감 1.0 + 집기 0.3 + 걷기 2.7초, M4 B에서 실제로 재서 맞춤) | 4.0 |
 | economy.start_debris | int | 새로 시작할 때 잔해 | 0 |
+| speed.levels | float[] | **M3-E** 배속 단계 — HUD 버튼을 누를 때마다 다음 (끝 → 처음). 첫 값 = 1 · 오름차순. **게임 시간만 빨라짐** (core는 dt만 받음 · 고정 스텝 그대로) · 고른 값은 브라우저 키 `crumble-ant.speed` (저장 형식 v1에 안 넣음 — H-28) | 1,1.5,2,3 |
 
 ### 3-4. `fx.xlsx` › fx_config → `fx_config.json` (키-값 · M2 타격 연출 — view만 읽음)
 px = 1080폭 기준 (view가 프레임 폭에 비례해 줄임) · ms = 밀리초. 값은 기개발 제안 임시값 (폰 확인 뒤 조정 — H-10). "M1 값" = M1 view 상수를 옮긴 것 (H-10 ⑥-4)
@@ -136,6 +138,8 @@ px = 1080폭 기준 (view가 프레임 폭에 비례해 줄임) · ms = 밀리�
 | finisher.chunk_count · chunk_px | int · float | 마무리 · 마지막 일격 큰 조각 (1080폭 기준) | 2 · 56 |
 | finisher.sfx_hz · sfx_ms | float · int | 마무리 효과음 "쾅" (일반 220Hz · 70ms보다 낮고 길게) | 150 · 140 |
 | impact.star_px · inner_ratio · points · ms | float · float · int · int | **M3-D B** 충격 별 (무기 끝 x · 건물 밑면 y — H-27 Q4) | 70 · 0.45 · 8 · 140 |
+| speed_fx.light_from · hit_sfx_every | float · int | **M3-E** 배속 ≥ light_from이면 가벼운 연출 — 일반 타격 히트스톱 · 매 타격 흔들림 끔 (마무리 · 마지막 일격만, 길이 ÷ 배속) · 일반 타격음 hit_sfx_every타에 1번 (H-28 ② · 질문 2) | 2 · 3 |
+| motion.strike.min_wall_ms | int | **M3-E** 공격 모션 최소 길이 (벽시계 · 60fps 2프레임) — ×3 · 공속 최대에서도 보이게 (같은 팔은 4타마다라 안 겹침) | 33 |
 | impact.push_px · push_ms | float · int | 건물 **그림만** 위로 밀렸다 돌아옴 (core 건물 y 그대로 · 히트스톱 중에도 진행 — H-27 Q5). 마무리 = × star_scale | 8 · 90 |
 
 ### 3-5. `art.xlsx` → 아트 배치 (M3 — view만 읽음 · 규격과 맞추는 법 = `docs/art.md`)
@@ -198,6 +202,7 @@ pivot · socket · grip = `art/game` 납품본 측정값 · draw_h · anchor · 
 | fx.crumble · fx.combo · ant.down | string | 파괴 · 연타 카운트 (M2 D) · 기절 글자 | `와르르!` · `{n} HIT!` · `@ @ 기절!` |
 | nest.title · nest.sub · nest.back | string | 개미굴 화면 | 개미굴 · … · `▲ 전투로` |
 | hud.debris | string | HUD 보유 잔해 (M4) | `잔해 {n}` |
+| hud.speed | string | **M3-E** 배속 버튼 | `×{n}` |
 | upgrade.title · level · max · short · close | string | 강화 패널 | 강화 · `Lv {n} / {max}` · MAX · 잔해가 부족해요 · ✕ |
 | upgrade.reset · reset_confirm | string | 테스트 빌드 기록 지우기 (두 번 눌러 확정 — H-17 질문 7) | 기록 지우기 · 한 번 더 누르면 지워져요 |
 | upgrade.fx.{stat} (4) | string | 지금 → 다음 효과 | `데미지 {a} → {b}` · `초당 {a} → {b}회` · `점프 +{a}% → +{b}%` · `하강 +{a}% → +{b}%` |
@@ -222,6 +227,7 @@ pivot · socket · grip = `art/game` 납품본 측정값 · draw_h · anchor · 
 | **upgrade** (M4) | id · level · cost · wallet | 강화 구매 성공. 데미지 · 타격 간격 = 다음 타격부터, 점프력 · 이동속도 = 다음 점프부터 |
 
 **view → core 입력 계약 (InputRouter action)**: strongJump · challenge · menu{id} · openNest{via: tap / swipe_down / button} · closeNest{via: button / swipe_up}
+- M3-E: `cycleSpeed` — HUD [×1] 버튼 (InputRouter 버튼 · 강점프와 안 겹침). 배속 값은 view가 들고 `sim.update(dt × 배속)` · 히트스톱 · 트윈 · 모션 · 잔해 · 일개미도 같은 배속 · 효과음 높이는 그대로 · core가 한 번에 받는 시간 상한 0.25초 그대로 (×3이면 12fps 이하부터 게임 시간이 늦어짐 — `?debug`에 실제 배속)
 - M4: `buyUpgrade{id}` · `closeUpgrade{via: button / outside}` · `resetSave` (두 번째 누름). InputRouter `upgrade` 모드 = 패널 버튼만 받고 바깥 탭은 닫기 (강점프 안 됨, H-17 질문 6). 구매 결과 = core `buyUpgrade(id)` → ok / short (부족) / max
 
 **저장 (M4 — 형식 v1, H-17 ③)**: 키 `crumble-ant.save` · `{ v: 1, debris, upgrades: {upgrade_id: Lv}, stage, auto_advance }`. 만들기 · 검증 · 버전 변환 = `src/core/save.ts` (읽고 쓰기는 view). 저장 시점 = deposit · upgrade · stageStart · 화면을 떠날 때 (1초에 한 번 이하). 도전 중 = 도전 전 스테이지 · auto_advance OFF로. 운반 중 잔해는 저장 안 함 [프로토만]. 못 읽으면 새로 시작 + 원본을 `crumble-ant.save.bad`로. 시간 기록 없음
@@ -254,6 +260,7 @@ pivot · socket · grip = `art/game` 납품본 측정값 · draw_h · anchor · 
 | **M3-D A** 4연타 마무리 | strike (combo % finisher.every == 0 · 마지막 일격 아님) | 0.07초 멈춤 · 0.12초 흔들림 | "다다다 쾅!" — 긴 히트스톱 · 큰 흔들림 · 큰 별 · 큰 조각 · 낮은 "쾅" · 팔 늘어남 ×1.2 | `fx_config` finisher.* |
 | **M3-D B** 충격 별 · 건물 밀림 | strike | 0.14초 · 0.09초 | 무기 끝에 노란 별 (어두운 테두리 — L-05) · 건물 그림이 위로 살짝 튕김. 그림 파일이 있으면 별 대신 그림 | `fx_config` impact.* · `art_config.impact_file` |
 | **M3-D** [FX] 토글 2개 | ([FX] 패널) | — | "4연타 마무리" · "충격 · 밀림" — 끄면 M3 모습 | — (테스트 빌드 확인용) |
+| **M3-E** 배속 버튼 · 가벼운 연출 | (HUD 오른쪽 아래 [×1]) · 배속 ≥ 2 | — | 누를 때마다 ×1 → ×1.5 → ×2 → ×3 → ×1. ×2 이상: 일반 타격 멈춤 · 흔들림 끔 · 일반 타격음 3타에 1번 · 공격 모션 최소 33ms | `speed.levels` · `fx_config` speed_fx.* · motion.strike.min_wall_ms · `hud.speed` |
 | **M3-C** [FX] 모션 토글 | ([FX] 패널) | — | 끄면 M3 모습 (팔 찌르기 트윈 · 점프 늘어남) | — (테스트 빌드 확인용) |
 | **M3** 표정 바꾸기 | land · antDown | hit_face_ms · 기절 동안 | 착지 피격 = head_hit · 기절 = head_down · 그 외 head_normal | `art_config.hit_face_ms` |
 | **M3** 파츠 그림 | (늘) | — | 도형 대신 파츠 그림 조립. M2 연출(펀치 과장 = 팔 늘이기 + 손 소켓 키우기 · 찌그러짐 등)은 같게 | `art.xlsx` 전부 |
@@ -283,5 +290,6 @@ pivot · socket · grip = `art/game` 납품본 측정값 · draw_h · anchor · 
 | M1 | 코어 루프 (PR #2 이식) | ① 화면 720×1560 · HUD / 전투 / 띠 = 6 / 84 / 10% (core 레이아웃 테스트) ② PR #2 테스트 57개 이식 통과 + [굴] 버튼 테스트 ③ **`npm run measure` 표 = PR #2 본문 표** (다르면 이유를 PR에) ④ `data` · `data:check` ✅ (시트 4개 · PK · FK) ⑤ smoke: 콘솔 오류 0 · 전투 구역 그려짐 · 15초 안에 건물 파괴 수 > 0 ⑥ 화면 6컷 (매달려 연타 · 잔해 → 운반 팝업 · 착지 피격 · 기절 · 후퇴 + [도전] · [굴] → 개미굴) 360 / 390 / 430 폭 ⑦ 이 문서 §3 · §4 · §5 · §7 | `ff3175d` (PR #9) |
 | M2 | 타격감 보강 (I-10) | ① **`npm run measure` 표 = M1 표** ② 테스트: M1 59개 + 연타 카운트(core) · 히트스톱 시계 · fx_config 검증 ③ **[FX] 전부 끔 = M1 화면** (같은 장면 M1 빌드와 나란히 · 끈 상태에서 M2 연출 객체 0개 자동 확인) ④ smoke ✅ (콘솔 오류 0 · 첫 탭 전 소리 객체 없음) ⑤ 화면 컷: 연타 중 ("N HIT!" · 번쩍 · 큰 주먹) · 마지막 일격 · "와르르!" 받침 · [FX] 패널 — 360 / 390 / 430 ⑥ 히트스톱 지연 측정 (스테이지 1 · 5 · 7 — 건물당 %) PR 본문에 ⑦ 이 문서 §3 · §4 · §5 · §7 | `d563925` (PR #16) |
 | M3 | 아트 적용 — 개미 파츠 + 무기 8종 (I-11 · H-12) · C 모션 (I-14 · H-21) | ① **`npm run measure` 표 = M2 표** (core 안 건드림) ② **그림 끔 = M2 화면** (같은 장면 나란히) ③ 그림 켬 화면 컷: 기본 자세 · 매달려 연타 (펀치 과장 + 무기) · 착지 피격 표정 · 기절 표정 · 슬롯별 무기 8종 — 360 / 390 / 430 ④ 폴백 자동 테스트 (파츠 하나 빠짐 → 도형 · 무기 빠짐 → 맨주먹) + 아트 없이 빌드 · smoke ✅ ⑤ smoke 콘솔 오류 0 (그림 켬 기본) ⑥ 데이터 검증: weapons PK · loadout FK · mounts → parts FK · 파일 이름 규칙 · art/game 파일 (폴더 없으면 경고) ⑦ `docs/art.md` · 이 문서 §3 · §5 · §7 / **C (모션)**: ⑧ measure = M3 표 ⑨ [FX] 모션 끔 = M3 화면 (같은 장면 픽셀 비교 · 끈 상태에서 모션 객체 0) ⑩ 모션 화면 컷: 점프 6단계 · 공격 3단계 · 강점프 — 그림 · 도형 둘 다 (390) · 그림 ×1.5 · 무기 ×1.3 기본값 · 표정 3종이 390폭에서 구별됨 ⑪ 0.067초 간격 연타 (순수 함수 테스트 + 브라우저) ⑫ 테스트: 단계 자세 · 간격 비례 · 히트스톱 중 정지 · 모션 끔 = 기본 자세 · 그림 팔 늘어남 상한 ⑬ smoke ✅ | B `d127828` (PR #19) · C `500f6aa` (PR #28) · CA-002 `1ba2fe8` (PR #31) |
-| M3-D | 공격 손맛 — 4연타 마무리 · 충격 별 · 건물 밀림 (I-16 · H-27) | ① `npm run measure` = M3 표 ② [FX] 마무리 · 충격 끔 = M3 화면 (픽셀 비교) · 전부 끔 fxCount 0 ③ 화면 컷 (그림 · 도형): 일반 타격 별 · 4번째 마무리 (큰 별 · 큰 조각 · 흔들림) · 파괴 일격 (마지막이 이김) — 390 ④ 테스트: 마무리 판정 (combo % every · 마지막 일격 제외) · 히트스톱 길이 (hit_ratio_max) · 별 크기 ⑤ 히트스톱 지연 표 `npm run measure -- --hitstop` (마무리 포함) ⑥ smoke ✅ ⑦ 이 문서 §3-4 · §5 · §7 | |
+| M3-D | 공격 손맛 — 4연타 마무리 · 충격 별 · 건물 밀림 (I-16 · H-27) | ① `npm run measure` = M3 표 ② [FX] 마무리 · 충격 끔 = M3 화면 (픽셀 비교) · 전부 끔 fxCount 0 ③ 화면 컷 (그림 · 도형): 일반 타격 별 · 4번째 마무리 (큰 별 · 큰 조각 · 흔들림) · 파괴 일격 (마지막이 이김) — 390 ④ 테스트: 마무리 판정 (combo % every · 마지막 일격 제외) · 히트스톱 길이 (hit_ratio_max) · 별 크기 ⑤ 히트스톱 지연 표 `npm run measure -- --hitstop` (마무리 포함) ⑥ smoke ✅ ⑦ 이 문서 §3-4 · §5 · §7 | A `a794430` (PR #32) · B `74cf239` (PR #33) |
+| M3-E | 배속 ×1 · ×1.5 · ×2 · ×3 (I-17 · H-28) | ① `npm run measure` 그대로 ② **배속별 같은 게임 시간 결과 동일** (테스트 — dt × 배속으로 돌린 sim과 ×1 sim이 같은 고정 스텝 수에서 상태 · 이벤트 같음) ③ ×3 smoke (콘솔 오류 0 · 파괴 수 오름) ④ 버튼 화면 컷 (×1 · ×1.5 · ×2 · ×3) ⑤ ×2 이상 가벼운 연출 · 모션 최소 길이 테스트 ⑥ 기절 · 후퇴 · [도전] · 개미굴 중 배속 유지 ⑦ PR에 "무료 ×3 = 재화 ×3" 확인 문구 (M4 운반 예약은 게임 시간) ⑧ 이 문서 §3 · §4 · §5 · §7 | |
 | M4 | 강화 4종 + 소프트 재화 (I-12 · I-13 · H-17) | ① 강화 0이면 `npm run measure` 표 = M3 표 ② `npm run measure -- --upgrades` = 진행 표 (§3-6 측정 · PR 본문에) · **단일 강화 Lv 0 ~ max 퇴보 0건** ③ 테스트: 비용 (정수 반복) · 효과 정수화 · 구매 (부족 · MAX) · deposit 시각 · 저장 왕복 · 깨진 저장 → 새로 시작 + `.bad` 보관 · 버전 · 도전 중 저장 · 강화가 다음 타격 · 점프부터 적용 ④ 실제 브라우저: 구매 → 새로고침 → 잔해 · Lv · 스테이지 그대로 ⑤ smoke ✅ + 강화 패널 열기 · 구매 1회 · 콘솔 오류 0 ⑥ 화면 컷: HUD 잔해 · 패널 (가능 · 부족 · MAX) · 구매 순간 — 360 / 390 / 430 ⑦ 이 문서 §3 · §4 · §5 · §7 | |
