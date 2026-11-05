@@ -98,6 +98,15 @@ const FX_KEYS = [
   ["motion.strike.pull_deg", "num", { min: 0, max: 90 }], ["motion.strike.weapon_spin_deg", "num", { min: -180, max: 180 }], ["motion.strike.min_pull_ms", "int", { min: 0 }],
   ["motion.strike.body_tilt_deg", "num", { min: 0, max: 45 }], ["motion.strike.art_stretch_max", "num", { min: 1 }], ["motion.strike.art_thrust", "num", { min: 0, max: 1 }],
   ["motion.strong_scale", "num", { gt: 0 }],
+  // M3-D 공격 손맛 (H-27)
+  ["hitstop.hit_ratio_max", "num", { gt: 0, max: 1 }],
+  ["finisher.every", "int", { min: 1 }], ["finisher.hitstop_ms", "int", { min: 0 }],
+  ["finisher.camera_ms", "int", { min: 0 }], ["finisher.camera_intensity", "num", { min: 0, max: 0.1 }],
+  ["finisher.stretch_mult", "num", { gt: 0 }], ["finisher.star_scale", "num", { gt: 0 }],
+  ["finisher.chunk_count", "int", { min: 0 }], ["finisher.chunk_px", "num", { gt: 0 }],
+  ["finisher.sfx_hz", "num", { gt: 0 }], ["finisher.sfx_ms", "int", { gt: 0 }],
+  ["impact.star_px", "num", { gt: 0 }], ["impact.inner_ratio", "num", { gt: 0, max: 1 }], ["impact.points", "int", { min: 3 }], ["impact.ms", "int", { min: 0 }],
+  ["impact.push_px", "num", { min: 0 }], ["impact.push_ms", "int", { min: 0 }],
 ];
 
 // ui_strings 필수 키 (view가 읽는 것)
@@ -233,6 +242,8 @@ export function validateAll(data) {
       for (const k of ["draw_scale", "draw_scale_max", "weapon_scale", "weapon_scale_max"]) checkValue(`art_config.${k}`, a[k], "num", { gt: 0 }, errors);
       checkValue("art_config.hit_face_ms", a.hit_face_ms, "int", { min: 0 }, errors);
       checkValue("art_config.head_scale", a.head_scale, "num", { gt: 0 }, errors);
+      if (!("impact_file" in a)) errors.push("art_config.impact_file: 없음 (비우면 도형 별)");
+      else if (a.impact_file !== null && !/^[a-z0-9_]+\.png$/.test(a.impact_file)) errors.push(`art_config.impact_file: 비우거나 영문 소문자 · 숫자 · _ .png (${JSON.stringify(a.impact_file)})`);
       if (a.draw_scale > a.draw_scale_max) errors.push("art_config.draw_scale: draw_scale_max 이하여야 함");
       if (a.weapon_scale > a.weapon_scale_max) errors.push("art_config.weapon_scale: weapon_scale_max 이하여야 함");
     }
@@ -362,6 +373,7 @@ export function artFileIssues(data, root = "art/game") {
   const need = [
     ...(Array.isArray(data.ant_parts) ? data.ant_parts.map((r) => ["ant", r.file]) : []),
     ...(Array.isArray(data.weapons) ? data.weapons.map((r) => ["weapons", r.file]) : []),
+    ...(typeof data.art_config?.impact_file === "string" ? [["fx", data.art_config.impact_file]] : []),
   ];
   if (!fs.existsSync(root)) {
     if (need.length) out.warnings.push(`${root} 폴더 없음 — 그림 ${need.length}개는 아트 납품 뒤 (그때까지 게임은 도형으로 그림)`);
