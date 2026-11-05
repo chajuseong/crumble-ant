@@ -14,6 +14,7 @@ import { t } from './text';
 import { FX, type FxToggles, loadToggles } from './fx';
 import { createFxPanel } from './fxPanel';
 import { HitstopClock } from './hitstop';
+import { dropsChunks, hitstopMs, impactScale, type StrikeKind, strikeKind } from './hitFeel';
 import { Sfx } from './sfx';
 import type { NestScene } from './NestScene';
 
@@ -127,6 +128,9 @@ export class BattleScene extends Phaser.Scene {
       const url = ART_FILE_URLS[file];
       if (url && !this.textures.exists(artTextureKey(file))) this.load.image(artTextureKey(file), url);
     }
+    // M3-D 충격 별 그림 (있으면 — 없으면 도형 별)
+    const impact = ART_DATA.config.impact_file;
+    if (impact && ART_FILE_URLS[impact] && !this.textures.exists(artTextureKey(impact))) this.load.image(artTextureKey(impact), ART_FILE_URLS[impact]);
   }
 
   private applyArt(): void {
@@ -405,9 +409,14 @@ export class BattleScene extends Phaser.Scene {
         case 'strike': {
           const on = this.fxOn;
           const final = e.hpLeft <= 0; // 마지막 일격
-          // E 펀치 과장 (끔 = M1 팔 찌르기)
-          this.fxCount += this.ant.strike(e.arm, on.punch ? FX.punch.stretch : FX.arm.stretch, FX.punch.ms, on.punch ? FX.punch.fist_scale : null, this.cfg.battle.strike_interval_s);
-          if (on.punch) this.fxCount += 1;
+          // M3-D: 마지막 일격 > 4연타 마무리 (core combo) > 일반 — A' 끔이면 마무리 없음
+          const kind: StrikeKind = strikeKind(e.combo, e.hpLeft, on.finisher);
+          const fin = kind === 'finisher';
+          const interval = this.cfg.battle.strike_interval_s;
+          // E 펀치 과장 (끔 = M1 팔 찌르기) · 마무리 팔은 더 길게 (A')
+          const stretch = (on.punch ? FX.punch.stretch : FX.arm.stretch) * (fin ? FX.finisher.stretch_mult : 1);
+          this.fxCount += this.ant.strike(e.arm, stretch, FX.punch.ms, on.punch ? FX.punch.fist_scale : null, interval);
+          if (on.punch || fin) this.fxCount += 1;
           const b = this.sim.building;
           if (this.buildingView && b) {
             this.buildingView.setCrackSteps(FX.crack.steps);
@@ -417,11 +426,13 @@ export class BattleScene extends Phaser.Scene {
           }
           const y = this.ant.root.y - this.cfg.battle.ant.height_ratio * this.L.battle.height;
           this.floatText(this.L.width / 2 + this.px(Phaser.Math.Between(-120, 120)), y, `${e.damage}`, COLOR.damage, this.px(FX.damage.text_px), 900, FX.damage.ms, FX.damage.pop_scale);
-          if (on.hitstop) { this.hitstop.add(final ? FX.hitstop.final_ms : FX.hitstop.hit_ms, FX.hitstop.max_ms); this.fxCount += 1; } // A
-          if (on.shake && !final) { this.cameras.main.shake(FX.camera.hit_ms, FX.camera.hit_intensity); this.fxCount += 1; } // C (마지막 일격은 destroy에서 크게)
+          if (on.hitstop || fin) { this.hitstop.add(hitstopMs(kind, interval), FX.hitstop.max_ms); this.fxCount += 1; } // A · A' (일반 = 간격 × hit_ratio_max 이하)
+          if (fin) { this.cameras.main.shake(FX.finisher.camera_ms, FX.finisher.camera_intensity); this.fxCount += 1; } // A' 큰 흔들림
+          else if (on.shake && !final) { this.cameras.main.shake(FX.camera.hit_ms, FX.camera.hit_intensity); this.fxCount += 1; } // C (마지막 일격은 destroy에서 크게)
+          if (on.impact) this.impact(kind, e.arm, stretch); // B' 충격 별 · 건물 밀림 · 큰 조각
           if (on.combo) this.showCombo(e.combo); // D
           if (on.hitDebris) this.burstHitDebris(y); // F
-          if (on.sfx && this.sfx.created) { if (final) this.sfx.final(); else this.sfx.hit(e.combo); this.fxCount += 1; } // G
+          if (on.sfx && this.sfx.created) { if (final) this.sfx.final(); else if (fin) this.sfx.finisher(); else this.sfx.hit(e.combo); this.fxCount += 1; } // G · A' 마무리 "쾅"
           break;
         }
         case 'destroy':
@@ -585,6 +596,43 @@ export class BattleScene extends Phaser.Scene {
   }
 
   /** M2 F — 타격점(건물 밑면)에서 작은 조각 · 먼지 */
+  /** M3-D B' — 무기 끝 x · 건물 밑면 y에 충격 별 · 건물 그림 밀림 · (마무리 · 마지막 일격) 큰 조각 */
+  private impact(kind: StrikeKind, slot: number, stretch: number): void {
+    const v = this.buildingView;
+    if (!v) return;
+    const k = impactScale(kind);
+    const x = Phaser.Math.Clamp(this.ant.strikeX(slot, stretch), v.root.x - v.w / 2, v.root.x + v.w / 2);
+    const y = v.bottomY;
+    const im = FX.impact;
+    const file = ART_DATA.config.impact_file;
+    const r = this.px(im.star_px) * k;
+    const star: Phaser.GameObjects.Image | Phaser.GameObjects.Star =
+      file && this.textures.exists(artTextureKey(file))
+        ? this.add.image(x, y, artTextureKey(file)).setDisplaySize(r * 2, r * 2)
+        : this.add.star(x, y, im.points, r * im.inner_ratio, r, COLOR.impact).setStrokeStyle(this.px(6), COLOR.buildingDark);
+    star.setDepth(DEPTH.fx).setScale(star.scaleX * 0.4, star.scaleY * 0.4).setAngle(Phaser.Math.Between(0, 45));
+    const sx = star.scaleX / 0.4;
+    const sy = star.scaleY / 0.4;
+    this.tweens.add({ targets: star, scaleX: sx * 1.2, scaleY: sy * 1.2, alpha: 0, duration: im.ms, ease: 'Quad.easeOut', onComplete: () => star.destroy() });
+    v.push(this.px(im.push_px) * k, im.push_ms);
+    this.fxCount += 2;
+    if (dropsChunks(kind)) this.burstChunks(x, y);
+  }
+
+  /** M3-D B' 큰 조각 — 작은 파편(F)과 같은 움직임 · 크기만 큼 */
+  private burstChunks(x: number, y: number): void {
+    const f = FX.finisher;
+    const d = FX.hit_debris;
+    for (let i = 0; i < f.chunk_count; i++) {
+      const size = this.px(f.chunk_px) * Phaser.Math.FloatBetween(0.8, 1.15);
+      const o = this.add.rectangle(x, y, size, size * 0.8, this.buildingView?.color ?? 0xcccccc).setStrokeStyle(this.px(5), COLOR.buildingDark).setDepth(DEPTH.fx - 1);
+      const ang = Phaser.Math.FloatBetween(Math.PI * 0.2, Math.PI * 0.8);
+      const sp = this.px(d.speed_px) * (d.life_ms / 1000);
+      this.tweens.add({ targets: o, x: o.x + Math.cos(ang) * sp * (i % 2 ? 1 : -1), y: o.y + Math.sin(ang) * sp, alpha: 0, angle: Phaser.Math.Between(-200, 200), duration: d.life_ms, ease: 'Quad.easeOut', onComplete: () => o.destroy() });
+      this.fxCount += 1;
+    }
+  }
+
   private burstHitDebris(y: number): void {
     const d = FX.hit_debris;
     for (let i = 0; i < d.count; i++) {

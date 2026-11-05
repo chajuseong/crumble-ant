@@ -46,6 +46,13 @@ export class Sfx {
     this.burst(s.final_ms * 0.7, 1600, 0.5);
   }
 
+  /** M3-D 4연타 마무리 "쾅" — 일반보다 낮고 길게 (마지막 일격보다는 짧게) */
+  finisher(): void {
+    const f = FX.finisher;
+    this.thump(f.sfx_hz, f.sfx_ms, 1);
+    this.burst(f.sfx_ms * 0.7, 2000, 0.45);
+  }
+
   /** 붕괴 "와르르" — 잡음이 내려감 */
   crumble(): void {
     const s = FX.sfx;

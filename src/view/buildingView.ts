@@ -8,7 +8,7 @@ export class BuildingView {
   private readonly cracks: Phaser.GameObjects.Graphics;
   private readonly hpBar: Phaser.GameObjects.Rectangle;
   private readonly hpText: Phaser.GameObjects.Text;
-  private readonly w: number;
+  readonly w: number;
   private readonly h: number;
   private readonly scene: Phaser.Scene;
   private readonly crackSeed: number[];
@@ -21,6 +21,7 @@ export class BuildingView {
     this.h = h;
     this.color = COLOR.building[id % COLOR.building.length]!;
     this.root = scene.add.container(x, y);
+    this.baseY = y;
     this.crackSeed = Array.from({ length: 12 }, (_, i) => ((id * 9301 + i * 49297) % 233280) / 233280);
 
     const g = scene.add.graphics();
@@ -63,8 +64,26 @@ export class BuildingView {
     this.root.add(this.hpText);
   }
 
+  /** M3-D B 건물 밀림 (그림만 위로 — core 건물 y 그대로) */
+  private readonly pushAnim = { v: 0 };
+  private baseY = 0;
+
   setY(y: number): void {
-    this.root.y = y;
+    this.baseY = y;
+    this.root.y = y - this.pushAnim.v;
+  }
+
+  /** 맞은 건물 밑면 화면 y (밀림 빼고) — 충격 별 자리 */
+  get bottomY(): number {
+    return this.baseY;
+  }
+
+  /** 위로 px만큼 밀렸다 ms 동안 돌아옴 (트윈 = 벽시계 → 히트스톱 중에도 진행 — H-27 Q5) */
+  push(px: number, ms: number): void {
+    this.scene.tweens.killTweensOf(this.pushAnim);
+    this.pushAnim.v = px;
+    this.root.y = this.baseY - px;
+    this.scene.tweens.add({ targets: this.pushAnim, v: 0, duration: ms, ease: 'Quad.easeOut', onUpdate: () => (this.root.y = this.baseY - this.pushAnim.v) });
   }
 
   setHp(hp: number, maxHp: number): void {
@@ -103,6 +122,7 @@ export class BuildingView {
 
   destroy(): void {
     this.scene.tweens.killTweensOf(this.root);
+    this.scene.tweens.killTweensOf(this.pushAnim);
     this.root.destroy(true);
   }
 

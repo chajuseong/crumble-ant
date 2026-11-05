@@ -152,6 +152,14 @@ export class AntRig {
     return created;
   }
 
+  /** M3-D: 내지르기 끝(팔 각도 = 기본 × 0.15)에서 무기 끝 x — 그림 좌표 (root 배율 전) */
+  tipX(slot: number): number | null {
+    const arm = this.arms[slot - 1];
+    if (!arm) return null;
+    const reach = arm.len + (arm.weapon ? arm.weapon.height * Math.abs(arm.weapon.scaleY) * arm.weapon.originY : 0);
+    return arm.baseX + Math.sin(Phaser.Math.DegToRad(arm.rest * 0.15)) * reach;
+  }
+
   /** M3-C: 맨주먹 슬롯 주먹을 미리 만들어 둠 (모션이 크기만 바꿈). 반환 = 새로 만든 수 */
   ensureFist(slot: number, want: boolean): number {
     const arm = this.arms[slot - 1];

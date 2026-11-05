@@ -191,6 +191,18 @@ export class AntView {
     return created;
   }
 
+  /** M3-D 충격 별 자리 x (화면) — 그 팔이 내지른 끝 (무기 끝 · 맨주먹이면 팔 끝 — H-27 Q4) */
+  strikeX(slot: number, stretch = 1): number {
+    if (this.rig) {
+      const x = this.rig.tipX(slot);
+      if (x !== null) return this.root.x + x * this.rig.root.scaleX;
+    }
+    const arm = this.arms[slot - 1];
+    const rest = this.armRest[slot - 1];
+    if (!arm || !rest) return this.root.x;
+    return this.root.x + rest.x + Math.sin(Phaser.Math.DegToRad(rest.angle * 0.15)) * this.armLen * stretch;
+  }
+
   /** 도형 주먹 (M2 E) — 없으면 만듦. 반환 = 새로 만든 수 */
   private ensureShapeFist(i: number, want: boolean): number {
     if (!want || this.fists[i]) return 0;

@@ -17,6 +17,8 @@ export const FX_TOGGLES = [
   { id: 'sfx', label: 'G 효과음' },
   { id: 'contrast', label: '"와르르!" 대비' },
   { id: 'motion', label: 'M3-C 모션 (공격 · 점프)' },
+  { id: 'finisher', label: "M3-D A' 4연타 마무리" },
+  { id: 'impact', label: "M3-D B' 충격 별 · 건물 밀림" },
 ] as const;
 
 export type FxToggleId = (typeof FX_TOGGLES)[number]['id'];
