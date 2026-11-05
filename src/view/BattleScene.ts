@@ -187,7 +187,7 @@ export class BattleScene extends Phaser.Scene {
     this.sim.update(this.hitstop.consume(deltaMs) / 1000);
     this.handleEvents(this.sim.drainEvents());
     // M3-C 모션 — core 상태를 읽어 자세만 그림 (히트스톱 중엔 공격 모션도 멈춤 · 땅에 닿으면 먼지 고리)
-    if (this.ant.updateMotion(deltaMs, this.sim.ant, this.sim.building?.state === 'falling', this.fxOn.hitstop && this.hitstop.stopped)) {
+    if (this.ant.updateMotion(deltaMs, this.sim.ant, this.sim.building?.state === 'falling', this.fxOn.hitstop && this.hitstop.stopped, this.hangGap(), this.sim.ant.y / this.cfg.battle.ant.height_ratio)) {
       this.dustRing();
       this.fxCount += 1;
     }
@@ -518,6 +518,12 @@ export class BattleScene extends Phaser.Scene {
         }
       }
     }
+  }
+
+  /** CA-002: (떨어지는 건물 밑면 − 개미 발) ÷ 개미 키 — 건물이 없거나 착지했으면 Infinity */
+  private hangGap(): number {
+    const b = this.sim.building;
+    return b && b.state === 'falling' ? (b.y - this.sim.ant.y) / this.cfg.battle.ant.height_ratio : Infinity;
   }
 
   private dustRing(): void {

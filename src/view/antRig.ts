@@ -40,6 +40,8 @@ export class AntRig {
   readonly root: Phaser.GameObjects.Container;
   private readonly arms: (RigArm | null)[] = Array.from({ length: SLOTS }, () => null);
   private readonly heads = new Map<Face, Phaser.GameObjects.Image>();
+  /** 그림 머리끝 높이 ÷ 개미 키 (그림 배율 · 머리 배율 포함) — CA-002 매달릴 때 내리는 양 */
+  readonly topRatio: number;
   /** 다리 마운트 [왼, 오] — M3-C 모션 */
   private readonly legs: { mount: Phaser.GameObjects.Container; rest: number; side: number }[] = [];
 
@@ -50,6 +52,7 @@ export class AntRig {
     private readonly fistR: number,
   ) {
     this.root = scene.add.container(0, 0).setScale(plan.drawScale);
+    let top = 1;
     const dot = (parent: Phaser.GameObjects.Container, x: number, y: number, color: number) => {
       if (plan.showPivots) parent.add(scene.add.circle(x, y, h * 0.035, color).setStrokeStyle(2, 0xffffff));
     };
@@ -71,6 +74,7 @@ export class AntRig {
         for (const face of ['normal', 'hit', 'down'] as const) {
           const p = place(`head_${face}`);
           if (p) this.heads.set(face, p.img.setVisible(face === 'normal'));
+          if (p) top = Math.max(top, plan.drawScale * (mount.anchor_y + plan.headScale * p.part.draw_h * p.part.pivot_y));
         }
       } else {
         const p = place(mount.part_id as keyof ArtPlan['parts']);
@@ -103,6 +107,7 @@ export class AntRig {
       dot(m, 0, 0, PIVOT_COLOR);
       this.root.add(m);
     }
+    this.topRatio = top;
   }
 
   setFace(face: Face): void {
