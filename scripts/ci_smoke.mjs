@@ -81,12 +81,16 @@ try {
   // M4: 재화가 들어오면 강화 패널을 열고 가장 싼 강화 1번 구매 (콘솔 오류 0 · Lv 1 · 재화 줄어듦)
   result.upgrade = await page.evaluate(async () => {
     const s = window.__game.scene.getScene("battle");
-    const deadline = performance.now() + 15000;
-    while (s.sim.wallet < 60 && performance.now() < deadline) await new Promise((r) => setTimeout(r, 200));
+    // 재화가 자연히 모이길 잠깐만 기다리고 (느린 러너에서 전체 45초를 넘지 않게), 모자라면 시험용으로 채움 — deposit 자체는 economy.test가 확인
+    const cost = 60;
+    const deadline = performance.now() + 6000;
+    while (s.sim.wallet < cost && performance.now() < deadline) await new Promise((r) => setTimeout(r, 200));
+    const seeded = s.sim.wallet < cost;
+    if (seeded) s.sim.wallet = cost;
     const before = s.sim.wallet;
     s.openUpgrade();
     s.dispatch([{ type: "buyUpgrade", id: "attack_power" }]);
-    const r = { open: s.upgradePanel.isOpen, before, after: s.sim.wallet, level: s.sim.levels.attack_power };
+    const r = { open: s.upgradePanel.isOpen, before, after: s.sim.wallet, level: s.sim.levels.attack_power, seeded };
     s.dispatch([{ type: "closeUpgrade", via: "button" }]);
     return r;
   });
