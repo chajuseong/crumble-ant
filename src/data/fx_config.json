@@ -2,7 +2,8 @@
   "hitstop": {
     "hit_ms": 40,
     "final_ms": 90,
-    "max_ms": 120
+    "max_ms": 120,
+    "hit_ratio_max": 0.33
   },
   "flash": {
     "alpha": 0.7,
@@ -103,5 +104,25 @@
       "art_thrust": 0.6
     },
     "strong_scale": 1.4
+  },
+  "finisher": {
+    "every": 4,
+    "hitstop_ms": 70,
+    "camera_ms": 120,
+    "camera_intensity": 0.006,
+    "stretch_mult": 1.2,
+    "star_scale": 1.8,
+    "chunk_count": 2,
+    "chunk_px": 56,
+    "sfx_hz": 150,
+    "sfx_ms": 140
+  },
+  "impact": {
+    "star_px": 70,
+    "inner_ratio": 0.45,
+    "points": 8,
+    "ms": 140,
+    "push_px": 8,
+    "push_ms": 90
   }
 }

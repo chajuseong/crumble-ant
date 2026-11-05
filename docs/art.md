@@ -1,6 +1,7 @@
 # 아트 규격 · 파츠 조립 (M3)
 
-> 문서 버전: v0.3 (2026-11-04) — §6 기본값 = 대표 폰 확인 (그림 ×1.5 · 무기 ×1.3) · 머리 배율 · 표정 시간 (H-22)
+> 문서 버전: v0.4 (2026-11-05) — §3 충격 별 그림 자리 `art/game/fx/` (M3-D — H-27)
+> v0.3 (2026-11-04) — §6 기본값 = 대표 폰 확인 (그림 ×1.5 · 무기 ×1.3) · 머리 배율 · 표정 시간 (H-22)
 > v0.2 (2026-11-04) — §6 좌표를 `art/game` 납품본(아트 #15 `faa5c2c`)으로 다시 잼 · 무기 이름 = README
 > v0.1 (2026-11-04) — 📮 #3 [DD→개발] M3 아트 적용 (I-11) · 계획 승인 H-12. 아트(ChatGPT)에 전달된 규격을 정본으로 옮김
 > 아트 PR은 `art/`만 고친다 (대표 머지). 게임은 **`art/game/`만** 읽는다 — `art/production/`은 원본 · 초안 보관
@@ -26,6 +27,7 @@
 | `art/game/ant/` | `ant_<skin>_body.png` · `ant_<skin>_head_normal.png` · `ant_<skin>_head_hit.png` · `ant_<skin>_head_down.png` · `ant_<skin>_arm.png` · `ant_<skin>_leg.png` (지금 skin = `black`) |
 | `art/game/weapons/` | `weapon_<weapon_id>.png` × 8 — weapon_id = 영문 소문자 · 숫자 · 밑줄 |
 | `art/game/weapons/README.md` | 무기 목록 표 `weapon_id | 한글 이름 | 파일` (H-12 Q7) |
+| `art/game/fx/` (나중) | 충격 별 그림 1장 — 이름을 `art.xlsx` › art_config `impact_file`에 적으면 도형 별 대신 씀 (M3-D). 위를 향한 별 · 투명 배경 · 가운데 = 맞는 점 |
 
 - 지금 무기 8종 (H-12 · 이름 = `art/game/weapons/README.md`): `club` 몽둥이 · `drill` 드릴 · `flail` 도리깨 · `hammer` 망치 · `mace` 철퇴 · `mallet` 나무망치 · `pickaxe` 곡괭이 · `wrench` 렌치
 - 파일 이름 규칙은 `npm run data:check`가 검사한다. 시트에 있는 파일이 `art/game/`에 없으면: 폴더가 없을 때 = 경고, 폴더가 있을 때 = 오류 (H-12 Q6)

@@ -6,5 +6,6 @@
   "weapon_scale": 1.3,
   "weapon_scale_max": 2,
   "hit_face_ms": 900,
-  "head_scale": 1.3
+  "head_scale": 1.3,
+  "impact_file": null
 }
