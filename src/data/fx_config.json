@@ -63,5 +63,45 @@
     "crumble_ms": 600,
     "combo_pitch_step": 0.04,
     "combo_pitch_max": 8
+  },
+  "motion": {
+    "blend_ms": 80,
+    "crouch": {
+      "lead_s": 0.15,
+      "body_drop": 0.06,
+      "leg_fold_deg": 30
+    },
+    "launch": {
+      "ms": 140,
+      "stretch": 1.12
+    },
+    "rise": {
+      "leg_tuck_deg": 35,
+      "arm_gather": 0.5
+    },
+    "hang": {
+      "leg_dangle_deg": 10,
+      "sway_deg": 3
+    },
+    "fall": {
+      "leg_spread_deg": 25,
+      "arm_spread": 1.2
+    },
+    "land": {
+      "squash": 0.82,
+      "ms": 120
+    },
+    "strike": {
+      "span": 0.9,
+      "pull_ratio": 0.3,
+      "thrust_ratio": 0.3,
+      "pull_deg": 20,
+      "weapon_spin_deg": 25,
+      "min_pull_ms": 16,
+      "body_tilt_deg": 6,
+      "art_stretch_max": 1.1,
+      "art_thrust": 0.6
+    },
+    "strong_scale": 1.4
   }
 }

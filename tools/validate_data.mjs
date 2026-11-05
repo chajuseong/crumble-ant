@@ -86,6 +86,18 @@ const FX_KEYS = [
   ["crumble_text.px", "num", { gt: 0 }], ["crumble_text.plate_alpha", "num", { min: 0, max: 1 }], ["crumble_text.stroke_px", "num", { min: 0 }], ["crumble_text.ms", "int", { min: 0 }],
   ["sfx.volume", "num", { min: 0, max: 1 }], ["sfx.hit_hz", "num", { gt: 0 }], ["sfx.hit_ms", "int", { gt: 0 }], ["sfx.final_hz", "num", { gt: 0 }], ["sfx.final_ms", "int", { gt: 0 }],
   ["sfx.crumble_ms", "int", { gt: 0 }], ["sfx.combo_pitch_step", "num", { min: 0 }], ["sfx.combo_pitch_max", "int", { min: 0 }],
+  // M3-C 모션 (H-21)
+  ["motion.blend_ms", "int", { min: 0 }],
+  ["motion.crouch.lead_s", "num", { min: 0 }], ["motion.crouch.body_drop", "num", { min: 0, max: 0.5 }], ["motion.crouch.leg_fold_deg", "num", { min: -90, max: 90 }],
+  ["motion.launch.ms", "int", { min: 0 }], ["motion.launch.stretch", "num", { gt: 0 }],
+  ["motion.rise.leg_tuck_deg", "num", { min: -90, max: 90 }], ["motion.rise.arm_gather", "num", { min: 0, max: 1 }],
+  ["motion.hang.leg_dangle_deg", "num", { min: -90, max: 90 }], ["motion.hang.sway_deg", "num", { min: 0, max: 45 }],
+  ["motion.fall.leg_spread_deg", "num", { min: -90, max: 90 }], ["motion.fall.arm_spread", "num", { gt: 0 }],
+  ["motion.land.squash", "num", { gt: 0, max: 1 }], ["motion.land.ms", "int", { min: 0 }],
+  ["motion.strike.span", "num", { gt: 0, max: 1 }], ["motion.strike.pull_ratio", "num", { min: 0, max: 1 }], ["motion.strike.thrust_ratio", "num", { gt: 0, max: 1 }],
+  ["motion.strike.pull_deg", "num", { min: 0, max: 90 }], ["motion.strike.weapon_spin_deg", "num", { min: -180, max: 180 }], ["motion.strike.min_pull_ms", "int", { min: 0 }],
+  ["motion.strike.body_tilt_deg", "num", { min: 0, max: 45 }], ["motion.strike.art_stretch_max", "num", { min: 1 }], ["motion.strike.art_thrust", "num", { min: 0, max: 1 }],
+  ["motion.strong_scale", "num", { gt: 0 }],
 ];
 
 // ui_strings 필수 키 (view가 읽는 것)
@@ -204,6 +216,9 @@ export function validateAll(data) {
     else {
       walkKeys(f, "fx_config", errors);
       for (const [key, kind, o] of FX_KEYS) checkValue(`fx_config.${key}`, get(f, key), kind, o, errors);
+      const st = f.motion?.strike;
+      if (st && isNum(st.pull_ratio) && isNum(st.thrust_ratio) && st.pull_ratio + st.thrust_ratio > 1 + 1e-9)
+        errors.push(`fx_config.motion.strike: pull_ratio + thrust_ratio ≤ 1이어야 함 (나머지 = 복귀, 지금 ${st.pull_ratio + st.thrust_ratio})`);
     }
   }
 
@@ -217,6 +232,7 @@ export function validateAll(data) {
       checkValue("art_config.enabled", a.enabled, "bool", {}, errors);
       for (const k of ["draw_scale", "draw_scale_max", "weapon_scale", "weapon_scale_max"]) checkValue(`art_config.${k}`, a[k], "num", { gt: 0 }, errors);
       checkValue("art_config.hit_face_ms", a.hit_face_ms, "int", { min: 0 }, errors);
+      checkValue("art_config.head_scale", a.head_scale, "num", { gt: 0 }, errors);
       if (a.draw_scale > a.draw_scale_max) errors.push("art_config.draw_scale: draw_scale_max 이하여야 함");
       if (a.weapon_scale > a.weapon_scale_max) errors.push("art_config.weapon_scale: weapon_scale_max 이하여야 함");
     }
