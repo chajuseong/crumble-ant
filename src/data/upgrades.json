@@ -6,7 +6,7 @@
     "per_level_pct": 10,
     "max_level": 20,
     "cost_base": 60,
-    "cost_growth_pct": 130,
+    "cost_growth_pct": 122,
     "sort": 1
   },
   {
@@ -15,8 +15,8 @@
     "stat": "attack_speed",
     "per_level_pct": 8,
     "max_level": 10,
-    "cost_base": 90,
-    "cost_growth_pct": 135,
+    "cost_base": 70,
+    "cost_growth_pct": 132,
     "sort": 2
   },
   {
@@ -25,8 +25,8 @@
     "stat": "jump_power",
     "per_level_pct": 5,
     "max_level": 7,
-    "cost_base": 80,
-    "cost_growth_pct": 145,
+    "cost_base": 65,
+    "cost_growth_pct": 138,
     "sort": 3
   },
   {
@@ -35,8 +35,8 @@
     "stat": "move_speed",
     "per_level_pct": 5,
     "max_level": 6,
-    "cost_base": 80,
-    "cost_growth_pct": 145,
+    "cost_base": 65,
+    "cost_growth_pct": 138,
     "sort": 4
   }
 ]
