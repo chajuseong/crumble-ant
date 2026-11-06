@@ -29,6 +29,9 @@ export interface AntState {
   maxHp: number;
   /** ground: 다음 자동 점프까지 남은 시간 */
   groundTimer: number;
+  /** M5 도움닫기 중인가 (지면 · 건물이 떨어지는 중 · windup_s > 0) — 남은 시간 = windupLeft */
+  winding: boolean;
+  windupLeft: number;
   /** rise: 남은 상승 시간 (건물에 막혀 매달려 있어도 줄어든다 = 타격 가능 시간) */
   riseTimeLeft: number;
   jumpKind: JumpKind | null;
@@ -86,6 +89,8 @@ export type BattleEvent =
   | { type: 'land'; buildingId: number; damage: number; antHp: number }
   | { type: 'antDown'; stage: number }
   | { type: 'tapIgnored'; reason: TapIgnoredReason }
+  /** M5: 도움닫기 시작 — 끝나면 자동 점프 · 그 사이 탭 = 바로 강점프 (skip — I-20) · 깔리면 취소 */
+  | { type: 'windupStart' }
   /** M4: 파괴 뒤 economy.carry_delay_s가 지나 잔해가 굴에 도착 — wallet += amount (docs/dev.md §4) */
   | { type: 'deposit'; amount: number; wallet: number }
   /** M4: 강화 구매 — 데미지 · 간격은 다음 타격부터, 점프력 · 이동속도는 다음 점프부터 */
@@ -140,7 +145,9 @@ export class BattleSim {
       y: 0,
       hp: b.ant.max_hp,
       maxHp: b.ant.max_hp,
-      groundTimer: b.jump.ground_delay_s,
+      groundTimer: (b.jump.windup_s ?? 0) > 0 ? b.jump.windup_s! : b.jump.ground_delay_s,
+      winding: false,
+      windupLeft: 0,
       riseTimeLeft: 0,
       jumpKind: null,
       jumpSpeed: b.jump.speed_ratio_per_s,
@@ -251,7 +258,13 @@ export class BattleSim {
     switch (a.phase) {
       case 'ground':
         if (falling) {
+          // M5: 도움닫기가 켜져 있으면 건물이 떨어지는 동안의 지면 대기 = 도움닫기 (windupStart 한 번)
+          if (this.windupOn && !a.winding) {
+            a.winding = true;
+            this.events.push({ type: 'windupStart' });
+          }
           a.groundTimer -= dt;
+          if (a.winding) a.windupLeft = Math.max(0, a.groundTimer);
           if (a.groundTimer <= EPS) this.beginJump('auto');
         }
         break;
@@ -309,6 +322,8 @@ export class BattleSim {
     a.phase = 'rise';
     a.jumpKind = kind;
     a.jumpSpeed = speed;
+    a.winding = false; // 도움닫기 중 탭 = 남은 도움닫기를 건너뛰고 바로 강점프 (skip — I-20)
+    a.windupLeft = 0;
     a.fallSpeed = kind === 'strong' ? st.fallSpeed * sj.speed_mult : st.fallSpeed;
     a.apex = height;
     a.riseTimeLeft = height / speed;
@@ -322,7 +337,19 @@ export class BattleSim {
     a.phase = 'ground';
     a.contact = false;
     a.jumpKind = null;
-    a.groundTimer = this.cfg.battle.jump.ground_delay_s;
+    a.groundTimer = this.groundDelay;
+    a.winding = false; // 깔리면 · 다시 시작하면 도움닫기 취소 → 다음 건물이 떨어질 때 처음부터
+    a.windupLeft = 0;
+  }
+
+  /** M5 도움닫기 켜짐 (windup_s > 0) */
+  private get windupOn(): boolean {
+    return (this.cfg.battle.jump.windup_s ?? 0) > 0;
+  }
+
+  /** 자동 점프 전 지면 대기 — 도움닫기가 켜지면 windup_s (방식 A: ground_delay_s 대신) */
+  private get groundDelay(): number {
+    return this.windupOn ? this.cfg.battle.jump.windup_s! : this.cfg.battle.jump.ground_delay_s;
   }
 
   private strike(b: BuildingState): void {
@@ -445,7 +472,11 @@ export class BattleSim {
     if (this.cfg.battle.ant.refill_hp_on_stage_start || a.hp <= 0) a.hp = a.maxHp;
     if (reason === 'advance' || reason === 'repeat') {
       // 클리어 직후 이어지는 스테이지: 개미 동작은 끊지 않음
-      if (a.phase === 'ground') a.groundTimer = this.cfg.battle.jump.ground_delay_s;
+      if (a.phase === 'ground') {
+        a.groundTimer = this.groundDelay;
+        a.winding = false;
+        a.windupLeft = 0;
+      }
     } else {
       this.toGround(); // 후퇴 · 재시작 · 도전 · 처음: 개미를 지면에서 다시 시작
     }

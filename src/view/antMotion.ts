@@ -42,6 +42,8 @@ export interface MotionInput {
   groundTimer: number;
   /** 건물이 떨어지는 중 = 자동 점프가 곧 옴 */
   jumpPending: boolean;
+  /** M5 도움닫기 길이 (core battle.jump.windup_s · 0 = 끔) — 켜지면 웅크림이 도움닫기 전체에 걸침 */
+  windupS?: number;
   /** 모션 시계 (초 · 히트스톱 동안 멈춤) */
   t: number;
   jumpAt: number | null;
@@ -156,8 +158,9 @@ export function composePose(cfg: MotionConfig, base: Pose, inp: MotionInput, res
   const p: Pose = { ...base, legs: [...base.legs] as [number, number], arms: base.arms.map((a) => ({ ...a })) };
   const strong = inp.jumpStrong ? cfg.strong_scale : 1;
   // 웅크림 — 자동 점프 전 지면 대기 마지막 lead_s 동안 (core 점프 시각은 그대로)
-  if (inp.phase === 'ground' && inp.jumpPending && cfg.crouch.lead_s > 0 && inp.groundTimer <= cfg.crouch.lead_s) {
-    const c = clamp01(1 - inp.groundTimer / cfg.crouch.lead_s);
+  const lead = (inp.windupS ?? 0) > 0 ? inp.windupS! : cfg.crouch.lead_s; // M5: 도움닫기 = 웅크림 전체
+  if (inp.phase === 'ground' && inp.jumpPending && lead > 0 && inp.groundTimer <= lead) {
+    const c = clamp01(1 - inp.groundTimer / lead);
     p.dy -= cfg.crouch.body_drop * c;
     p.sy *= 1 - cfg.crouch.body_drop * c;
     p.legs[0] += cfg.crouch.leg_fold_deg * c;
