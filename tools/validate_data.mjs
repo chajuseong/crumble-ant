@@ -35,6 +35,7 @@ const CONFIG_KEYS = [
   ["battle.jump.height_ratio", "num", { gt: 0, max: 1 }],
   ["battle.jump.speed_ratio_per_s", "num", { gt: 0 }],
   ["battle.jump.ground_delay_s", "num", { min: 0 }],
+  ["battle.jump.windup_s", "num", { min: 0 }],
   ["battle.strong_jump.height_mult", "num", { gt: 0 }],
   ["battle.strong_jump.speed_mult", "num", { gt: 0 }],
   ["battle.strong_jump.cooldown_s", "num", { min: 0 }],

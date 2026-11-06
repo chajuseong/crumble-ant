@@ -19,7 +19,8 @@
     "jump": {
       "height_ratio": 0.42,
       "speed_ratio_per_s": 1.1,
-      "ground_delay_s": 0.25
+      "ground_delay_s": 0.25,
+      "windup_s": 0
     },
     "strong_jump": {
       "height_mult": 1.6,
