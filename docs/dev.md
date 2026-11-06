@@ -1,6 +1,7 @@
 # 와르르 개미 — 개발 기준 문서 (단일 기준)
 
-> 문서 버전: v0.13 (2026-11-06) — M5 도움닫기 데이터: battle.jump.windup_s (0 = 끔) · windupStart 이벤트 · 웅크림 = 도움닫기 전체 · 완료 조건 (H-34 · I-20) · M3-E · M4 머지 기록
+> 문서 버전: v0.14 (2026-11-06) — M5 C 도움닫기 켬: battle.jump.windup_s 0.5 · strip.ambient_carry_amount 지움 · 측정 (0 · 0.3 · 0.5) · M5 A · B 머지 기록
+> v0.13 (2026-11-06) — M5 도움닫기 데이터: battle.jump.windup_s (0 = 끔) · windupStart 이벤트 · 웅크림 = 도움닫기 전체 · 완료 조건 (H-34 · I-20) · M3-E · M4 머지 기록
 > v0.12 (2026-11-05) — M3-E 배속 데이터: speed.levels · speed_fx.* · motion.strike.min_wall_ms · hud.speed · 입력 · 연출 · 완료 조건 (H-28) · M3-D 머지 기록
 > v0.11 (2026-11-05) — M3-D 공격 손맛 데이터: fx_config finisher.* · impact.* · hitstop.hit_ratio_max · art_config.impact_file · 연출 · 완료 조건 (H-27)
 > v0.10 (2026-11-04) — M3-C 모션 데이터: fx_config motion.* · art_config 기본값 (그림 ×1.5 · 무기 ×1.3 · 머리 ×1.3 · 표정 900ms) · 연출 · 완료 조건 (H-21 · H-22)
@@ -76,7 +77,7 @@ art/production/ (원본) · art/game/ (게임용) — 아트가 들어올 때 �
 | battle.jump.height_ratio | float | 자동 점프 최고점 (다리 스탯 "점프력" 자리) | 0.42 |
 | battle.jump.speed_ratio_per_s | float | 위아래 이동 속도 (다리 스탯 "점프 이동 속도" 자리) | 1.1 |
 | battle.jump.ground_delay_s | float | 착지 후 다음 자동 점프까지 (도움닫기를 켜면 안 씀) | 0.25 |
-| battle.jump.windup_s | float | **M5 도움닫기** — 0 = 끔 (지금처럼 ground_delay_s). 0보다 크면 자동 점프 전 대기 = 이 값 (방식 A — ground_delay_s 대신). 도움닫기 중 탭 = 바로 강점프 (skip — I-20) · 강화 대상 아님 · 켜는 값 0.5 = C PR | 0 |
+| battle.jump.windup_s | float | **M5 도움닫기** — 0 = 끔 (지금처럼 ground_delay_s). 0보다 크면 자동 점프 전 대기 = 이 값 (방식 A — ground_delay_s 대신). 도움닫기 중 탭 = 바로 강점프 (skip — I-20) · 강화 대상 아님 · M5 C에서 0.5로 켬 (균형은 폰 확인 뒤 DD) | 0.5 |
 | battle.strong_jump.height_mult · speed_mult · cooldown_s | float | 강점프 배율 · 속도 배율 · 쿨타임 (기획서 §9 미정 — 임시, H-01 #3) | 1.6 · 1.0 · 0 |
 | battle.arm_damage | int[] (4개) | 팔 1 ~ 4 슬롯 1타 데미지 (장비 회차에 표로) | 10,10,10,10 |
 | battle.strike_interval_s | float | 매달려 있는 동안 팔 타격 간격 | 0.12 |
@@ -93,7 +94,7 @@ art/production/ (원본) · art/game/ (게임용) — 아트가 들어올 때 �
 | input.strip_swipe_min_dy_ratio · strip_swipe_max_ms | float · int | 띠 아래 스와이프 판정 | 0.03 · 700 |
 | input.nest_swipe_up_min_dy_ratio | float | 개미굴 위로 스와이프 → 복귀 | 0.05 |
 | strip.worker_speed_ratio_per_s · worker_size_ratio · worker_gap_ratio | float | 일개미 속도 · 크기 · 간격 (연출) | 0.16 · 0.32 · 0.07 |
-| strip.ambient_spawn_interval_s · ambient_carry_amount | float · int | 배경 행렬 간격 · 팝업 숫자 (연출). **M5 C에서 `ambient_carry_amount`를 지움** (M4 B부터 안 읽음 · M5 B가 core 검사를 먼저 없앰) — 배경 행렬은 재화 없음 · "+N" 팝업 없음 (H-17 질문 3) | 1.6 · 5 |
+| strip.ambient_spawn_interval_s | float | 배경 행렬 간격 (연출). 배경 행렬은 재화 없음 · "+N" 팝업 없음 (H-17 질문 3) — 팝업 숫자 키 `ambient_carry_amount`는 M5 C에서 지움 | 1.6 |
 | strip.debris_pieces · debris_pickup_s | int · float | 잔해 조각 수 · 집어가기까지 (기획서 §7 "0.3초") | 6 · 0.3 |
 | strip.burrow_x_ratio | float | 굴 입구 위치 (띠 우측 끝 — H-01 #8) | 0.93 |
 | strip.popup_rise_ratio · popup_duration_s | float | 운반 팝업 높이 · 시간 | 0.5 · 0.8 |
@@ -193,6 +194,7 @@ pivot · socket · grip = `art/game` 납품본 측정값 · draw_h · anchor · 
 | jump_power 점프력 | 5 · 7 (×1.35) | 80 · 145 | 천장 ×1.384 바로 아래 · 단독 효과가 커서 비싸게 |
 | move_speed 이동속도 | 5 · 6 (×1.3) | 80 · 145 | 효과가 약해서 Lv 짧게 |
 - 측정 (자동만 · 가장 싼 것부터 · 이동속도 하강만): 스테이지 3 = 1.4분 · 5 = 7.9분 · 8 = 22.4분 (구매 순서에 따라 8스테이지 약 20 ~ 35분) · 강점프 연타 = 8스테이지 3.5분 — 값은 임시, 폰 확인 뒤 조정
+- **M5 C 도움닫기 0.5 켠 뒤** (`npm run measure -- --upgrades`): 자동만 스테이지 3 / 5 / 8 = 1.5 / **11.5** / **34.7분** (끔 1.4 / 7.9 / 23.1 · 0.3이면 1.5 / 2.7 / 29.2) · 강점프 연타 3.4분 그대로 (탭 = skip) · 60분 번 잔해 99,520 → 67,870 · 단일 강화 퇴보 1건 (jump_power Lv3 · 스테이지 3 자동 100% → 0%) — 비용 조정은 폰 확인 뒤 DD
 
 ### 3-7. `ui_strings.xlsx` › ui_strings → `ui_strings.json` (키-값, 전부 string)
 | Column명 (key) | 데이터 타입 | 설명 | 예시 데이터 |
@@ -297,4 +299,4 @@ pivot · socket · grip = `art/game` 납품본 측정값 · draw_h · anchor · 
 | M3-D | 공격 손맛 — 4연타 마무리 · 충격 별 · 건물 밀림 (I-16 · H-27) | ① `npm run measure` = M3 표 ② [FX] 마무리 · 충격 끔 = M3 화면 (픽셀 비교) · 전부 끔 fxCount 0 ③ 화면 컷 (그림 · 도형): 일반 타격 별 · 4번째 마무리 (큰 별 · 큰 조각 · 흔들림) · 파괴 일격 (마지막이 이김) — 390 ④ 테스트: 마무리 판정 (combo % every · 마지막 일격 제외) · 히트스톱 길이 (hit_ratio_max) · 별 크기 ⑤ 히트스톱 지연 표 `npm run measure -- --hitstop` (마무리 포함) ⑥ smoke ✅ ⑦ 이 문서 §3-4 · §5 · §7 | A `a794430` (PR #32) · B `74cf239` (PR #33) |
 | M3-E | 배속 ×1 · ×1.5 · ×2 · ×3 (I-17 · H-28) | ① `npm run measure` 그대로 ② **배속별 같은 게임 시간 결과 동일** (테스트 — dt × 배속으로 돌린 sim과 ×1 sim이 같은 고정 스텝 수에서 상태 · 이벤트 같음) ③ ×3 smoke (콘솔 오류 0 · 파괴 수 오름) ④ 버튼 화면 컷 (×1 · ×1.5 · ×2 · ×3) ⑤ ×2 이상 가벼운 연출 · 모션 최소 길이 테스트 ⑥ 기절 · 후퇴 · [도전] · 개미굴 중 배속 유지 ⑦ PR에 "무료 ×3 = 재화 ×3" 확인 문구 (M4 운반 예약은 게임 시간) ⑧ 이 문서 §3 · §4 · §5 · §7 | A `c8d9c14` (PR #35) · B `6a257f1` (PR #36) |
 | M4 | 강화 4종 + 소프트 재화 (I-12 · I-13 · H-17) | ① 강화 0이면 `npm run measure` 표 = M3 표 ② `npm run measure -- --upgrades` = 진행 표 (§3-6 측정 · PR 본문에) · **단일 강화 Lv 0 ~ max 퇴보 0건** ③ 테스트: 비용 (정수 반복) · 효과 정수화 · 구매 (부족 · MAX) · deposit 시각 · 저장 왕복 · 깨진 저장 → 새로 시작 + `.bad` 보관 · 버전 · 도전 중 저장 · 강화가 다음 타격 · 점프부터 적용 ④ 실제 브라우저: 구매 → 새로고침 → 잔해 · Lv · 스테이지 그대로 ⑤ smoke ✅ + 강화 패널 열기 · 구매 1회 · 콘솔 오류 0 ⑥ 화면 컷: HUD 잔해 · 패널 (가능 · 부족 · MAX) · 구매 순간 — 360 / 390 / 430 ⑦ 이 문서 §3 · §4 · §5 · §7 | B `d5b82af` (PR #38) · A `7d483d7` (PR #24) |
-| M5 | 점프 도움닫기 (I-19 · I-20 · H-34) | ① `windup_s` 0 = M4 measure · `--upgrades` 표 그대로 (diff 0) ② 테스트: 도움닫기 길이 · `windupStart` · 도움닫기 중 탭 = 바로 강점프 1회 · 깔리면 취소 · 첫 점프에도 · 배속별 같은 결과 · 강화와 무관 ③ view: 웅크림 = 도움닫기 전체 · ×1 · ×3 화면 컷 ④ 켜는 C PR (0.5): measure · `--upgrades` 표 (0.3 · 0.5 비교) · smoke ⑤ 이 문서 §3 · §4 · §5 · §7 | |
+| M5 | 점프 도움닫기 (I-19 · I-20 · H-34) | ① `windup_s` 0 = M4 measure · `--upgrades` 표 그대로 (diff 0) ② 테스트: 도움닫기 길이 · `windupStart` · 도움닫기 중 탭 = 바로 강점프 1회 · 깔리면 취소 · 첫 점프에도 · 배속별 같은 결과 · 강화와 무관 ③ view: 웅크림 = 도움닫기 전체 · ×1 · ×3 화면 컷 ④ 켜는 C PR (0.5): measure · `--upgrades` 표 (0.3 · 0.5 비교) · smoke ⑤ 이 문서 §3 · §4 · §5 · §7 | A `5620daf` (PR #42) · B `f652c4c` (PR #43) |

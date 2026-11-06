@@ -60,7 +60,6 @@ const CONFIG_KEYS = [
   ["strip.worker_size_ratio", "num", { gt: 0, max: 1 }],
   ["strip.worker_gap_ratio", "num", { min: 0, max: 1 }],
   ["strip.ambient_spawn_interval_s", "num", { gt: 0 }],
-  ["strip.ambient_carry_amount", "int", { min: 0 }],
   ["strip.debris_pieces", "int", { min: 0 }],
   ["strip.debris_pickup_s", "num", { min: 0 }],
   ["strip.burrow_x_ratio", "num", { gt: 0, max: 1 }],
