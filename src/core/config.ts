@@ -44,6 +44,8 @@ export interface BattleConfig {
   };
   arms: ArmConfig[];
   strike_interval_s: number;
+  /** M4 공격속도 강화 하한 (없으면 0) */
+  strike_interval_min_s?: number;
   /** 연타가 이어지는 시간 (같은 건물 · 마지막 타격 뒤) — M2 D, 결과에는 영향 없음 */
   combo_window_s: number;
   arm_order_resets_each_jump: boolean;
@@ -109,6 +111,26 @@ export interface StripConfig {
   popup_duration_s: number;
 }
 
+/** M4 강화 (upgrades 시트 — docs/dev.md §3-6). stat = 코드가 아는 4종 */
+export type UpgradeStat = 'attack_power' | 'attack_speed' | 'jump_power' | 'move_speed';
+export interface UpgradeRow {
+  upgrade_id: string;
+  name: string;
+  stat: UpgradeStat;
+  per_level_pct: number;
+  max_level: number;
+  cost_base: number;
+  cost_growth_pct: number;
+  sort: number;
+}
+
+/** M4 재화 (game_config economy.*) */
+export interface EconomyConfig {
+  /** 파괴 → 재화 도착까지 (게임 시간 초) */
+  carry_delay_s: number;
+  start_debris: number;
+}
+
 export interface GameConfig {
   layout: LayoutConfig;
   battle: BattleConfig;
@@ -116,6 +138,9 @@ export interface GameConfig {
   stages: StagesConfig;
   input: InputConfig;
   strip: StripConfig;
+  /** M4 — 시트가 없으면 빈 목록 (강화 0 = M3 결과 그대로) */
+  upgrades: { rows: UpgradeRow[] };
+  economy: EconomyConfig;
 }
 
 export const ARM_SLOT_COUNT = 4;

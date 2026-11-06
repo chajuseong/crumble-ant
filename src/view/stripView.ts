@@ -68,7 +68,7 @@ export class StripView {
     this.ambientTimer -= dt;
     if (this.ambientTimer <= 0) {
       this.ambientTimer = this.cfg.ambient_spawn_interval_s;
-      this.spawnWorker(-this.size, this.cfg.ambient_carry_amount, false);
+      this.spawnWorker(-this.size, 0, false); // M4: 배경 행렬은 재화 없음 · 숫자 팝업 없음 (H-17 질문 3)
     }
     const speed = this.cfg.worker_speed_ratio_per_s * this.width;
     for (let i = this.workers.length - 1; i >= 0; i--) {
@@ -77,7 +77,7 @@ export class StripView {
       w.phase += dt * 14;
       w.root.y = this.laneY - Math.abs(Math.sin(w.phase)) * this.size * 0.08;
       if (w.root.x >= this.burrowX) {
-        this.popup(w.amount);
+        if (w.amount > 0) this.popup(w.amount);
         w.root.destroy(true);
         this.workers.splice(i, 1);
       }
@@ -107,7 +107,8 @@ export class StripView {
     this.workers.push({ root, amount, phase: Math.random() * Math.PI });
   }
 
-  private popup(amount: number): void {
+  /** 굴 입구 "+N" — M4부터 core deposit(실제 재화 도착) 때 장면이 부름 */
+  popup(amount: number): void {
     const t = this.scene.add
       .text(this.burrowX, this.laneY - this.size * 0.6, `+${amount}`, {
         fontFamily: FONT,

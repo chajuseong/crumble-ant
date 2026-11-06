@@ -3,7 +3,7 @@
  * 파일 경로 · JSON 읽기는 하지 않는다 (view · 테스트가 JSON을 넘김 — Unity에서는 ScriptableObject 등에서 같은 모양으로).
  * 검사는 두 번: 시트 변환 때 tools/validate_data.mjs, 시작할 때 validateConfig (화면에 오류 표시).
  */
-import type { ArmConfig, BuildingRow, GameConfig, StageRow } from './config';
+import type { ArmConfig, BuildingRow, GameConfig, StageRow, UpgradeRow } from './config';
 
 /** src/data/*.json 묶음 (파일 이름 = 키) */
 export interface RawGameData {
@@ -11,6 +11,8 @@ export interface RawGameData {
   stages: StageRow[];
   game_config: Record<string, unknown>;
   ui_strings: Record<string, unknown>;
+  /** M4 — 없으면 강화 없음 */
+  upgrades?: UpgradeRow[];
 }
 
 type Obj = Record<string, unknown>;
@@ -29,6 +31,7 @@ export function fromData(raw: RawGameData): GameConfig {
       strong_jump: o(battle.strong_jump) as unknown as GameConfig['battle']['strong_jump'],
       arms,
       strike_interval_s: battle.strike_interval_s as number,
+      strike_interval_min_s: typeof battle.strike_interval_min_s === 'number' ? battle.strike_interval_min_s : 0,
       combo_window_s: battle.combo_window_s as number,
       arm_order_resets_each_jump: battle.arm_order_resets_each_jump as boolean,
       landing_damage_coeff: battle.landing_damage_coeff as number,
@@ -41,5 +44,11 @@ export function fromData(raw: RawGameData): GameConfig {
     },
     input: o(g.input) as unknown as GameConfig['input'],
     strip: o(g.strip) as unknown as GameConfig['strip'],
+    // 정렬 = sort → upgrade_id (객체 · 배열 순서에 기대지 않음)
+    upgrades: { rows: (Array.isArray(raw.upgrades) ? [...raw.upgrades] : []).sort((a, b) => a.sort - b.sort || (a.upgrade_id < b.upgrade_id ? -1 : a.upgrade_id > b.upgrade_id ? 1 : 0)) },
+    economy: {
+      carry_delay_s: typeof o(g.economy).carry_delay_s === 'number' ? (o(g.economy).carry_delay_s as number) : 0,
+      start_debris: typeof o(g.economy).start_debris === 'number' ? (o(g.economy).start_debris as number) : 0,
+    },
   };
 }

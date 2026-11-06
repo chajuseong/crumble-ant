@@ -14,6 +14,7 @@
  */
 
 import { type GameConfig, buildingForStage, stageRow } from './config';
+import { type BattleStats, type BuyResult, buyCheck, deriveStats, initialLevels, type Levels } from './economy';
 
 export type AntPhase = 'ground' | 'rise' | 'fall' | 'down';
 export type JumpKind = 'auto' | 'strong';
@@ -31,7 +32,10 @@ export interface AntState {
   /** rise: 남은 상승 시간 (건물에 막혀 매달려 있어도 줄어든다 = 타격 가능 시간) */
   riseTimeLeft: number;
   jumpKind: JumpKind | null;
+  /** 상승 속도 */
   jumpSpeed: number;
+  /** 하강 속도 (M4 이동속도 강화 = 하강만 — I-13) */
+  fallSpeed: number;
   /** 이번 점프의 목표 최고점 (발 기준) */
   apex: number;
   /** 상승 중 건물 밑면에 닿아 매달려 있음 = 타격 중 */
@@ -81,7 +85,19 @@ export type BattleEvent =
   | { type: 'destroy'; buildingId: number; y: number; debrisReward: number }
   | { type: 'land'; buildingId: number; damage: number; antHp: number }
   | { type: 'antDown'; stage: number }
-  | { type: 'tapIgnored'; reason: TapIgnoredReason };
+  | { type: 'tapIgnored'; reason: TapIgnoredReason }
+  /** M4: 파괴 뒤 economy.carry_delay_s가 지나 잔해가 굴에 도착 — wallet += amount (docs/dev.md §4) */
+  | { type: 'deposit'; amount: number; wallet: number }
+  /** M4: 강화 구매 — 데미지 · 간격은 다음 타격부터, 점프력 · 이동속도는 다음 점프부터 */
+  | { type: 'upgrade'; id: string; level: number; cost: number; wallet: number };
+
+/** 시작 상태 (M4 저장에서 읽은 값 — src/core/save.ts) */
+export interface BattleStart {
+  stage: number;
+  autoAdvance: boolean;
+  debris: number;
+  levels: Levels;
+}
 
 export const FIXED_STEP_S = 1 / 120;
 const EPS = 1e-9;
@@ -99,15 +115,26 @@ export class BattleSim {
   totalDestroyed = 0;
   /** 연타 카운터 (M2 D) — 판정 · 결과에 쓰지 않음 */
   combo = 0;
+  /** M4 보유 잔해 (정수) */
+  wallet = 0;
+  /** M4 강화 Lv (upgrade_id → Lv) */
+  levels: Levels;
+  /** M4 강화가 반영된 전투 값 (시트 값은 cfg 그대로) */
+  stats: BattleStats;
+  /** M4 운반 중인 잔해 (도착 시각 순 — 지연이 일정해서 넣은 순서 = 도착 순서) */
+  readonly carrying: { at: number; amount: number }[] = [];
   private comboBuildingId = -1;
   private lastStrikeTime = -Infinity;
   private accumulator = 0;
   private nextBuildingId = 1;
   private events: BattleEvent[] = [];
 
-  constructor(cfg: GameConfig, startStage = 1) {
+  constructor(cfg: GameConfig, startStage = 1, start: BattleStart | null = null) {
     this.cfg = cfg;
     const b = cfg.battle;
+    this.levels = { ...initialLevels(cfg), ...(start?.levels ?? {}) };
+    this.stats = deriveStats(cfg, this.levels);
+    this.wallet = start ? start.debris : cfg.economy.start_debris;
     this.ant = {
       phase: 'ground',
       y: 0,
@@ -117,6 +144,7 @@ export class BattleSim {
       riseTimeLeft: 0,
       jumpKind: null,
       jumpSpeed: b.jump.speed_ratio_per_s,
+      fallSpeed: b.jump.speed_ratio_per_s,
       apex: 0,
       contact: false,
       strikeTimer: 0,
@@ -124,8 +152,8 @@ export class BattleSim {
       strongCooldownLeft: 0,
       downTimer: 0,
     };
-    this.stage = { stage: 1, autoAdvance: true, challenging: false, destroyed: 0, toClear: 1 };
-    this.startStage(Math.max(1, Math.floor(startStage)), 'init');
+    this.stage = { stage: 1, autoAdvance: start ? start.autoAdvance : true, challenging: false, destroyed: 0, toClear: 1 };
+    this.startStage(Math.max(1, Math.floor(start ? start.stage : startStage)), 'init');
   }
 
   /** 쌓인 이벤트를 꺼낸다 (렌더러가 매 프레임 호출) */
@@ -164,6 +192,17 @@ export class BattleSim {
     return true;
   }
 
+  /** M4 강화 구매 — 결과 ok / short (부족) / max / unknown. ok면 upgrade 이벤트 */
+  buyUpgrade(id: string): BuyResult {
+    const c = buyCheck(this.cfg, this.levels, this.wallet, id);
+    if (c.result !== 'ok' || c.cost === null) return c.result;
+    this.wallet -= c.cost;
+    this.levels[id] = c.level + 1;
+    this.stats = deriveStats(this.cfg, this.levels);
+    this.events.push({ type: 'upgrade', id, level: c.level + 1, cost: c.cost, wallet: this.wallet });
+    return 'ok';
+  }
+
   /** [도전] 버튼을 보여야 하는가 — 도전 중에는 숨김 (CA-001: 다시 누르면 깨지 않은 스테이지를 건너뛰었음) */
   get challengeAvailable(): boolean {
     return !this.stage.autoAdvance && !this.stage.challenging;
@@ -175,6 +214,13 @@ export class BattleSim {
     this.time += dt;
     const a = this.ant;
     const bc = this.cfg.battle;
+
+    // M4 재화 도착 (기절 · 후퇴 중에도 — 예약은 그대로)
+    while (this.carrying.length > 0 && this.carrying[0]!.at <= this.time + EPS) {
+      const c = this.carrying.shift()!;
+      this.wallet += c.amount;
+      this.events.push({ type: 'deposit', amount: c.amount, wallet: this.wallet });
+    }
 
     if (a.strongCooldownLeft > 0) a.strongCooldownLeft = Math.max(0, a.strongCooldownLeft - dt);
 
@@ -218,7 +264,7 @@ export class BattleSim {
         }
         break;
       case 'fall':
-        a.y -= a.jumpSpeed * dt;
+        a.y -= a.fallSpeed * dt;
         if (a.y <= 0) this.toGround();
         break;
     }
@@ -245,7 +291,7 @@ export class BattleSim {
         a.strikeTimer -= dt;
         while (a.strikeTimer <= EPS && this.building === falling) {
           this.strike(falling);
-          a.strikeTimer += bc.strike_interval_s;
+          a.strikeTimer += this.stats.strikeIntervalS;
         }
       }
 
@@ -256,13 +302,14 @@ export class BattleSim {
 
   private beginJump(kind: JumpKind): void {
     const a = this.ant;
-    const jc = this.cfg.battle.jump;
     const sj = this.cfg.battle.strong_jump;
-    const height = kind === 'strong' ? jc.height_ratio * sj.height_mult : jc.height_ratio;
-    const speed = kind === 'strong' ? jc.speed_ratio_per_s * sj.speed_mult : jc.speed_ratio_per_s;
+    const st = this.stats;
+    const height = kind === 'strong' ? st.jumpHeight * sj.height_mult : st.jumpHeight;
+    const speed = kind === 'strong' ? st.riseSpeed * sj.speed_mult : st.riseSpeed;
     a.phase = 'rise';
     a.jumpKind = kind;
     a.jumpSpeed = speed;
+    a.fallSpeed = kind === 'strong' ? st.fallSpeed * sj.speed_mult : st.fallSpeed;
     a.apex = height;
     a.riseTimeLeft = height / speed;
     a.contact = false;
@@ -280,14 +327,14 @@ export class BattleSim {
 
   private strike(b: BuildingState): void {
     const a = this.ant;
-    const arm = this.cfg.battle.arms[a.nextArm]!;
-    b.hp = Math.max(0, b.hp - arm.damage);
+    const damage = this.stats.armDamage[a.nextArm]!;
+    b.hp = Math.max(0, b.hp - damage);
     // 연타: 같은 건물에서 마지막 타격 뒤 combo_window_s 안이면 이어짐 (비교 전 반올림 — 결정성)
     const gap = Math.round((this.time - this.lastStrikeTime) * 1e6) / 1e6;
     this.combo = this.comboBuildingId === b.id && gap <= this.cfg.battle.combo_window_s ? this.combo + 1 : 1;
     this.comboBuildingId = b.id;
     this.lastStrikeTime = this.time;
-    this.events.push({ type: 'strike', arm: a.nextArm + 1, damage: arm.damage, buildingId: b.id, hpLeft: b.hp, combo: this.combo });
+    this.events.push({ type: 'strike', arm: a.nextArm + 1, damage, buildingId: b.id, hpLeft: b.hp, combo: this.combo });
     a.nextArm = (a.nextArm + 1) % this.cfg.battle.arms.length;
     if (b.hp <= 0) this.destroyBuilding(b);
   }
@@ -322,6 +369,8 @@ export class BattleSim {
   private destroyBuilding(b: BuildingState): void {
     this.resetCombo();
     this.events.push({ type: 'destroy', buildingId: b.id, y: b.y, debrisReward: b.debrisReward });
+    // M4: 잔해는 운반 예약 → carry_delay_s 뒤 deposit (H-17 질문 2 — core가 도착 시각을 정함)
+    if (b.debrisReward > 0) this.carrying.push({ at: this.time + this.cfg.economy.carry_delay_s, amount: b.debrisReward });
     this.building = null;
     this.ant.contact = false;
     // 파괴 후에도 남은 상승은 계속 (잔해를 뚫고 올라감) → 하강
