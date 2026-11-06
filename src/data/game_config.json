@@ -20,7 +20,7 @@
       "height_ratio": 0.42,
       "speed_ratio_per_s": 1.1,
       "ground_delay_s": 0.25,
-      "windup_s": 0
+      "windup_s": 0.5
     },
     "strong_jump": {
       "height_mult": 1.6,
@@ -61,7 +61,6 @@
     "worker_size_ratio": 0.32,
     "worker_gap_ratio": 0.07,
     "ambient_spawn_interval_s": 1.6,
-    "ambient_carry_amount": 5,
     "debris_pieces": 6,
     "debris_pickup_s": 0.3,
     "burrow_x_ratio": 0.93,
