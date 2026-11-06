@@ -33,8 +33,8 @@ describe('M2 A 히트스톱 시계', () => {
 });
 
 describe('M2 [FX] 토글 · fx_config', () => {
-  it('토글 11개 (A ~ G + 대비 + M3-C 모션 + M3-D 마무리 · 충격) · 기본 = 전부 켬', () => {
-    expect(FX_TOGGLES.map((t) => t.id)).toEqual(['hitstop', 'flash', 'shake', 'combo', 'punch', 'hitDebris', 'sfx', 'contrast', 'motion', 'finisher', 'impact']);
+  it('토글 12개 (A ~ G + 대비 + M3-C 모션 + M3-D 마무리 · 충격 + M6 파괴 그림) · 기본 = 전부 켬', () => {
+    expect(FX_TOGGLES.map((t) => t.id)).toEqual(['hitstop', 'flash', 'shake', 'combo', 'punch', 'hitDebris', 'sfx', 'contrast', 'motion', 'finisher', 'impact', 'envFx']);
     expect(Object.values(allToggles(true)).every(Boolean)).toBe(true);
   });
 

@@ -7,7 +7,8 @@ import { AntView } from './antView';
 import { ART_FILE_URLS, artTextureKey } from './artFiles';
 import { createArtPanel } from './artPanel';
 import { ART_DATA, type ArtPlan, type ArtSettings, loadArtSettings, neededFiles, resolveArtPlan } from './artPlan';
-import { BuildingView } from './buildingView';
+import { type BuildingArt, BuildingView } from './buildingView';
+import { ENV_DATA, type EnvPlan, envStatusText, neededEnvFiles, resolveEnvPlan } from './envPlan';
 import { StripView } from './stripView';
 import { COLOR, FONT } from './theme';
 import { t } from './text';
@@ -32,7 +33,8 @@ export interface BattleSceneData {
 }
 
 interface Debris {
-  obj: Phaser.GameObjects.Rectangle;
+  /** 도형 조각 · M6 파편 그림 */
+  obj: Phaser.GameObjects.Rectangle | Phaser.GameObjects.Image;
   vx: number;
   vy: number;
   spin: number;
@@ -75,6 +77,8 @@ export class BattleScene extends Phaser.Scene {
   private ant!: AntView;
   private buildingView: BuildingView | null = null;
   private buildingViewId = -1;
+  /** M6 지금 건물 뷰의 건물 테이블 PK (파괴 뒤에도 파편 그림을 고르려고 — core 값을 기억만) */
+  private buildingViewRow: string | null = null;
   private strip!: StripView;
   private debris: Debris[] = [];
   private clouds: Phaser.GameObjects.Ellipse[] = [];
@@ -118,6 +122,12 @@ export class BattleScene extends Phaser.Scene {
   artPlan!: ArtPlan;
   /** 실제로 텍스처가 올라간 그림 파일 이름 */
   artLoaded: string[] = [];
+  // ── M6 건물 · 배경 · 파괴 그림 (H-42) — 끄거나 파일 없음 = 지금 도형 ──
+  /** 지금 그리는 계획 (smoke · 검수용으로 읽음) */
+  envPlan!: EnvPlan;
+  private skyImage: Phaser.GameObjects.Image | null = null;
+  private groundGfx: Phaser.GameObjects.Graphics | null = null;
+  private envLoading = false;
   /** PR #2 1080폭 기준 px → 지금 프레임 px */
   private px(n: number): number {
     return n * this.scaleK;
@@ -149,6 +159,75 @@ export class BattleScene extends Phaser.Scene {
     // M3-D 충격 별 그림 (있으면 — 없으면 도형 별)
     const impact = ART_DATA.config.impact_file;
     if (impact && ART_FILE_URLS[impact] && !this.textures.exists(artTextureKey(impact))) this.load.image(artTextureKey(impact), ART_FILE_URLS[impact]);
+    // M6: 켬일 때만 시작에 읽음 (약 6MB — [프로토만] H-42 Q6). 끔이면 지금처럼 안 읽음 · [ART]에서 켜면 그때 읽음
+    if (this.artSettings.env) this.queueEnvFiles();
+  }
+
+  /** M6 그림 읽기 예약 — 목록(빌드에 묶인 파일)에 있고 아직 안 올라간 것만. 반환 = 예약한 수 */
+  private queueEnvFiles(): number {
+    let n = 0;
+    for (const file of neededEnvFiles()) {
+      const url = ART_FILE_URLS[file];
+      if (url && !this.textures.exists(artTextureKey(file))) {
+        this.load.image(artTextureKey(file), url);
+        n++;
+      }
+    }
+    return n;
+  }
+
+  /** M6 계획 다시 세우고 하늘 · 띠 · 지면 선 · 지금 건물에 적용 ([ART] 바꿀 때마다) */
+  private applyEnv(): void {
+    const on = this.artSettings.env;
+    if (on && !this.envLoading && this.queueEnvFiles() > 0) {
+      // [ART]에서 켰는데 아직 안 읽음 → 읽은 뒤 다시
+      this.envLoading = true;
+      this.load.once('complete', () => {
+        this.envLoading = false;
+        this.applyEnv();
+      });
+      this.load.start();
+    }
+    const loaded = new Set(neededEnvFiles().filter((f) => this.textures.exists(artTextureKey(f))));
+    this.envPlan = resolveEnvPlan(ENV_DATA, on, loaded);
+    const p = this.envPlan;
+    // 하늘: 전체 화면 한 장 (도형 하늘 위) · 도형 구름 숨김
+    this.skyImage?.destroy();
+    this.skyImage = null;
+    if (p.sky) this.skyImage = this.add.image(this.L.width / 2, this.L.height / 2, artTextureKey(p.sky)).setDisplaySize(this.L.width, this.L.height).setDepth(DEPTH.sky);
+    for (const c of this.clouds) c.setVisible(!p.sky);
+    // 띠: 덤불 = 하늘 바로 위 (건물 · 개미 뒤) · 땅 = 띠 레이어 · 지면 선 숨김
+    if (p.strip) {
+      const key = artTextureKey(p.strip.file);
+      const src = this.textures.get(key).getSourceImage() as HTMLImageElement;
+      const c = this.textures.getPixel(Math.floor(src.width / 2), src.height - 1, key);
+      const fill = c ? Phaser.Display.Color.GetColor(c.red, c.green, c.blue) : COLOR.soil;
+      this.strip.setArt({ key, groundRatio: p.strip.groundRatio, burrowX: p.strip.burrowX, fillColor: fill }, DEPTH.sky + 1);
+    } else this.strip.setArt(null, DEPTH.sky + 1);
+    this.groundGfx?.setVisible(!p.strip);
+    // 지금 떨어지는 건물을 새 계획으로 다시 (HP · 위치는 core 값 그대로)
+    if (this.buildingView && this.sim.building) {
+      this.removeBuildingView(false);
+      this.createBuildingView();
+    }
+  }
+
+  private buildingArt(buildingId: string): BuildingArt | null {
+    const a = this.envPlan?.buildings[buildingId];
+    return a ? { key: artTextureKey(a.file), pivotY: a.pivotY, drawW: a.drawW, tint: a.tint } : null;
+  }
+
+  private createBuildingView(): void {
+    const b = this.sim.building;
+    if (!b) return;
+    const bw = this.cfg.battle.building.width_ratio * this.L.width;
+    const bh = this.cfg.battle.building.height_ratio * this.L.battle.height;
+    this.buildingView = new BuildingView(this, this.L.width / 2, battleToScreenY(this.L, b.y), bw, bh, b.id, b.maxHp, this.buildingArt(b.buildingId));
+    this.buildingView.root.setDepth(DEPTH.building);
+    this.buildingView.setCrackSteps(FX.crack.steps);
+    this.buildingView.setHp(b.hp, b.maxHp);
+    this.buildingViewId = b.id;
+    this.buildingViewRow = b.buildingId;
   }
 
   private applyArt(): void {
@@ -189,17 +268,19 @@ export class BattleScene extends Phaser.Scene {
       this.ant.setMotion(t.motion);
     }, () => this.sfx.unlock());
     this.applyArt();
+    this.applyEnv();
     this.ant.setMotion(this.fxOn.motion);
     const artPanel = createArtPanel(
       ART_DATA,
       this.artSettings,
       () => {
         this.applyArt();
-        artPanel.showPlan(this.artPlan);
+        this.applyEnv();
+        artPanel.showPlan(this.artPlan, envStatusText(this.envPlan));
       },
       () => this.sfx.unlock(),
     );
-    artPanel.showPlan(this.artPlan);
+    artPanel.showPlan(this.artPlan, envStatusText(this.envPlan));
 
     if (this.debug) {
       this.debugText = this.add
@@ -268,6 +349,7 @@ export class BattleScene extends Phaser.Scene {
   private drawGround(): void {
     const { L } = this;
     const g = this.add.graphics().setDepth(DEPTH.ground);
+    this.groundGfx = g;
     g.fillStyle(COLOR.groundLine, 1);
     g.fillRect(0, L.groundY - this.px(5), L.width, this.px(10));
   }
@@ -464,9 +546,10 @@ export class BattleScene extends Phaser.Scene {
           const b = this.sim.building!;
           const bw = this.cfg.battle.building.width_ratio * this.L.width;
           const bh = this.cfg.battle.building.height_ratio * this.L.battle.height;
-          this.buildingView = new BuildingView(this, this.L.width / 2, battleToScreenY(this.L, b.y), bw, bh, b.id, b.maxHp);
+          this.buildingView = new BuildingView(this, this.L.width / 2, battleToScreenY(this.L, b.y), bw, bh, b.id, b.maxHp, this.buildingArt(b.buildingId));
           this.buildingView.root.setDepth(DEPTH.building);
           this.buildingViewId = b.id;
+          this.buildingViewRow = b.buildingId;
           break;
         }
         case 'jump':
@@ -498,12 +581,14 @@ export class BattleScene extends Phaser.Scene {
           if (fin) { this.shake(FX.finisher.camera_ms, FX.finisher.camera_intensity); this.fxCount += 1; } // A' 큰 흔들림
           else if (on.shake && !final && !light) { this.shake(FX.camera.hit_ms, FX.camera.hit_intensity); this.fxCount += 1; } // C (마지막 일격은 destroy에서 크게)
           if (on.impact) this.impact(kind, e.arm, stretch); // B' 충격 별 · 건물 밀림 · 큰 조각
+          if (final && this.buildingView) this.finalRing(Phaser.Math.Clamp(this.ant.strikeX(e.arm, stretch), this.buildingView.root.x - this.buildingView.w / 2, this.buildingView.root.x + this.buildingView.w / 2), this.buildingView.bottomY); // M6 링
           if (on.combo) this.showCombo(e.combo); // D
           if (on.hitDebris) this.burstHitDebris(y); // F
           if (on.sfx && this.sfx.created) { if (final) this.sfx.final(); else if (fin) this.sfx.finisher(); else if (hitSoundTurn(e.combo, this.speed)) this.sfx.hit(e.combo); this.fxCount += 1; } // G · A' 마무리 "쾅"
           break;
         }
         case 'destroy':
+          if (this.buildingView) this.destroyDust(this.buildingView.root.x, this.buildingView.bottomY); // M6 먼지
           this.burstDebris(e.debrisReward);
           this.removeBuildingView(false);
           if (this.fxOn.shake) { this.shake(FX.camera.final_ms, FX.camera.final_intensity); this.fxCount += 1; } // C 크게
@@ -563,11 +648,13 @@ export class BattleScene extends Phaser.Scene {
     const each = n > 0 ? Math.floor(reward / n) : 0;
     const bw = this.cfg.battle.building.width_ratio * this.L.width;
     const bh = this.cfg.battle.building.height_ratio * this.L.battle.height;
+    const art = this.debrisArt();
     for (let i = 0; i < n; i++) {
       const size = this.px(Phaser.Math.Between(40, 80));
       const x = v.root.x + Phaser.Math.FloatBetween(-0.45, 0.45) * bw;
       const y = v.root.y - Phaser.Math.FloatBetween(0.1, 0.9) * bh;
-      const obj = this.add.rectangle(x, y, size, size * 0.8, v.color).setStrokeStyle(this.px(5), COLOR.buildingDark).setDepth(DEPTH.building);
+      // M6: 파편 그림 (건물별 → 공용) — 수 · 움직임 · 줍기는 그대로 (H-42 Q5)
+      const obj = art ? this.debrisImage(art, x, y, size).setDepth(DEPTH.building) : this.add.rectangle(x, y, size, size * 0.8, v.color).setStrokeStyle(this.px(5), COLOR.buildingDark).setDepth(DEPTH.building);
       this.debris.push({ obj, vx: this.px(Phaser.Math.FloatBetween(-520, 520)), vy: this.px(Phaser.Math.FloatBetween(-900, -300)), spin: Phaser.Math.FloatBetween(-8, 8), restTimer: null, amount: each + (i === 0 ? reward - each * n : 0) });
     }
   }
@@ -582,7 +669,7 @@ export class BattleScene extends Phaser.Scene {
         d.obj.x = Phaser.Math.Clamp(d.obj.x + d.vx * dt, this.px(40), this.L.width - this.px(40));
         d.obj.y += d.vy * dt;
         d.obj.rotation += d.spin * dt;
-        const floor = groundY - d.obj.height / 2;
+        const floor = groundY - d.obj.displayHeight / 2;
         if (d.obj.y >= floor) {
           d.obj.y = floor;
           d.restTimer = this.cfg.strip.debris_pickup_s; // 지면에 닿음 → 잠깐 뒤 일개미가 집어감
@@ -706,6 +793,50 @@ export class BattleScene extends Phaser.Scene {
 
   /** M2 F — 타격점(건물 밑면)에서 작은 조각 · 먼지 */
   /** M3-D B' — 무기 끝 x · 건물 밑면 y에 충격 별 · 건물 그림 밀림 · (마무리 · 마지막 일격) 큰 조각 */
+  /** M6 지금 건물의 파편 그림 (끔 · 그림 건물 아님 · 파일 없음 = null → 도형 조각) */
+  private debrisArt(): { key: string; tint: number | null } | null {
+    if (!this.fxOn.envFx) return null;
+    const a = this.buildingViewRow ? this.envPlan.buildings[this.buildingViewRow] : null;
+    return a?.debris ? { key: artTextureKey(a.debris), tint: a.tint } : null;
+  }
+
+  /** 파편 그림 한 조각 — 폭 = 도형 조각 크기 × size_mult · 좌우 뒤집기 (반복 티 줄이기) · 7 · 8은 건물 색 그대로 곱하기 */
+  private debrisImage(art: { key: string; tint: number | null }, x: number, y: number, size: number): Phaser.GameObjects.Image {
+    const im = this.add.image(x, y, art.key);
+    im.setScale((size * FX.debris_img.size_mult) / im.width).setFlipX(Math.random() < FX.debris_img.flip_ratio);
+    if (art.tint !== null) im.setTint(art.tint);
+    this.fxCount += 1;
+    return im;
+  }
+
+  /** M6 마지막 일격 충격파 링 — 타격점에서 퍼지며 사라짐 */
+  private finalRing(x: number, y: number): void {
+    const file = this.envPlan.ring;
+    if (!file || !this.fxOn.envFx) return;
+    const d = this.px(FX.final_ring.px);
+    const ring = this.add.image(x, y, artTextureKey(file)).setDepth(DEPTH.fx);
+    const full = d / ring.width;
+    ring.setScale(full * 0.2);
+    this.tweens.add({ targets: ring, scale: full, alpha: { from: 1, to: 0 }, duration: FX.final_ring.ms, ease: 'Quad.easeOut', onComplete: () => ring.destroy() });
+    this.fxCount += 1;
+  }
+
+  /** M6 파괴 먼지 — 건물 밑면 둘레로 퍼지며 사라짐 */
+  private destroyDust(x: number, y: number): void {
+    const file = this.envPlan.dust;
+    if (!file || !this.fxOn.envFx) return;
+    const f = FX.destroy_dust;
+    for (let i = 0; i < f.count; i++) {
+      const o = this.add.image(x, y, artTextureKey(file)).setDepth(DEPTH.fx - 1).setFlipX(i % 2 === 1);
+      const k = this.px(f.px) / o.width;
+      o.setScale(k * 0.6);
+      const ang = Math.PI * (f.count > 1 ? i / (f.count - 1) : 0.5); // 좌 → 우 반원 (위쪽)
+      const sp = this.px(f.spread_px);
+      this.tweens.add({ targets: o, x: x - Math.cos(ang) * sp, y: y - Math.sin(ang) * sp * 0.5, scale: k, alpha: { from: 0.9, to: 0 }, duration: f.ms, ease: 'Quad.easeOut', onComplete: () => o.destroy() });
+      this.fxCount += 1;
+    }
+  }
+
   private impact(kind: StrikeKind, slot: number, stretch: number): void {
     const v = this.buildingView;
     if (!v) return;
@@ -732,9 +863,10 @@ export class BattleScene extends Phaser.Scene {
   private burstChunks(x: number, y: number): void {
     const f = FX.finisher;
     const d = FX.hit_debris;
+    const art = this.debrisArt();
     for (let i = 0; i < f.chunk_count; i++) {
       const size = this.px(f.chunk_px) * Phaser.Math.FloatBetween(0.8, 1.15);
-      const o = this.add.rectangle(x, y, size, size * 0.8, this.buildingView?.color ?? 0xcccccc).setStrokeStyle(this.px(5), COLOR.buildingDark).setDepth(DEPTH.fx - 1);
+      const o = (art ? this.debrisImage(art, x, y, size) : this.add.rectangle(x, y, size, size * 0.8, this.buildingView?.color ?? 0xcccccc).setStrokeStyle(this.px(5), COLOR.buildingDark)).setDepth(DEPTH.fx - 1);
       const ang = Phaser.Math.FloatBetween(Math.PI * 0.2, Math.PI * 0.8);
       const sp = this.px(d.speed_px) * (d.life_ms / 1000);
       this.tweens.add({ targets: o, x: o.x + Math.cos(ang) * sp * (i % 2 ? 1 : -1), y: o.y + Math.sin(ang) * sp, alpha: 0, angle: Phaser.Math.Between(-200, 200), duration: d.life_ms, ease: 'Quad.easeOut', onComplete: () => o.destroy() });

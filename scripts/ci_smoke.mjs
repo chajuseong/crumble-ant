@@ -41,6 +41,8 @@ const url = server.resolvedUrls.local[0];
 const ctx = await browser.newContext({ viewport: VIEW, isMobile: true, hasTouch: true });
 // M3-E: SMOKE_SPEED=3 → 배속을 고른 채로 확인 (브라우저 키 crumble-ant.speed)
 if (process.env.SMOKE_SPEED) await ctx.addInitScript((v) => { try { localStorage.setItem("crumble-ant.speed", v); } catch {} }, process.env.SMOKE_SPEED);
+// M6: SMOKE_ENV=1 → [ART] "건물 · 배경 그림"을 켠 채로 확인 (브라우저 키 crumble-ant.art-settings — 나머지는 시트 기본값)
+if (process.env.SMOKE_ENV) await ctx.addInitScript(() => { try { localStorage.setItem("crumble-ant.art-settings", JSON.stringify({ env: true })); } catch {} });
 const page = await ctx.newPage();
 page.setDefaultTimeout(10000);
 const errors = [];
@@ -102,6 +104,14 @@ try {
     const p = s?.artPlan;
     return p ? { mode: p.mode, reason: p.reason, missing: p.missing.length, missing_weapons: p.missingWeapons.length, loaded: s.artLoaded.length, drawn: s.ant?.artMode ?? null } : null;
   });
+  // M6: 건물 · 배경 그림 상태 — 계획과 실제 그린 쪽이 같아야 함 (끔 = 도형)
+  result.env = await page.evaluate(() => {
+    const s = window.__game?.scene.getScene("battle");
+    const p = s?.envPlan;
+    if (!p) return null;
+    const bld = Object.values(p.buildings);
+    return { on: p.on, buildings: bld.filter(Boolean).length, of: bld.length, sky: !!p.sky, strip: !!p.strip, missing: p.missing.length, strip_drawn: s.strip?.artMode ?? null };
+  });
   result.renderer = await page.evaluate(() => {
     const c = document.querySelector("#game canvas");
     if (!c) return null;
@@ -121,6 +131,10 @@ result.checks = {
   art_state: { ok: !!result.art && result.art.drawn === result.art.mode && (result.art.mode === "image" ? result.art.missing === 0 : result.art.reason !== null), ...(result.art ?? {}) },
   upgrade: { ok: !!result.upgrade && result.upgrade.open && result.upgrade.level === 1 && result.upgrade.after < result.upgrade.before, ...(result.upgrade ?? {}) },
   speed: { ok: result.speed === Number(process.env.SMOKE_SPEED || 1), speed: result.speed },
+  env_state: {
+    ok: !!result.env && result.env.on === !!process.env.SMOKE_ENV && result.env.strip_drawn === (result.env.strip ? "image" : "shape") && (!result.env.on || (result.env.missing === 0 && result.env.buildings === result.env.of)),
+    ...(result.env ?? {}),
+  },
   battle_runs: { ok: Number.isFinite(after) && after > before, destroyed_before: before, destroyed_after: after, rise_ms: result.ms.rise, limit_ms: RUN_MS },
 };
 result.ok = Object.values(result.checks).every((c) => c.ok);

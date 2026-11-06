@@ -19,6 +19,7 @@ export const FX_TOGGLES = [
   { id: 'motion', label: 'M3-C 모션 (공격 · 점프)' },
   { id: 'finisher', label: "M3-D A' 4연타 마무리" },
   { id: 'impact', label: "M3-D B' 충격 별 · 건물 밀림" },
+  { id: 'envFx', label: 'M6 파괴 그림 (링 · 파편 · 먼지)' },
 ] as const;
 
 export type FxToggleId = (typeof FX_TOGGLES)[number]['id'];
