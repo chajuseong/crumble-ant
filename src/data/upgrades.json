@@ -6,7 +6,7 @@
     "per_level_pct": 10,
     "max_level": 20,
     "cost_base": 60,
-    "cost_growth_pct": 122,
+    "cost_growth_pct": 126,
     "sort": 1
   },
   {
@@ -16,15 +16,15 @@
     "per_level_pct": 8,
     "max_level": 10,
     "cost_base": 70,
-    "cost_growth_pct": 132,
+    "cost_growth_pct": 135,
     "sort": 2
   },
   {
     "upgrade_id": "jump_power",
     "name": "점프력",
     "stat": "jump_power",
-    "per_level_pct": 5,
-    "max_level": 7,
+    "per_level_pct": 12,
+    "max_level": 3,
     "cost_base": 65,
     "cost_growth_pct": 138,
     "sort": 3
