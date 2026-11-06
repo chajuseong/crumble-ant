@@ -129,5 +129,19 @@
   "speed_fx": {
     "light_from": 2,
     "hit_sfx_every": 3
+  },
+  "final_ring": {
+    "px": 520,
+    "ms": 280
+  },
+  "destroy_dust": {
+    "count": 3,
+    "px": 240,
+    "spread_px": 160,
+    "ms": 500
+  },
+  "debris_img": {
+    "size_mult": 1.6,
+    "flip_ratio": 0.5
   }
 }
