@@ -1,0 +1,66 @@
+[
+  {
+    "art_id": "house",
+    "file": "building_house.png",
+    "pivot_y": 0.996,
+    "draw_w": 1,
+    "tint": null,
+    "debris_file": "debris_house.png"
+  },
+  {
+    "art_id": "bakery",
+    "file": "building_bakery.png",
+    "pivot_y": 0.996,
+    "draw_w": 1,
+    "tint": null,
+    "debris_file": "debris_bakery.png"
+  },
+  {
+    "art_id": "factory",
+    "file": "building_factory.png",
+    "pivot_y": 0.996,
+    "draw_w": 1,
+    "tint": null,
+    "debris_file": "debris_factory.png"
+  },
+  {
+    "art_id": "office",
+    "file": "building_office.png",
+    "pivot_y": 0.996,
+    "draw_w": 1,
+    "tint": null,
+    "debris_file": "debris_office.png"
+  },
+  {
+    "art_id": "apartment",
+    "file": "building_apartment.png",
+    "pivot_y": 0.996,
+    "draw_w": 1,
+    "tint": null,
+    "debris_file": "debris_apartment.png"
+  },
+  {
+    "art_id": "townhall",
+    "file": "building_townhall.png",
+    "pivot_y": 0.996,
+    "draw_w": 1,
+    "tint": null,
+    "debris_file": "debris_townhall.png"
+  },
+  {
+    "art_id": "office_b",
+    "file": "building_office.png",
+    "pivot_y": 0.996,
+    "draw_w": 1,
+    "tint": "#b8c4ff",
+    "debris_file": "debris_office.png"
+  },
+  {
+    "art_id": "townhall_b",
+    "file": "building_townhall.png",
+    "pivot_y": 0.996,
+    "draw_w": 1,
+    "tint": "#ffc8a8",
+    "debris_file": "debris_townhall.png"
+  }
+]

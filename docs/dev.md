@@ -1,6 +1,7 @@
 # 와르르 개미 — 개발 기준 문서 (단일 기준)
 
-> 문서 버전: v0.16 (2026-11-06) — M5-D 점프력 A안: 12%/Lv · 최대 Lv 3 · 비용 다시 맞춤 · 단일 강화 퇴보 0건 · 옛 세이브 Lv 자르기 (H-41)
+> 문서 버전: v0.17 (2026-11-06) — M6 건물 · 배경 아트 데이터 (꺼진 채): buildings.art_id · building_art 시트 · art_config env_* · fx_config 파괴 이펙트 · 연출 · 완료 조건 (H-42)
+> v0.16 (2026-11-06) — M5-D 점프력 A안: 12%/Lv · 최대 Lv 3 · 비용 다시 맞춤 · 단일 강화 퇴보 0건 · 옛 세이브 Lv 자르기 (H-41)
 > v0.15 (2026-11-06) — M5-D 균형: 강화 비용 낮춤 (도움닫기 0.5 유지 — I-21) · 측정 · 점프력 퇴보 1건 남음 (효과 안은 [계획 먼저])
 > v0.14 (2026-11-06) — M5 C 도움닫기 켬: battle.jump.windup_s 0.5 · strip.ambient_carry_amount 지움 · 측정 (0 · 0.3 · 0.5) · M5 A · B 머지 기록
 > v0.13 (2026-11-06) — M5 도움닫기 데이터: battle.jump.windup_s (0 = 끔) · windupStart 이벤트 · 웅크림 = 도움닫기 전체 · 완료 조건 (H-34 · I-20) · M3-E · M4 머지 기록
@@ -23,7 +24,8 @@
 - v0.4 변경: §6 그림 굴 입구 = 띠 우측 끝 · [굴] 버튼으로도 개미굴 진입 · §10 DD 위치 (기획 + DD 겸하는 Claude Code 창) · §11 요청서 #1 원문
 
 ## 1. 범위
-- 지금 범위: **M5 점프 도움닫기** (I-19 · I-20 · H-34) — core 규칙 변경: 자동 점프 전 지면 대기를 도움닫기로 (꺼진 채 먼저 · 켜는 값 0.5초는 C PR). 도움닫기 중 탭 = 남은 도움닫기를 건너뛰고 바로 강점프 (skip — I-20)
+- 지금 범위: **M6 건물 · 배경 아트 적용** (I-22 · H-42) — 건물 그림 6장 (8행 ↔ `art_id`) · 하늘 · 지면/굴 띠 · 충격 별 · 마지막 일격 링 · 파괴 파편 (건물별) · 먼지. **view만** — core는 건물 밑면 y만 쓰고 `battle.building.height_ratio` · `width_ratio`는 그리기 전용이라 measure 그대로. 꺼진 채 먼저 (`art_config.env_enabled` FALSE → C에서 TRUE)
+- M5 · M5-D (끝): 도움닫기 0.5초 (core 규칙) · 강화 비용 · 점프력 12%/Lv × 3
 - M4는 core 규칙이 바뀐다 (재화 · 강화 반영 전투 값). 강화 0이면 `npm run measure` = M3 표
 - 범위 밖: 체력 강화 · 하드 재화 · 오프라인 보상 · 장비 수치 · 개미굴 방 기능 · 필살기 · 반격
 - 끝난 것: M1 코어 루프 · M2 타격감 · M3 아트 적용 B (파츠 조립 · [ART] 패널) — §7
@@ -48,7 +50,8 @@ art/production/ (원본) · art/game/ (게임용) — 아트가 들어올 때 �
 | Column명 | 데이터 타입 | 설명 | 예시 데이터 |
 |---|---|---|---|
 | building_id | string (PK) | 건물 ID. 중복 불가 | `bld_hut` |
-| name | string | 이름 (표시용, 임시) | 오두막 |
+| name | string | 이름 (표시용) — **M6부터 그림 이름** (H-42 Q2 · `building_id`는 그대로 — 세이브 · FK) | 주택 |
+| art_id | string? (FK → `art.xlsx` building_art) | **M6** 건물 그림 — 빈칸 = 도형. 8행 ↔ 그림 6장 = 그림 높이 순 · 7 · 8 = 사무실 · 시청 색 바꿈 (H-42 Q1) | house |
 | hp | int | 건물 HP | 60 |
 | fall_speed | float | 낙하 속도 (전투 구역 높이 / 초) | 0.1 |
 | weight | float | 무게 — 추후 반격용. 지금 로직 없음 (기본 1.0) | 1.0 |
@@ -145,6 +148,9 @@ px = 1080폭 기준 (view가 프레임 폭에 비례해 줄임) · ms = 밀리�
 | impact.star_px · inner_ratio · points · ms | float · float · int · int | **M3-D B** 충격 별 (무기 끝 x · 건물 밑면 y — H-27 Q4) | 70 · 0.45 · 8 · 140 |
 | speed_fx.light_from · hit_sfx_every | float · int | **M3-E** 배속 ≥ light_from이면 가벼운 연출 — 일반 타격 히트스톱 · 매 타격 흔들림 끔 (마무리 · 마지막 일격만, 길이 ÷ 배속) · 일반 타격음 hit_sfx_every타에 1번 (H-28 ② · 질문 2) | 2 · 3 |
 | motion.strike.min_wall_ms | int | **M3-E** 공격 모션 최소 길이 (벽시계 · 60fps 2프레임) — ×3 · 공속 최대에서도 보이게 (같은 팔은 4타마다라 안 겹침) | 33 |
+| final_ring.px · ms | float · int | **M6** 마지막 일격 충격파 링 (`art_config.ring_file`) — 다 퍼진 지름 (1080폭) · 시간. 별(140ms)보다 길고 "와르르!"(750ms)보다 짧게 [가정] | 520 · 280 |
+| destroy_dust.count · px · spread_px · ms | int · float · float · int | **M6** 파괴 먼지 (`art_config.dust_file`) — 수 · 크기 · 퍼지는 거리 · 시간 [가정] | 3 · 240 · 160 · 500 |
+| debris_img.size_mult · flip_ratio | float | **M6** 파편 그림 = 도형 조각 크기 × size_mult (그림 둘레가 투명해서) · 좌우 뒤집기 비율. 회전 · 크기 흔들림 · 움직임은 지금 도형 조각 값 그대로 (H-42 Q5 · 반복 티 줄이기) | 1.6 · 0.5 |
 | impact.push_px · push_ms | float · int | 건물 **그림만** 위로 밀렸다 돌아옴 (core 건물 y 그대로 · 히트스톱 중에도 진행 — H-27 Q5). 마무리 = × star_scale | 8 · 90 |
 
 ### 3-5. `art.xlsx` → 아트 배치 (M3 — view만 읽음 · 규격과 맞추는 법 = `docs/art.md`)
@@ -155,7 +161,12 @@ pivot · socket · grip = `art/game` 납품본 측정값 · draw_h · anchor · 
 | art_config (키-값) | skin_id · enabled | string · bool | 지금 스킨 · 그림으로 그리기 | black · TRUE |
 | | draw_scale · draw_scale_max · weapon_scale · weapon_scale_max | float | 그림 배율 · [ART] 슬라이더 상한 (판정 크기는 그대로 — H-12 Q1). 기본값 = 대표 폰 확인 (H-22) | 1.5 · 2.5 · 1.3 · 2.0 |
 | | head_scale | float | 머리만 따로 배율 (목 기준) — 표정 가독성 (H-22). 390pt 폰에서 머리 높이 45 → 58pt | 1.3 |
-| | impact_file? | string (빈칸 = 도형 별) | **M3-D** 충격 별 그림 (`art/game/fx/` 안) — 아트가 오면 이름만 적음 | (빈칸) |
+| | impact_file? | string (빈칸 = 도형 별) | **M3-D** 충격 별 그림 (`art/game/` 안 파일 이름 — `env/impact.png`) — **M6 C에서 impact.png** | (빈칸) |
+| | env_enabled | bool | **M6** 건물 · 하늘 · 띠 · 파괴 이펙트를 그림으로 (A · B = FALSE 꺼진 채 → C = TRUE). 끄거나 파일 없음 = 지금 도형 | FALSE |
+| | sky_file? · strip_file? | string | 하늘 (전체 화면 9:19.5) · 지면/굴 띠 (1440×312) — `art/game/env/` · 빈칸 = 도형 | sky.png · ground_strip.png |
+| | strip_ground_ratio | float | 띠 그림 풀 윗선 높이 ÷ 그림 높이 — 이 선 = 지면(groundY). 위 = 덤불 (건물 · 개미 뒤) · 아래 = 땅 (일개미 층) | 0.24 |
+| | strip_burrow_x | float | 띠 그림 굴 입구 가운데 — **그림 켬일 때만** 일개미 도착점 · "+N" 자리 (끄면 `strip.burrow_x_ratio` 0.93) | 0.887 |
+| | ring_file? · dust_file? · debris_file? | string | 마지막 일격 링 · 파괴 먼지 · 공용 파편 (`art/game/fx/`) — 빈칸 = 그 연출 없음 / 도형 조각 | shock_ring.png · dust.png · debris.png |
 | | hit_face_ms | int | 착지 피격 표정 시간 — 짓눌림 0.26초 + 건물이 깔고 남는 0.6초 동안 보이게 | 900 |
 | ant_parts (표) | skin_id · part_id | string (PK 둘) | 스킨 + 파츠 (body · head_normal · head_hit · head_down · arm · leg) | black · arm |
 | | file | string | `ant_<skin>_<part>.png` (art/game/ant/) | ant_black_arm.png |
@@ -167,6 +178,11 @@ pivot · socket · grip = `art/game` 납품본 측정값 · draw_h · anchor · 
 | | name · file | string | 한글 이름 (`art/game/weapons/README.md`) · `weapon_<id>.png` | 망치 · weapon_hammer.png |
 | | grip_x · grip_y · scale · angle_deg | float | 손잡이 점 · 그림 높이 (개미 키 기준) · 손에서의 각도 | 0.496 · 0.887 · 0.5 · 0 |
 | ant_loadout (표) | slot · weapon_id? | int (PK) · string (FK → weapons, 빈칸 = 맨주먹) | 팔 슬롯 1 ~ 4 장착 (외형만) | 1 · hammer |
+| building_art (표 · M6) | art_id | string (PK) | 건물 그림 + 색 조합 — `buildings.art_id`가 가리킴 | townhall_b |
+| | file | string | `building_<이름>.png` (`art/game/buildings/`) | building_townhall.png |
+| | pivot_y | float | 밑면 y (0 ~ 1 · 기준점 x = 가운데). **그림 밑면 = core 건물 밑면** (치는 곳 · 깔리는 곳) — `npm run art:pivots` | 0.996 |
+| | draw_w | float | 그림 폭 ÷ 건물 폭 (`width_ratio`) · 세로는 비율대로 (위로 341 ~ 387px — 판정은 밑면만이라 결과 그대로, H-42 Q3) | 1.0 |
+| | tint? · debris_file? | string | 곱하기 색 `#rrggbb` (같은 그림 다시 쓸 때) · 건물별 파편 `debris_<이름>.png` (`art/game/fx/building_debris/` — 빈칸 = 공용 debris_file) | #b8c4ff · debris_office.png |
 
 ### 3-6. `upgrades.xlsx` › upgrades → `upgrades.json` (표 · M4 — core가 읽음)
 | Column명 | 데이터 타입 | 설명 | 예시 데이터 |
@@ -270,6 +286,10 @@ pivot · socket · grip = `art/game` 납품본 측정값 · draw_h · anchor · 
 | **M3-D A** 4연타 마무리 | strike (combo % finisher.every == 0 · 마지막 일격 아님) | 0.07초 멈춤 · 0.12초 흔들림 | "다다다 쾅!" — 긴 히트스톱 · 큰 흔들림 · 큰 별 · 큰 조각 · 낮은 "쾅" · 팔 늘어남 ×1.2 | `fx_config` finisher.* |
 | **M3-D B** 충격 별 · 건물 밀림 | strike | 0.14초 · 0.09초 | 무기 끝에 노란 별 (어두운 테두리 — L-05) · 건물 그림이 위로 살짝 튕김. 그림 파일이 있으면 별 대신 그림 | `fx_config` impact.* · `art_config.impact_file` |
 | **M3-D** [FX] 토글 2개 | ([FX] 패널) | — | "4연타 마무리" · "충격 · 밀림" — 끄면 M3 모습 | — (테스트 빌드 확인용) |
+| **M6** 건물 · 배경 그림 | (늘 · `env_enabled`) | — | 건물 = 그림 (밑면 = core 밑면 · 폭 = 건물 폭) · 번쩍 = 그림 흰색 칠 · 금 = 밑면 쪽 판정 상자 안 · HP 바 · 흔들림 · 밀림 · 착지 납작 그대로. 하늘 = 전체 화면 · 띠 = 한 장을 두 번 잘라 덤불(건물 뒤) / 땅(일개미 층) · 띠 아래 빈 곳 = 그림 맨 아래 흙색 | `art.xlsx` building_art · art_config env_* |
+| **M6** 마지막 일격 링 | strike (hpLeft 0) | 0.28초 | 충격 별과 같이, 타격점에서 링이 퍼지며 사라짐 | `fx_config` final_ring.* · `art_config.ring_file` |
+| **M6** 파괴 파편 · 먼지 | destroy · strike (마무리 · 마지막) | 조각 = 지금 그대로 · 먼지 0.5초 | 잔해 조각 (일개미가 주워 감) · M3-D 큰 조각 = 건물별 파편 그림 (회전 · 크기 · 좌우 뒤집기) · 먼지가 퍼지며 사라짐. 매 타격 작은 파편 (M2 F)은 도형 그대로 | `fx_config` debris_img.* · destroy_dust.* · `building_art.debris_file` |
+| **M6** [ART] · [FX] 토글 | ([ART] · [FX] 패널) | — | [ART] "건물 · 배경 그림" · [FX] "파괴 그림 이펙트" — 끄면 지금 화면 | — (테스트 빌드 확인용) |
 | **M3-E** 배속 버튼 · 가벼운 연출 | (HUD 오른쪽 아래 [×1]) · 배속 ≥ 2 | — | 누를 때마다 ×1 → ×1.5 → ×2 → ×3 → ×1. ×2 이상: 일반 타격 멈춤 · 흔들림 끔 · 일반 타격음 3타에 1번 · 공격 모션 최소 33ms | `speed.levels` · `fx_config` speed_fx.* · motion.strike.min_wall_ms · `hud.speed` |
 | **M3-C** [FX] 모션 토글 | ([FX] 패널) | — | 끄면 M3 모습 (팔 찌르기 트윈 · 점프 늘어남) | — (테스트 빌드 확인용) |
 | **M3** 표정 바꾸기 | land · antDown | hit_face_ms · 기절 동안 | 착지 피격 = head_hit · 기절 = head_down · 그 외 head_normal | `art_config.hit_face_ms` |
@@ -304,3 +324,4 @@ pivot · socket · grip = `art/game` 납품본 측정값 · draw_h · anchor · 
 | M3-E | 배속 ×1 · ×1.5 · ×2 · ×3 (I-17 · H-28) | ① `npm run measure` 그대로 ② **배속별 같은 게임 시간 결과 동일** (테스트 — dt × 배속으로 돌린 sim과 ×1 sim이 같은 고정 스텝 수에서 상태 · 이벤트 같음) ③ ×3 smoke (콘솔 오류 0 · 파괴 수 오름) ④ 버튼 화면 컷 (×1 · ×1.5 · ×2 · ×3) ⑤ ×2 이상 가벼운 연출 · 모션 최소 길이 테스트 ⑥ 기절 · 후퇴 · [도전] · 개미굴 중 배속 유지 ⑦ PR에 "무료 ×3 = 재화 ×3" 확인 문구 (M4 운반 예약은 게임 시간) ⑧ 이 문서 §3 · §4 · §5 · §7 | A `c8d9c14` (PR #35) · B `6a257f1` (PR #36) |
 | M4 | 강화 4종 + 소프트 재화 (I-12 · I-13 · H-17) | ① 강화 0이면 `npm run measure` 표 = M3 표 ② `npm run measure -- --upgrades` = 진행 표 (§3-6 측정 · PR 본문에) · **단일 강화 Lv 0 ~ max 퇴보 0건** ③ 테스트: 비용 (정수 반복) · 효과 정수화 · 구매 (부족 · MAX) · deposit 시각 · 저장 왕복 · 깨진 저장 → 새로 시작 + `.bad` 보관 · 버전 · 도전 중 저장 · 강화가 다음 타격 · 점프부터 적용 ④ 실제 브라우저: 구매 → 새로고침 → 잔해 · Lv · 스테이지 그대로 ⑤ smoke ✅ + 강화 패널 열기 · 구매 1회 · 콘솔 오류 0 ⑥ 화면 컷: HUD 잔해 · 패널 (가능 · 부족 · MAX) · 구매 순간 — 360 / 390 / 430 ⑦ 이 문서 §3 · §4 · §5 · §7 | B `d5b82af` (PR #38) · A `7d483d7` (PR #24) |
 | M5 | 점프 도움닫기 (I-19 · I-20 · H-34) | ① `windup_s` 0 = M4 measure · `--upgrades` 표 그대로 (diff 0) ② 테스트: 도움닫기 길이 · `windupStart` · 도움닫기 중 탭 = 바로 강점프 1회 · 깔리면 취소 · 첫 점프에도 · 배속별 같은 결과 · 강화와 무관 ③ view: 웅크림 = 도움닫기 전체 · ×1 · ×3 화면 컷 ④ 켜는 C PR (0.5): measure · `--upgrades` 표 (0.3 · 0.5 비교) · smoke ⑤ 이 문서 §3 · §4 · §5 · §7 | A `5620daf` (PR #42) · B `f652c4c` (PR #43) · C `2218e36` (PR #46) |
+| M6 | 건물 · 배경 아트 적용 (I-22 · H-42) | ① `npm run measure` · `--upgrades` = M5-D 표 그대로 (diff 0) ② **[ART] 건물 · 배경 끔 = 지금 화면** (같은 장면 픽셀 비교) · [FX] 파괴 그림 끔 = 지금 ③ 그림 켬 화면 컷 (390 · 360 · 430): 8스테이지 건물마다 매달려 치는 순간 · 착지 · 마지막 일격 (별 + 링) · 파괴 (파편 · 먼지) · 일개미 굴 입구 도착 + "+N" · 덤불 뒤 개미 ④ 폴백 테스트 (순수 함수): 건물 그림 하나 없음 · `art_id` 빈칸 · 하늘 / 띠 없음 · 끔 ⑤ 데이터 검증: `art_id` FK · building_art PK · 파일 이름 · 파일 있는지 (이름으로 · 겹침 오류) · tint 형식 · `strip_*` 범위 ⑥ smoke ×1 · ×3 콘솔 오류 0 · 첫 화면까지 시간 (전 → 후 — 그림 약 6MB 시작 때 읽기 [프로토만]) ⑦ 이 문서 §3 · §5 · §7 · `docs/art.md` §7 | |

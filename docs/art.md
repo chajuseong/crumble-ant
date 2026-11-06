@@ -1,6 +1,7 @@
-# 아트 규격 · 파츠 조립 (M3)
+# 아트 규격 · 파츠 조립 (M3 · M6)
 
-> 문서 버전: v0.4 (2026-11-05) — §3 충격 별 그림 자리 `art/game/fx/` (M3-D — H-27)
+> 문서 버전: v0.5 (2026-11-06) — §7 건물 · 배경 · 파괴 이펙트 (M6 — H-42) · §3 위치 · 파일 이름으로 찾기
+> v0.4 (2026-11-05) — §3 충격 별 그림 자리 `art/game/fx/` (M3-D — H-27)
 > v0.3 (2026-11-04) — §6 기본값 = 대표 폰 확인 (그림 ×1.5 · 무기 ×1.3) · 머리 배율 · 표정 시간 (H-22)
 > v0.2 (2026-11-04) — §6 좌표를 `art/game` 납품본(아트 #15 `faa5c2c`)으로 다시 잼 · 무기 이름 = README
 > v0.1 (2026-11-04) — 📮 #3 [DD→개발] M3 아트 적용 (I-11) · 계획 승인 H-12. 아트(ChatGPT)에 전달된 규격을 정본으로 옮김
@@ -27,9 +28,12 @@
 | `art/game/ant/` | `ant_<skin>_body.png` · `ant_<skin>_head_normal.png` · `ant_<skin>_head_hit.png` · `ant_<skin>_head_down.png` · `ant_<skin>_arm.png` · `ant_<skin>_leg.png` (지금 skin = `black`) |
 | `art/game/weapons/` | `weapon_<weapon_id>.png` × 8 — weapon_id = 영문 소문자 · 숫자 · 밑줄 |
 | `art/game/weapons/README.md` | 무기 목록 표 `weapon_id | 한글 이름 | 파일` (H-12 Q7) |
-| `art/game/fx/` (나중) | 충격 별 그림 1장 — 이름을 `art.xlsx` › art_config `impact_file`에 적으면 도형 별 대신 씀 (M3-D). 위를 향한 별 · 투명 배경 · 가운데 = 맞는 점 |
+| `art/game/env/` | `impact.png` 충격 별 (M3-D — 이름을 art_config `impact_file`에 적으면 도형 별 대신) · `sky.png` 하늘 · `ground_strip.png` 지면/굴 띠 (M6 §7) |
+| `art/game/buildings/` | `building_<이름>.png` × 6 + `README.md` 표 (M6 §7) |
+| `art/game/fx/` | `shock_ring.png` · `dust.png` · `debris.png` (공용 파편) · `building_debris/debris_<이름>.png` × 6 (건물별 파편) — M6 §7 |
 
 - 지금 무기 8종 (H-12 · 이름 = `art/game/weapons/README.md`): `club` 몽둥이 · `drill` 드릴 · `flail` 도리깨 · `hammer` 망치 · `mace` 철퇴 · `mallet` 나무망치 · `pickaxe` 곡괭이 · `wrench` 렌치
+- **게임은 파일 이름만으로 찾는다** (`src/view/artFiles.ts`) — 하위 폴더 어디든 되지만, `art/game/` 안에 **같은 이름이 둘이면 오류** (`npm run data:check`)
 - 파일 이름 규칙은 `npm run data:check`가 검사한다. 시트에 있는 파일이 `art/game/`에 없으면: 폴더가 없을 때 = 경고, 폴더가 있을 때 = 오류 (H-12 Q6)
 
 ## 4. 좌표 — 아트가 아니라 데이터로 맞춘다 (`design/tables/art.xlsx`)
@@ -69,3 +73,40 @@
 - `hit_face_ms` 900 = 착지 짓눌림 0.26초 + 건물이 개미를 깔고 남는 0.6초 동안 피격 표정이 보이게 (전에는 600)
 - `draw_scale_max` 2.5 = 아트 인게임 목업의 개미(화면 높이 약 15%) ÷ 지금 개미(0.07 × 0.84 ≈ 5.9%)
 - 기본 장착: 1 망치 · 2 드릴 · 3 철퇴 · 4 렌치 — 실루엣이 서로 다른 4개 (목업은 망치)
+
+## 7. 건물 · 배경 · 파괴 이펙트 (M6 — H-42)
+**원칙: view만.** core는 건물의 **밑면 y만** 쓴다 (치는 곳 · 깔리는 곳). 그림 크기 · 모양은 결과(measure)에 영향 없음
+
+| 그림 | 규격 (납품본 — F-04 · F-05 · F-06) | 게임에서 | 시트 |
+|---|---|---|---|
+| 건물 `building_<이름>.png` × 6 | 폭 720 · 높이 682 ~ 775 · 여백 3px · 밑면이 평평 (밑면 폭 94 ~ 96%) | 폭 = 건물 폭 (`width_ratio` × `draw_w`) · 세로는 비율대로 · **그림 밑면 = core 밑면** · 기준점 x = 가운데 | `building_art` (art_id · file · pivot_y · draw_w · tint · debris_file) |
+| 하늘 `sky.png` | 1440×3120 (9:19.5 = 화면 비율) · 불투명 | 전체 화면 한 장 (HUD · 띠가 위에) — 도형 하늘 · 구름 숨김 | art_config `sky_file` |
+| 띠 `ground_strip.png` | 1440×312 (4.6:1 = 띠 비율) · 좌우 이어짐 · 위 24% = 풀 · 덤불 (투명 포함) | 풀 윗선 = 지면 (groundY). 한 장을 두 번 잘라 **덤불 = 건물 · 개미 뒤 · 땅 = 일개미 층** · 띠 아래 빈 곳 = 그림 맨 아래 흙색 | `strip_file` · `strip_ground_ratio` · `strip_burrow_x` |
+| 충격 별 `impact.png` | 256 정사각 · 가운데 = 맞는 점 | 지금 도형 별 자리 (M3-D) | `impact_file` |
+| 링 `shock_ring.png` | 512 · 가운데 | 마지막 일격에 별과 같이 퍼짐 | `ring_file` · fx `final_ring.*` |
+| 먼지 `dust.png` | 256 · 가운데 | 파괴 때 퍼지며 사라짐 | `dust_file` · fx `destroy_dust.*` |
+| 파편 `debris_<이름>.png` × 6 · 공용 `debris.png` | 폭 256 · 가운데 · 건물당 큰 조각 하나 | 잔해 조각 (일개미가 주워 감) · M3-D 큰 조각 — 회전 · 크기 · 좌우 뒤집기로 반복 | `building_art.debris_file` (빈칸 = 공용) · fx `debris_img.*` |
+
+**건물 8행 ↔ 그림 6장** (H-42 Q1 — 그림 높이 순 · 7 · 8 = 같은 그림 + 색 바꿈 `tint`)
+| stage | building_id | 이름 (= 그림) | art_id | 그림 높이 (폭 360일 때) |
+|---|---|---|---|---|
+| 1 | bld_hut | 주택 | house | 341px |
+| 2 | bld_house | 빵집 | bakery | 351 |
+| 3 | bld_villa | 장난감 공장 | factory | 352 |
+| 4 | bld_shop | 사무실 | office | 366 |
+| 5 | bld_school | 아파트 | apartment | 368 |
+| 6 | bld_apt | 시청 | townhall | 387 |
+| 7 | bld_hospital | 사무실 (밤) | office_b (`#b8c4ff` [가정]) | 366 |
+| 8 | bld_tower | 시청 (노을) | townhall_b (`#ffc8a8` [가정]) | 387 |
+
+**재는 법** — `npm run art:pivots`
+- 건물: `pivot_y` = 마지막 불투명 행 아래 ÷ 높이
+- 띠: `strip_ground_ratio` = 위에서 처음으로 폭 95% 이상 불투명한 줄 (75/312 = 0.24) · `strip_burrow_x` = 풀선 아래 어두운 덩어리 가운데 (1219 ~ 1335px → 0.887)
+- 7 · 8 색 (`tint`)과 fx 키 값은 [가정] — C PR 화면 컷 · 폰 확인 뒤 맞춤
+
+**폴백**
+- 건물 그림 없음 · `art_id` 빈칸 → 그 건물만 도형
+- 하늘 · 띠 없음 → 각각 도형
+- 링 · 먼지 없음 → 그 연출 없음
+- 파편: 건물별 없음 → 공용 → 그것도 없으면 도형 조각
+- `env_enabled` FALSE · [ART] 끔 → 지금 화면

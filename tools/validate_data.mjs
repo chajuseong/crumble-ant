@@ -6,12 +6,13 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 
 // 있어야 하는 JSON (build_data.mjs SHEETS의 out과 같아야 함)
-export const REQUIRED = ["buildings", "stages", "game_config", "ui_strings", "fx_config", "art_config", "ant_parts", "ant_mounts", "weapons", "ant_loadout", "upgrades"];
+export const REQUIRED = ["buildings", "stages", "game_config", "ui_strings", "fx_config", "art_config", "ant_parts", "ant_mounts", "weapons", "ant_loadout", "upgrades", "building_art"];
 
 // M3 아트 — 파츠 이름 · 파일 이름 규칙 (docs/art.md §3)
 export const ART_PARTS = ["body", "head_normal", "head_hit", "head_down", "arm", "leg"];
 export const ART_MOUNTS = ["leg_l", "leg_r", "arm_1", "arm_2", "arm_3", "arm_4", "body", "head"];
 const ID = /^[a-z0-9_]+$/;
+const HEX = /^#[0-9a-f]{6}$/;
 
 const KEY_PART = /^[a-z][a-z0-9_]*$/;   // 키 조각: 영문 소문자 · 숫자 · _ (점 묶음의 각 조각)
 const isPlainObject = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
@@ -110,6 +111,10 @@ const FX_KEYS = [
   ["impact.push_px", "num", { min: 0 }], ["impact.push_ms", "int", { min: 0 }],
   // M3-E 배속 (H-28)
   ["speed_fx.light_from", "num", { gt: 1 }], ["speed_fx.hit_sfx_every", "int", { min: 1 }], ["motion.strike.min_wall_ms", "int", { min: 0 }],
+  // M6 파괴 그림 이펙트 (H-42)
+  ["final_ring.px", "num", { gt: 0 }], ["final_ring.ms", "int", { gt: 0 }],
+  ["destroy_dust.count", "int", { min: 0 }], ["destroy_dust.px", "num", { gt: 0 }], ["destroy_dust.spread_px", "num", { min: 0 }], ["destroy_dust.ms", "int", { gt: 0 }],
+  ["debris_img.size_mult", "num", { gt: 0 }], ["debris_img.flip_ratio", "num", { min: 0, max: 1 }],
 ];
 
 // ui_strings 필수 키 (view가 읽는 것)
@@ -185,6 +190,24 @@ export function validateAll(data) {
     if (JSON.stringify(obj).includes("�")) errors.push(`${name}.json: 깨진 글자(U+FFFD)가 있음 — 시트 저장 방식을 확인`);
   }
 
+  // building_art (M6 — H-42) — art_id PK · buildings.art_id가 가리킴
+  const artIds = new Set();
+  if ("building_art" in data) {
+    const rows = data.building_art;
+    if (!Array.isArray(rows)) errors.push("building_art: 표여야 함");
+    else rows.forEach((r, i) => {
+      const w = `building_art[${i}]`;
+      if (typeof r.art_id !== "string" || !ID.test(r.art_id)) errors.push(`${w}.art_id: 영문 소문자 · 숫자 · _ (${JSON.stringify(r.art_id)})`);
+      else if (artIds.has(r.art_id)) errors.push(`${w}.art_id: PK 중복 (${r.art_id})`);
+      else artIds.add(r.art_id);
+      if (typeof r.file !== "string" || !/^building_[a-z0-9_]+\.png$/.test(r.file)) errors.push(`${w}.file: building_<이름>.png (${JSON.stringify(r.file)})`);
+      checkValue(`${w}.pivot_y`, r.pivot_y, "num", { gt: 0, max: 1 }, errors);
+      checkValue(`${w}.draw_w`, r.draw_w, "num", { gt: 0, max: 2 }, errors);
+      if (r.tint !== null && !HEX.test(String(r.tint))) errors.push(`${w}.tint: 비우거나 #rrggbb (${JSON.stringify(r.tint)})`);
+      if (r.debris_file !== null && !/^debris_[a-z0-9_]+\.png$/.test(String(r.debris_file))) errors.push(`${w}.debris_file: 비우거나 debris_<이름>.png (${JSON.stringify(r.debris_file)})`);
+    });
+  }
+
   // buildings — building_id PK
   const ids = new Set();
   if ("buildings" in data) {
@@ -201,6 +224,8 @@ export function validateAll(data) {
       checkValue(`${w}.weight`, r.weight, "num", { gt: 0 }, errors);
       checkValue(`${w}.debris_reward`, r.debris_reward, "int", { min: 0 }, errors);
       checkValue(`${w}.is_boss`, r.is_boss, "bool", {}, errors);
+      if (!("art_id" in r)) errors.push(`${w}.art_id: 칸 없음 (빈칸 = 도형)`);
+      else if (r.art_id !== null && !artIds.has(r.art_id)) errors.push(`${w}.art_id: building_art에 없음 (FK ${JSON.stringify(r.art_id)}) — 빈칸 = 도형`);
     });
   }
 
@@ -254,6 +279,14 @@ export function validateAll(data) {
       checkValue("art_config.head_scale", a.head_scale, "num", { gt: 0 }, errors);
       if (!("impact_file" in a)) errors.push("art_config.impact_file: 없음 (비우면 도형 별)");
       else if (a.impact_file !== null && !/^[a-z0-9_]+\.png$/.test(a.impact_file)) errors.push(`art_config.impact_file: 비우거나 영문 소문자 · 숫자 · _ .png (${JSON.stringify(a.impact_file)})`);
+      // M6 건물 · 배경 · 파괴 이펙트 (H-42)
+      checkValue("art_config.env_enabled", a.env_enabled, "bool", {}, errors);
+      for (const k of ["sky_file", "strip_file", "ring_file", "dust_file", "debris_file"]) {
+        if (!(k in a)) errors.push(`art_config.${k}: 없음 (비우면 도형)`);
+        else if (a[k] !== null && !/^[a-z0-9_]+\.png$/.test(a[k])) errors.push(`art_config.${k}: 비우거나 영문 소문자 · 숫자 · _ .png (${JSON.stringify(a[k])})`);
+      }
+      checkValue("art_config.strip_ground_ratio", a.strip_ground_ratio, "num", { min: 0, max: 0.9 }, errors);
+      checkValue("art_config.strip_burrow_x", a.strip_burrow_x, "num", { gt: 0, max: 1 }, errors);
       if (a.draw_scale > a.draw_scale_max) errors.push("art_config.draw_scale: draw_scale_max 이하여야 함");
       if (a.weapon_scale > a.weapon_scale_max) errors.push("art_config.weapon_scale: weapon_scale_max 이하여야 함");
     }
@@ -375,21 +408,34 @@ export function validateAll(data) {
 }
 
 /**
- * 시트에 적힌 그림 파일이 art/game에 있는지 (H-12 Q6).
+ * 시트에 적힌 그림 파일이 art/game (하위 폴더 어디든 — 파일 이름으로 찾음)에 있는지 (H-12 Q6 · M6).
  * art/game 폴더가 없으면 경고만 (아트 납품 전 — 게임은 도형으로 그림), 폴더가 있는데 그 파일만 없으면 오류.
  */
 export function artFileIssues(data, root = "art/game") {
   const out = { errors: [], warnings: [] };
+  const a = data.art_config ?? {};
   const need = [
-    ...(Array.isArray(data.ant_parts) ? data.ant_parts.map((r) => ["ant", r.file]) : []),
-    ...(Array.isArray(data.weapons) ? data.weapons.map((r) => ["weapons", r.file]) : []),
-    ...(typeof data.art_config?.impact_file === "string" ? [["fx", data.art_config.impact_file]] : []),
+    ...(Array.isArray(data.ant_parts) ? data.ant_parts.map((r) => r.file) : []),
+    ...(Array.isArray(data.weapons) ? data.weapons.map((r) => r.file) : []),
+    ...["impact_file", "sky_file", "strip_file", "ring_file", "dust_file", "debris_file"].filter((k) => typeof a[k] === "string").map((k) => a[k]),
+    ...(Array.isArray(data.building_art) ? data.building_art.flatMap((r) => [r.file, r.debris_file].filter((f) => typeof f === "string")) : []),
   ];
   if (!fs.existsSync(root)) {
     if (need.length) out.warnings.push(`${root} 폴더 없음 — 그림 ${need.length}개는 아트 납품 뒤 (그때까지 게임은 도형으로 그림)`);
     return out;
   }
-  for (const [sub, file] of need) if (!fs.existsSync(path.join(root, sub, file))) out.errors.push(`${root}/${sub}/${file}: 파일 없음 (시트에는 있음)`);
+  // 게임은 파일 이름만으로 찾음 (src/view/artFiles.ts) → 하위 폴더 어디든 · 같은 이름이 둘이면 오류
+  const where = new Map();
+  const walk = (dir) => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) walk(p);
+      else if (e.name.endsWith(".png")) where.set(e.name, [...(where.get(e.name) ?? []), p]);
+    }
+  };
+  walk(root);
+  for (const [name, list] of where) if (list.length > 1) out.errors.push(`${root}: 같은 파일 이름 ${name}이 ${list.length}곳 (${list.join(" · ")}) — 게임은 이름으로만 찾음`);
+  for (const file of new Set(need)) if (!where.has(file)) out.errors.push(`${root}/**/${file}: 파일 없음 (시트에는 있음)`);
   return out;
 }
 
