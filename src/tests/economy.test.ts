@@ -9,9 +9,11 @@ const cfg = makeConfig();
 const row = (id: string) => cfg.upgrades.rows.find((r) => r.upgrade_id === id)!;
 
 describe('M4 비용 · 효과 (정수)', () => {
-  it('비용 = 정수 반복: 공격력 60 → 78 → 101 → 131 (floor(이전 × 130 / 100))', () => {
-    expect([0, 1, 2, 3].map((lv) => upgradeCost(row('attack_power'), lv))).toEqual([60, 78, 101, 131]);
-    expect(upgradeCost(row('attack_speed'), 0)).toBe(90);
+  it('비용 = 정수 반복: 60 → 78 → 101 → 131 (floor(이전 × 130 / 100)) · Lv 0 = cost_base', () => {
+    // 비용 값은 시트와 상관없이 고정 (M5-D에서 시트 비용이 바뀜) — 계산 규칙만 검사
+    const fixed = { ...row('attack_power'), cost_base: 60, cost_growth_pct: 130 };
+    expect([0, 1, 2, 3].map((lv) => upgradeCost(fixed, lv))).toEqual([60, 78, 101, 131]);
+    expect(upgradeCost(row('attack_speed'), 0)).toBe(row('attack_speed').cost_base);
   });
   it('효과 % = 100 + pct × Lv · 데미지 = floor(10 × % / 100) → Lv당 +1', () => {
     expect(levelPct(row('attack_power'), 3)).toBe(130);
