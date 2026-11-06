@@ -105,4 +105,18 @@ describe('M4 저장 형식 v1', () => {
     const s = parseSave({ v: 1, debris: 12.9, upgrades: { attack_power: 999, attack_speed: -3, ghost: 5 }, stage: 0, auto_advance: true }, cfg)!;
     expect(s).toEqual({ debris: 12, levels: { attack_power: 20, attack_speed: 0, jump_power: 0, move_speed: 0 }, stage: 1, autoAdvance: true });
   });
+  it('H-41: 점프력 최대 Lv가 줄면 (7 → 3) 옛 세이브 Lv 4 ~ 7 = 3으로 자름 · 재화는 그대로 (돌려주지 않음 [프로토만])', () => {
+    // 시트 값과 상관없이 max_level 3으로 고정
+    const c3 = makeConfig((c) => {
+      c.upgrades.rows.find((r) => r.upgrade_id === 'jump_power')!.max_level = 3;
+    });
+    for (const old of [4, 7]) {
+      const s = parseSave({ v: 1, debris: 500, upgrades: { attack_power: 2, jump_power: old }, stage: 4, auto_advance: true }, c3)!;
+      expect(s.levels.jump_power).toBe(3);
+      expect(s.levels.attack_power).toBe(2);
+      expect(s.debris).toBe(500);
+    }
+    const sim = new BattleSim(c3, 4, parseSave({ v: 1, debris: 500, upgrades: { jump_power: 7 }, stage: 4, auto_advance: true }, c3)!);
+    expect(sim.buyUpgrade('jump_power')).toBe('max');
+  });
 });
