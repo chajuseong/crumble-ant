@@ -36,6 +36,8 @@ export interface BattleConfig {
     height_ratio: number;
     speed_ratio_per_s: number;
     ground_delay_s: number;
+    /** M5 도움닫기 — 0 / 없음 = 끔 (ground_delay_s). 0보다 크면 자동 점프 전 대기 = 이 값 (I-19 · I-20) */
+    windup_s?: number;
   };
   strong_jump: {
     height_mult: number;
@@ -103,7 +105,6 @@ export interface StripConfig {
   worker_size_ratio: number;
   worker_gap_ratio: number;
   ambient_spawn_interval_s: number;
-  ambient_carry_amount: number;
   debris_pieces: number;
   debris_pickup_s: number;
   burrow_x_ratio: number;
@@ -202,6 +203,7 @@ export function validateConfig(raw: unknown): string[] {
     num('battle.jump.height_ratio', jump.height_ratio, { gt: 0, max: 1 }),
     num('battle.jump.speed_ratio_per_s', jump.speed_ratio_per_s, { gt: 0 }),
     num('battle.jump.ground_delay_s', jump.ground_delay_s, { min: 0 }),
+    ...(jump.windup_s !== undefined ? [num('battle.jump.windup_s', jump.windup_s, { min: 0 })] : []),
     num('battle.strong_jump.height_mult', strong.height_mult, { gt: 0 }),
     num('battle.strong_jump.speed_mult', strong.speed_mult, { gt: 0 }),
     num('battle.strong_jump.cooldown_s', strong.cooldown_s, { min: 0 }),
@@ -225,7 +227,6 @@ export function validateConfig(raw: unknown): string[] {
     num('strip.worker_size_ratio', strip.worker_size_ratio, { gt: 0, max: 1 }),
     num('strip.worker_gap_ratio', strip.worker_gap_ratio, { min: 0, max: 1 }),
     num('strip.ambient_spawn_interval_s', strip.ambient_spawn_interval_s, { gt: 0 }),
-    num('strip.ambient_carry_amount', strip.ambient_carry_amount, { min: 0 }),
     num('strip.debris_pieces', strip.debris_pieces, { min: 0, int: true }),
     num('strip.debris_pickup_s', strip.debris_pickup_s, { min: 0 }),
     num('strip.burrow_x_ratio', strip.burrow_x_ratio, { gt: 0, max: 1 }),

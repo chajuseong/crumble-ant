@@ -167,6 +167,7 @@ export class BattleScene extends Phaser.Scene {
     const antW = cfg.battle.ant.width_ratio * L.width;
     this.ant = new AntView(this, L.width / 2, L.groundY, antW, antH);
     this.ant.root.setDepth(DEPTH.ant);
+    this.ant.windupS = cfg.battle.jump.windup_s ?? 0; // M5
 
     // 땅속 띠 + 메뉴
     this.strip = new StripView(this, cfg.strip, L.strip, L.width);

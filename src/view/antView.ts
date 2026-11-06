@@ -47,6 +47,8 @@ export class AntView {
   private punch: PunchSize = { stretch: 1, socket: 1 };
   /** M3-E 배속 — 공격 모션 최소 길이(벽시계)를 게임 시간으로 바꿀 때 */
   speed = 1;
+  /** M5 도움닫기 길이 (core 값 · 0 = 끔) — 웅크림이 도움닫기 전체에 걸침 */
+  windupS = 0;
   /** CA-002 지금 내린 양 (개미 키 단위 · 확인용) */
   drop = 0;
   /** 팔 기본 각도 크기 (슬롯 1 ~ 4) — 도형 팔과 같은 값 */
@@ -254,7 +256,7 @@ export class AntView {
   }
 
   private motionInput(st: (AntMotionState & { jumpPending: boolean }) | null): MotionInput {
-    return { phase: st?.phase ?? this.lastPhase, contact: st?.contact ?? false, groundTimer: st?.groundTimer ?? Infinity, jumpPending: st?.jumpPending ?? false, t: this.motionT, ...this.mi };
+    return { phase: st?.phase ?? this.lastPhase, contact: st?.contact ?? false, groundTimer: st?.groundTimer ?? Infinity, jumpPending: st?.jumpPending ?? false, windupS: this.windupS, t: this.motionT, ...this.mi };
   }
 
   private applyPose(p: Pose): void {
