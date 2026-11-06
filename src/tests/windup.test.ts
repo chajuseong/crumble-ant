@@ -33,10 +33,11 @@ const firstJump = (sim: BattleSim) => {
 
 describe('M5 도움닫기', () => {
   it('windup_s 0 = 지면 대기 ground_delay_s 그대로 · windupStart 없음', () => {
-    const sim = new BattleSim(makeConfig());
+    // 시트 기본값과 상관없이 0으로 (M5 C에서 시트가 0.5가 됨)
+    const sim = new BattleSim(on(0));
     const { spawnAt, jumpAt } = firstJump(sim);
     expect(jumpAt - spawnAt).toBeCloseTo(sim.cfg.battle.jump.ground_delay_s, 1);
-    const sim2 = new BattleSim(makeConfig());
+    const sim2 = new BattleSim(on(0));
     expect(step(sim2, 10).some((e) => e.type === 'windupStart')).toBe(false);
   });
 
