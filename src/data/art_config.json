@@ -13,6 +13,7 @@
   "strip_file": "ground_strip.png",
   "strip_ground_ratio": 0.24,
   "strip_burrow_x": 0.887,
+  "strip_popup_y": 0.31,
   "ring_file": "shock_ring.png",
   "dust_file": "dust.png",
   "debris_file": "debris.png"

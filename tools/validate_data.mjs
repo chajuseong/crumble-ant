@@ -287,6 +287,7 @@ export function validateAll(data) {
       }
       checkValue("art_config.strip_ground_ratio", a.strip_ground_ratio, "num", { min: 0, max: 0.9 }, errors);
       checkValue("art_config.strip_burrow_x", a.strip_burrow_x, "num", { gt: 0, max: 1 }, errors);
+      if (a.strip_popup_y !== undefined && a.strip_popup_y !== null) checkValue("art_config.strip_popup_y", a.strip_popup_y, "num", { min: 0, max: 1 }, errors); // H-49 (비우면 일개미 줄 높이)
       if (a.draw_scale > a.draw_scale_max) errors.push("art_config.draw_scale: draw_scale_max 이하여야 함");
       if (a.weapon_scale > a.weapon_scale_max) errors.push("art_config.weapon_scale: weapon_scale_max 이하여야 함");
     }
