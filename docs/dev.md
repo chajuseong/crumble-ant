@@ -1,6 +1,7 @@
 # 와르르 개미 — 개발 기준 문서 (단일 기준)
 
-> 문서 버전: v0.20 (2026-11-07) — M7 터치 개편 데이터 (꺼진 채): strong_jump.mode · strong_timing.* · targets.* · rng_seed · fx · 문구 · 이벤트 7개 · 연출 · 완료 조건 (I-23 · H-51)
+> 문서 버전: v0.21 (2026-11-07) — M7 링 데이터 (꺼진 채): strong_timing.style ring · ring_s · perfect_s · good_s · tap_max_y · perfect_height_mult · targets.end_on_hang · lead_s · 등급 이벤트 · 링 연출 · 완료 조건 (I-24 · H-56 · 대표 결정)
+> v0.20 (2026-11-07) — M7 터치 개편 데이터 (꺼진 채): strong_jump.mode · strong_timing.* · targets.* · rng_seed · fx · 문구 · 이벤트 7개 · 연출 · 완료 조건 (I-23 · H-51)
 > v0.19 (2026-11-07) — M6 마무리: art_config.strip_popup_y ("+N" = 굴 입구 높이) · 금 = 건물 그림 모양으로 가림 (H-49) · M6 B · C 머지 기록
 > v0.18 (2026-11-07) — M6 C 켬: art_config.env_enabled TRUE · impact_file impact.png · 로딩 시간 측정 · M6 A 머지 기록
 > v0.17 (2026-11-06) — M6 건물 · 배경 아트 데이터 (꺼진 채): buildings.art_id · building_art 시트 · art_config env_* · fx_config 파괴 이펙트 · 연출 · 완료 조건 (H-42)
@@ -27,7 +28,7 @@
 - v0.4 변경: §6 그림 굴 입구 = 띠 우측 끝 · [굴] 버튼으로도 개미굴 진입 · §10 DD 위치 (기획 + DD 겸하는 Claude Code 창) · §11 요청서 #1 원문
 
 ## 1. 범위
-- 지금 범위: **M7 터치 개편** (I-23 · H-51) — 강점프 = 도움닫기 타이밍 (기회는 가끔 · 창 안 탭) · 매달림마다 **터치 과녁** (탭 = 추가 1타 · 다 맞히면 PERFECT 보너스 1타). **core 규칙 변경** (시드 난수 · 입력 `battleTap` · 배속 = core 입력 `setTimeScale`). 꺼진 채 먼저 (`strong_jump.mode` tap · `targets.count_max` 0 → C에서 켬) · 자동만 결과는 켜도 그대로
+- 지금 범위: **M7 터치 개편** (I-23 · H-51 → H-56 · I-24) — 강점프 = **줄어드는 링** (기회는 가끔 · 링이 발밑 원에 겹칠 때 아래 절반 탭 · PERFECT = 초강점프 · GOOD = 강점프 · 너무 빠름 = 헛발) · **터치 과녁 = 건물 단위** (닿기 직전 등장 · 위쪽만 · 탭 = 추가 1타 · 다 맞히면 PERFECT 보너스 1타). **core 규칙 변경** (시드 난수 · `battleTap` · 배속 = core 입력 `setTimeScale` · 기회 도움닫기만 실제 시간). 꺼진 채 먼저 (`strong_jump.mode` tap · `targets.count_max` 0 → C에서 켬)
 - M6 (끝): 건물 · 배경 아트 (`183f214`) · view만
 - M4는 core 규칙이 바뀐다 (재화 · 강화 반영 전투 값). 강화 0이면 `npm run measure` = M3 표
 - 범위 밖: 체력 강화 · 하드 재화 · 오프라인 보상 · 장비 수치 · 개미굴 방 기능 · 필살기 · 반격
@@ -88,12 +89,19 @@ art/production/ (원본) · art/game/ (게임용) — 아트가 들어올 때 �
 | battle.jump.windup_s | float | **M5 도움닫기** — 0 = 끔 (지금처럼 ground_delay_s). 0보다 크면 자동 점프 전 대기 = 이 값 (방식 A — ground_delay_s 대신). 도움닫기 중 탭 = 바로 강점프 (skip — I-20) · 강화 대상 아님 · M5 C에서 0.5로 켬 (균형은 폰 확인 뒤 DD) | 0.5 |
 | battle.strong_jump.height_mult · speed_mult · cooldown_s | float | 강점프 배율 · 속도 배율 · 쿨타임 (기획서 §9 미정 — 임시, H-01 #3) | 1.6 · 1.0 · 0 |
 | battle.strong_jump.mode | enum (tap · timing) | **M7** 강점프 입력 — `tap` = 지금 (전투 구역 아무 데나 탭 · 도움닫기 중 skip — I-07 · I-20) · `timing` = 도움닫기 타이밍 (기회일 때 창 안 탭만). A · B = tap (꺼진 채) → C = timing | tap |
+| battle.strong_jump.perfect_height_mult | float | **I-24** 링 PERFECT 초강점프 높이 배수 (GOOD = height_mult) — 전투 구역 위를 넘으면 자름. 측정: 1.6 · 1.9 · 2.2에서 60분 수입 차이 거의 없음 → 느낌용 (값어치는 나중 황금 과녁) | 1.9 |
 | battle.strong_timing.chance_pct · min_gap_jumps | int | **M7** 도움닫기마다 기회 확률 (%) · 기회 사이 최소 점프 수 — 시드 난수 [가정] | 35 · 2 |
-| battle.strong_timing.window_to · window_s | float | **M7** 맞는 창 끝 = 도움닫기 경과 비율 · 창 길이 = **실제 시간** (게임 시간 = × 배속, 창 시작은 도움닫기 시작보다 앞으로 안 감 — H-51 Q8). 창 밖 탭 = 기회 끝 (한 번만) | 0.9 · 0.15 |
+| battle.strong_timing.window_to · window_s | float | **M7** `style` circle 전용 — 맞는 창 끝 = 도움닫기 경과 비율 · 창 길이 = **실제 시간** (게임 시간 = × 배속, 창 시작은 도움닫기 시작보다 앞으로 안 감 — H-51 Q8). 창 밖 탭 = 기회 끝 (한 번만) | 0.9 · 0.15 |
+| battle.strong_timing.style | enum (circle · ring) | **I-24** 타이밍 방식 — circle = 창 (M7 B) · **ring = 줄어드는 링** | ring |
+| battle.strong_timing.ring_s · good_s | float | **I-24** ring: 링이 발밑 원에 겹치기까지 실제 시간 · GOOD 폭 ± (실제 초). 기회 도움닫기 = `ring_s` + `good_s` **실제 시간** (배속 무시 — 기회 도움닫기만). 0.40 + 0.10 = 0.5초 = 보통 도움닫기 → ×1 자동 결과 그대로 (측정) | 0.40 · 0.10 |
+| battle.strong_timing.perfect_s | float | **I-24** PERFECT 폭 ± (실제 초) ≤ good_s. 측정 (겹침 ± σ 0.08초): PERFECT 48 / 47 / 36% · GOOD 이상 73 / 71 / 62% (×1 / ×2 / ×3) | 0.05 |
+| battle.strong_timing.tap_max_y | float | **H-54 ③** 이 높이 (전투 구역 비율) **아래 탭 = 타이밍만 · 위 = 과녁만** (엉뚱한 탭이 기회를 날리지 않게) · 과녁은 이 높이 + 0.05 위에만 | 0.5 |
 | battle.targets.chance_pct · count_min · count_max | int | **M7** 매달림마다 과녁 묶음 확률 (%) · 과녁 수 (`count_max` 0 = 끔 → C 2 · 3) | 100 · 0 · 0 |
 | battle.targets.life_s | float | **M7** 과녁 수명 — **실제 시간** (core는 게임 시간 `life_s × 배속`으로 셈 — `setTimeScale`) | 1.2 |
 | battle.targets.radius_ratio · min_dist_ratio | float | **M7** 판정 반지름 · 과녁끼리 최소 거리 ÷ 전투 구역 폭 (그림 지름 96px = 0.067 → 판정 조금 넓게) | 0.08 · 0.22 |
 | battle.targets.miss_limit · perfect_bonus_strikes | int | **M7** 빈 곳 탭 이 횟수면 그 묶음 끝 (연타 · 매크로 막기) · 다 맞히면 보너스 타 (재화 아님) | 2 · 1 |
+| battle.targets.end_on_hang | bool | **H-54 ①** FALSE = 건물 단위 (매달림이 끝나도 수명 동안 남음 · 끝 = 수명 · 파괴 · 착지 · 탭 = 떨어지는 건물에 1타) · TRUE = 매달림 단위 (M7 B — 매달림 약 0.2초라 사람이 못 맞힘) | FALSE |
+| battle.targets.lead_s | float | **H-56 ①** 개미가 건물에 닿기 이만큼 전 (실제 초)에 등장 — 상승 중 · 정점 전에 닿을 때만 · 남은 과녁 있으면 안 나옴. 측정 (반응 모델 · 다 노림): 0.3 = 맞힘 75 / 73 / 61% (×1 / ×2 / ×3) | 0.3 |
 | battle.rng_seed | int (1 ~ 2³²−1) | **M7** core 시드 난수 (xorshift32) 시작값. 뽑는 순서 고정: 도움닫기 시작마다 1번 (기회) · 과녁 묶음마다 개수 1번 + 위치 시도. 세이브에 난수 상태 안 넣음 [프로토만] | 20261107 |
 | battle.arm_damage | int[] (4개) | 팔 1 ~ 4 슬롯 1타 데미지 (장비 회차에 표로) | 10,10,10,10 |
 | battle.strike_interval_s | float | 매달려 있는 동안 팔 타격 간격 | 0.12 |
@@ -163,6 +171,7 @@ px = 1080폭 기준 (view가 프레임 폭에 비례해 줄임) · ms = 밀리�
 | destroy_dust.count · px · spread_px · ms | int · float · float · int | **M6** 파괴 먼지 (`art_config.dust_file`) — 수 · 크기 · 퍼지는 거리 · 시간 [가정] | 3 · 240 · 160 · 500 |
 | debris_img.size_mult · flip_ratio | float | **M6** 파편 그림 = 도형 조각 크기 × size_mult (그림 둘레가 투명해서) · 좌우 뒤집기 비율. 회전 · 크기 흔들림 · 움직임은 지금 도형 조각 값 그대로 (H-42 Q5 · 반복 티 줄이기) | 1.6 · 0.5 |
 | target.px · timing.ring_px · perfect.text_px | float | **M7** 과녁 지름 (1080폭 — 720폭 96px) · 타이밍 원 시작 지름 · "PERFECT!" 글자 크기 [가정] | 144 · 260 · 110 |
+| ring.px · ring.flash_ms | float · int | **I-24** 줄어드는 링 시작 지름 (1080폭) · 기회 순간 개미 반짝 [가정] | 340 · 200 |
 | impact.push_px · push_ms | float · int | 건물 **그림만** 위로 밀렸다 돌아옴 (core 건물 y 그대로 · 히트스톱 중에도 진행 — H-27 Q5). 마무리 = × star_scale | 8 · 90 |
 
 ### 3-5. `art.xlsx` → 아트 배치 (M3 — view만 읽음 · 규격과 맞추는 법 = `docs/art.md`)
@@ -241,6 +250,7 @@ pivot · socket · grip = `art/game` 납품본 측정값 · draw_h · anchor · 
 | hud.debris | string | HUD 보유 잔해 (M4) | `잔해 {n}` |
 | hud.speed | string | **M3-E** 배속 버튼 | `×{n}` |
 | fx.perfect · fx.timing_ok | string | **M7** 과녁 묶음 다 맞힘 · 타이밍 강점프 성공 | `PERFECT!` · `타이밍!` |
+| fx.timing_perfect · timing_good · timing_early | string | **I-24** 링 등급 | `PERFECT!` · `GOOD!` · `헛발!` |
 | upgrade.title · level · max · short · close | string | 강화 패널 | 강화 · `Lv {n} / {max}` · MAX · 잔해가 부족해요 · ✕ |
 | upgrade.reset · reset_confirm | string | 테스트 빌드 기록 지우기 (두 번 눌러 확정 — H-17 질문 7) | 기록 지우기 · 한 번 더 누르면 지워져요 |
 | upgrade.fx.{stat} (4) | string | 지금 → 다음 효과 | `데미지 {a} → {b}` · `초당 {a} → {b}회` · `점프 +{a}% → +{b}%` · `하강 +{a}% → +{b}%` |
@@ -255,19 +265,19 @@ pivot · socket · grip = `art/game` 납품본 측정값 · draw_h · anchor · 
 | stageClear | stage · wasChallenge | 파괴 수가 buildings_to_clear에 닿았을 때 |
 | autoAdvance | on | auto_advance가 바뀔 때 |
 | spawn | seq · building_id · hp | 건물 생성 (seq = 화면에 나온 순번) |
-| jump | kind (auto / strong) · apex | 점프 시작 |
+| jump | kind (auto / strong / **perfect** — I-24 링 PERFECT) · apex | 점프 시작 |
 | strike | arm (1 ~ 4) · damage · hpLeft · **combo** · **source** (M7: auto · target · bonus) | 팔 1타. combo = 같은 건물에서 이어진 연타 수 (1부터). 마지막 타격 뒤 `battle.combo_window_s` 안에 다음 타격이면 +1, 아니면 1. 건물 파괴 · 착지 · 스테이지 시작 때 0 (M2 · H-10) |
 | destroy | seq · y · debrisReward | 건물 HP 0 |
 | land | seq · damage · antHp | 건물 착지 — damage = ceil(남은 HP × 계수) (정수화 시점) |
 | antDown | stage | 개미 HP 0 |
-| tapIgnored | reason (airborne / cooldown / down / pinned) | 강점프를 무시할 때 |
+| tapIgnored | reason (airborne / cooldown / down / pinned / **noChance** / **noBuilding** — M7) | 탭을 무시할 때 (M7: 기회 없음 · 건물 없음 · 위쪽 빈 곳) |
 | **windupStart** (M5) | — | 도움닫기 시작 (지면 · 건물이 떨어지는 중 · `windup_s` > 0). 남은 시간 = `ant.windupLeft`. 깔리면 (land) 취소 · 다음 건물이 떨어지면 처음부터. 스테이지 시작 · 후퇴 · 재시작 · [도전] · 기절 회복 뒤 첫 점프에도 (H-34) |
-| **timingChance** (M7) | fromS · toS (창 = 남은 도움닫기 시간 기준) | 이번 도움닫기에 강점프 기회 (`mode` timing · 확률 · 최소 간격). windupStart 바로 뒤 |
-| **timingResult** (M7) | ok | 기회 중 탭 — ok = 창 안 (뒤이어 jump strong) · false = 창 밖 (기회 끝 · 도움닫기 끝에 보통 점프) |
+| **timingChance** (M7) | fromS · toS (circle = 창의 남은 도움닫기 시간 · ring = GOOD 시작까지 남은 시간 · 0) | 이번 도움닫기에 강점프 기회 (`mode` timing · 확률 · 최소 간격). windupStart 바로 뒤 · ring이면 이 도움닫기는 실제 시간 (`ring_s` + `good_s`) |
+| **timingResult** (M7) | ok · **grade** (perfect · good · early — I-24) | 기회 중 첫 탭 — ring: 겹침 ± perfect_s = perfect (jump perfect) · ± good_s = good (jump strong) · 더 빠름 = early (헛발 · 기회 끝 · 끝에 보통 점프). circle: 창 안 = good · 밖 = early |
 | **targetsSpawn** (M7) | targets [{id, x, y}] (전투 구역 비율 좌표) · lifeS (실제 시간) | 매달림 시작 (contact) · 확률 · 개수 = 시드 난수 |
 | **targetHit** (M7) | id | 과녁 탭 → 뒤이어 strike (source target · nextArm · combo · 마무리 · 마지막 일격 규칙 그대로) |
 | **targetMiss** (M7) | missesLeft | 과녁이 있는 동안 빈 곳 탭 |
-| **targetsEnd** (M7) | reason (expire · missLimit · hangEnd · perfect) | 남은 과녁 사라짐 (벌칙 없음) — 시간 지남 · 빈 곳 탭 miss_limit번 · 매달림 끝 (파괴 · 착지 포함) · 다 맞힘 |
+| **targetsEnd** (M7) | reason (expire · missLimit · hangEnd · perfect) | 남은 과녁 사라짐 (벌칙 없음) — expire = 수명 · missLimit = 위쪽 빈 곳 탭 miss_limit번 · hangEnd = 매달림 끝 (`end_on_hang` TRUE) / 건물 파괴 · 착지 (FALSE = 건물 단위) · perfect = 다 맞힘 |
 | **perfect** (M7) | — | 묶음을 다 맞힘 → 뒤이어 strike (source bonus) × `perfect_bonus_strikes` |
 | **deposit** (M4) | amount · wallet | 파괴 뒤 `economy.carry_delay_s`가 지나 잔해가 굴에 도착 — wallet += amount. 후퇴 · 재시작 · 도전이 있어도 예약은 그대로 |
 | **upgrade** (M4) | id · level · cost · wallet | 강화 구매 성공. 데미지 · 타격 간격 = 다음 타격부터, 점프력 · 이동속도 = 다음 점프부터 |
@@ -311,8 +321,9 @@ pivot · socket · grip = `art/game` 납품본 측정값 · draw_h · anchor · 
 | **M6** 마지막 일격 링 | strike (hpLeft 0) | 0.28초 | 충격 별과 같이, 타격점에서 링이 퍼지며 사라짐 | `fx_config` final_ring.* · `art_config.ring_file` |
 | **M6** 파괴 파편 · 먼지 | destroy · strike (마무리 · 마지막) | 조각 = 지금 그대로 · 먼지 0.5초 | 잔해 조각 (일개미가 주워 감) · M3-D 큰 조각 = 건물별 파편 그림 (회전 · 크기 · 좌우 뒤집기) · 먼지가 퍼지며 사라짐. 매 타격 작은 파편 (M2 F)은 도형 그대로 | `fx_config` debris_img.* · destroy_dust.* · `building_art.debris_file` |
 | **M6** [ART] · [FX] 토글 | ([ART] · [FX] 패널) | — | [ART] "건물 · 배경 그림" · [FX] "파괴 그림 이펙트" — 끄면 지금 화면 | — (테스트 빌드 확인용) |
-| **M7** 터치 과녁 | targetsSpawn · targetHit · targetsEnd | 수명 (실제 1.2초) · 터짐 0.12초 · 사라짐 0.15초 | 720폭 지름 96px · 흰 받침 + 진한 테두리 (L-05) · 가운데 빨강 표적 · 바깥 고리가 남은 시간만큼 줄어듦 (core 값). 탭 = 그 자리 충격 별 + 팔 한 번 더 · 터짐. 놓침 = 조용히 작아지며 사라짐 | `fx_config` target.px · `battle.targets.*` |
+| **M7** 터치 과녁 | targetsSpawn (H-56: 닿기 직전) · targetHit · targetsEnd | 수명 (실제 1.2초) · 터짐 0.12초 · 사라짐 0.15초 | 720폭 지름 96px · 흰 받침 + 진한 테두리 (L-05) · 가운데 빨강 표적 · 바깥 고리가 남은 시간만큼 줄어듦 (core 값). 탭 = 그 자리 충격 별 + 팔 한 번 더 · 터짐. 놓침 = 조용히 작아지며 사라짐 | `fx_config` target.px · `battle.targets.*` |
 | **M7** 타이밍 원 | timingChance → timingResult · jump | 도움닫기 동안 | 기회일 때만 개미 발밑 원 (지름 260px → 개미 폭) · 창 안 = 노랑 굵게 · 성공 = "타이밍!" + 강점프 먼지 고리 · 실패 = 회색으로 꺼짐 | `fx_config` timing.ring_px · `fx.timing_ok` |
+| **I-24** 줄어드는 링 | timingChance → timingResult · jump | 기회 도움닫기 (실제 0.5초) | 기회 = 개미 반짝 + 큰 링 (지름 340px → 발밑 원) · 웅크림이 같이 깊어짐 · 겹침 = 발밑 원 노랑. PERFECT = "PERFECT!" + 흔들림 · 초강점프 · GOOD = "GOOD!" · 헛발 = "헛발!" + 링 회색으로 꺼짐 · 판정 시각은 core 값으로만 그림 | `fx_config` ring.* · `fx.timing_*` · `strong_timing.*` |
 | **M7** PERFECT | perfect | 0.75초 | "PERFECT!" (받침 판 — "와르르!"와 같은 대비) + 보너스 1타는 마무리 크기 연출 | `fx_config` perfect.text_px · `fx.perfect` |
 | **M7** [FX] 토글 | ([FX] 패널) | — | "M7 과녁 · 타이밍 원" — 끄면 그림만 안 보임 (판정은 그대로 — 테스트용) | — |
 | **M3-E** 배속 버튼 · 가벼운 연출 | (HUD 오른쪽 아래 [×1]) · 배속 ≥ 2 | — | 누를 때마다 ×1 → ×1.5 → ×2 → ×3 → ×1. ×2 이상: 일반 타격 멈춤 · 흔들림 끔 · 일반 타격음 3타에 1번 · 공격 모션 최소 33ms | `speed.levels` · `fx_config` speed_fx.* · motion.strike.min_wall_ms · `hud.speed` |
@@ -350,4 +361,4 @@ pivot · socket · grip = `art/game` 납품본 측정값 · draw_h · anchor · 
 | M4 | 강화 4종 + 소프트 재화 (I-12 · I-13 · H-17) | ① 강화 0이면 `npm run measure` 표 = M3 표 ② `npm run measure -- --upgrades` = 진행 표 (§3-6 측정 · PR 본문에) · **단일 강화 Lv 0 ~ max 퇴보 0건** ③ 테스트: 비용 (정수 반복) · 효과 정수화 · 구매 (부족 · MAX) · deposit 시각 · 저장 왕복 · 깨진 저장 → 새로 시작 + `.bad` 보관 · 버전 · 도전 중 저장 · 강화가 다음 타격 · 점프부터 적용 ④ 실제 브라우저: 구매 → 새로고침 → 잔해 · Lv · 스테이지 그대로 ⑤ smoke ✅ + 강화 패널 열기 · 구매 1회 · 콘솔 오류 0 ⑥ 화면 컷: HUD 잔해 · 패널 (가능 · 부족 · MAX) · 구매 순간 — 360 / 390 / 430 ⑦ 이 문서 §3 · §4 · §5 · §7 | B `d5b82af` (PR #38) · A `7d483d7` (PR #24) |
 | M5 | 점프 도움닫기 (I-19 · I-20 · H-34) | ① `windup_s` 0 = M4 measure · `--upgrades` 표 그대로 (diff 0) ② 테스트: 도움닫기 길이 · `windupStart` · 도움닫기 중 탭 = 바로 강점프 1회 · 깔리면 취소 · 첫 점프에도 · 배속별 같은 결과 · 강화와 무관 ③ view: 웅크림 = 도움닫기 전체 · ×1 · ×3 화면 컷 ④ 켜는 C PR (0.5): measure · `--upgrades` 표 (0.3 · 0.5 비교) · smoke ⑤ 이 문서 §3 · §4 · §5 · §7 | A `5620daf` (PR #42) · B `f652c4c` (PR #43) · C `2218e36` (PR #46) |
 | M6 | 건물 · 배경 아트 적용 (I-22 · H-42) | ① `npm run measure` · `--upgrades` = M5-D 표 그대로 (diff 0) ② **[ART] 건물 · 배경 끔 = 지금 화면** (같은 장면 픽셀 비교) · [FX] 파괴 그림 끔 = 지금 ③ 그림 켬 화면 컷 (390 · 360 · 430): 8스테이지 건물마다 매달려 치는 순간 · 착지 · 마지막 일격 (별 + 링) · 파괴 (파편 · 먼지) · 일개미 굴 입구 도착 + "+N" · 덤불 뒤 개미 ④ 폴백 테스트 (순수 함수): 건물 그림 하나 없음 · `art_id` 빈칸 · 하늘 / 띠 없음 · 끔 ⑤ 데이터 검증: `art_id` FK · building_art PK · 파일 이름 · 파일 있는지 (이름으로 · 겹침 오류) · tint 형식 · `strip_*` 범위 ⑥ smoke ×1 · ×3 콘솔 오류 0 · 첫 화면까지 시간 (전 → 후 — 그림 약 6MB 시작 때 읽기 [프로토만]) ⑦ 이 문서 §3 · §5 · §7 · `docs/art.md` §7 | A `b0176fa` (PR #57) · B `147e8ea` (PR #59) · C `183f214` (PR #60) |
-| M7 | 터치 개편 — 강점프 = 도움닫기 타이밍 · 터치 과녁 (I-23 · H-51) | ① B 키 끔 (`mode` tap · `count_max` 0) = M6 measure · `--upgrades` **그대로** (diff 0) · tap 모드 강점프 테스트 그대로 ② 테스트 (core): 같은 시드 + 같은 입력 = 같은 이벤트 · 기회 확률 · 최소 간격 · 창 안 / 밖 · 한 번만 · 과녁 위치 (뺄 곳 · 최소 거리) · 히트 판정 · 추가 타 combo · 마무리 · 마지막 일격 · miss_limit · perfect · 매달림 끝 / 파괴 / 착지 = 끝 · **배속 ×1 · ×3에서 과녁 실제 수명 같음** ③ **자동만 = 키 켜도 그대로** (테스트 + measure) ④ view: 과녁 · 타이밍 원 화면 컷 (390 · ×1 · ×3) · [FX] 끔 = 그림 없음 · 실제 탭으로 과녁 맞히기 / 타이밍 강점프 / 빈 곳 무시 / 강화 패널 · 개미굴 · [도전] 충돌 없음 ⑤ smoke ✅ (C 켬 · 과녁 1개 이상) ⑥ C: `measure --touch` 사람 모델 (과녁 50 · 80 · 100% × 타이밍 50 · 80 · 100% · ×3 타이밍 성공률) · 연타 모델 ⑦ 이 문서 §3 · §4 · §5 · §7 | |
+| M7 | 터치 개편 — 강점프 = 줄어드는 링 · 터치 과녁 건물 단위 (I-23 · H-51 · H-56 · I-24) | ① 키 끔 (`mode` tap · `count_max` 0) = M6 measure · `--upgrades` **그대로** (diff 0) ② 테스트 (core): 같은 시드 + 같은 입력 = 같은 이벤트 · 링 등급 (perfect · good · early) · 첫 탭만 · 기회 도움닫기 실제 시간 (×1 · ×3 같음) · 아래 / 위 구역 · 과녁 닿기 직전 등장 · 건물 단위 끝 (수명 · 파괴 · 착지) · 추가 타 · miss_limit · perfect · PERFECT 높이 자름 ③ **×1 자동만 = 키 켜도 그대로** (ring_s + good_s = windup_s) ④ view: 링 · 과녁 화면 컷 (390 · ×1 · ×3) · [FX] 끔 = 그림 없음 · 실제 탭 ⑤ smoke ✅ (C 켬) ⑥ C `measure --touch`: **예측 모델 σ 0.08 GOOD 이상 ×1 · ×2 · ×3 모두 50 ~ 80%** · **반응 모델 과녁 ≥ 40%** · **연타 강점프 0 · PERFECT 0** · ×2 · ×3 자동 진행 변화 (기록) ⑦ 이 문서 §3 · §4 · §5 · §7 | A `1140975` (PR #65) · B `9ecc01a` (PR #66) |
