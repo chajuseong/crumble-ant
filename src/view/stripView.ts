@@ -23,7 +23,9 @@ export class StripView {
   private readonly band: Band;
   private readonly width: number;
   private readonly workers: Worker[] = [];
-  private readonly burrowX: number;
+  private burrowX: number;
+  /** M6 띠 그림 (덤불 = 건물 · 개미 뒤 · 땅 = 이 레이어) — null = 도형 */
+  private art: { top: Phaser.GameObjects.Image; bottom: Phaser.GameObjects.Image; fill: Phaser.GameObjects.Rectangle } | null = null;
   private readonly laneY: number;
   private readonly size: number;
   private ambientTimer = 0;
@@ -53,6 +55,40 @@ export class StripView {
     g.fillStyle(COLOR.burrow, 1);
     g.fillEllipse(this.burrowX, this.laneY + this.size * 0.08, this.size * 1.45, this.size * 1.15);
     this.layer.add(g);
+  }
+
+  /**
+   * M6 띠 그림 켜기 / 끄기 (H-42 ④). 한 장을 두 번 잘라 (crop) 깐다:
+   *  - 풀 윗선(groundRatio) 위 = 덤불 → backDepth (건물 · 개미 뒤)
+   *  - 아래 = 땅 → 이 레이어 맨 아래 (일개미 · 팝업 아래 · 잔해가 "땅속으로 쏙" 가려짐)
+   * 풀 윗선 = 지면 (띠 맨 위). 그림 아래 남는 곳 = 그림 맨 아래 흙색 (fillColor)
+   */
+  setArt(art: { key: string; groundRatio: number; burrowX: number; fillColor: number } | null, backDepth: number): void {
+    if (this.art) {
+      this.art.top.destroy();
+      this.art.bottom.destroy();
+      this.art.fill.destroy();
+      this.art = null;
+    }
+    this.burrowX = this.width * (art ? art.burrowX : this.cfg.burrow_x_ratio);
+    if (!art) return;
+    const mk = () => this.scene.add.image(0, 0, art.key).setOrigin(0, 0);
+    const top = mk();
+    const k = this.width / top.width;
+    const lineY = art.groundRatio * top.height;
+    const y0 = this.band.top - lineY * k;
+    top.setScale(k).setPosition(0, y0).setCrop(0, 0, top.width, lineY).setDepth(backDepth);
+    const bottom = mk().setScale(k).setPosition(0, y0);
+    bottom.setCrop(0, lineY, bottom.width, bottom.height - lineY);
+    const artBottom = y0 + top.height * k;
+    const fill = this.scene.add.rectangle(0, artBottom, this.width, Math.max(0, this.band.top + this.band.height - artBottom), art.fillColor).setOrigin(0, 0);
+    this.layer.addAt([fill, bottom], 1); // 0 = 도형 흙 단면 (그 위를 덮음)
+    this.art = { top, bottom, fill };
+  }
+
+  /** M6 그림 켬인가 (smoke · 검수용) */
+  get artMode(): 'image' | 'shape' {
+    return this.art ? 'image' : 'shape';
   }
 
   /** 잔해를 집은 일개미 (파괴 연출 → 띠로 이어짐) */

@@ -18,7 +18,7 @@ const CSS = `
 #art-panel input[type=range]{flex:1;accent-color:#ff8a3d}
 #art-panel .k{min-width:44px}
 #art-panel .v{min-width:36px;text-align:right;font-variant-numeric:tabular-nums}
-#art-panel .status{font-size:12px;color:#ffe08a;padding:2px 2px 6px;border-bottom:1px solid rgba(255,255,255,.15);margin-bottom:4px}
+#art-panel .status{white-space:pre-line;font-size:12px;color:#ffe08a;padding:2px 2px 6px;border-bottom:1px solid rgba(255,255,255,.15);margin-bottom:4px}
 #art-panel .row{display:flex;gap:8px;margin-top:8px}
 #art-panel button{flex:1;font:600 13px system-ui,sans-serif;color:#fff8ec;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:8px}
 #art-panel .note{font-size:11px;color:#c9bfae;margin-top:6px}
@@ -27,7 +27,7 @@ const CSS = `
 export interface ArtPanel {
   isOpen(): boolean;
   /** 그린 결과가 바뀌면 상태 줄 갱신 */
-  showPlan(plan: ArtPlan): void;
+  showPlan(plan: ArtPlan, envText?: string): void;
 }
 
 export function statusText(plan: ArtPlan): string {
@@ -102,6 +102,7 @@ export function createArtPanel(data: ArtData, settings: ArtSettings, onChange: (
     refreshers.push(() => (sel.value = settings.loadout[i] ?? ''));
   }
 
+  refreshers.push(check('art-env', '건물 · 배경 그림 (M6 — 끄면 지금 도형)', () => settings.env, (v) => (settings.env = v)));
   refreshers.push(check('art-pivots', '기준점 보기 (분홍 = pivot · 하늘 = 손 소켓)', () => settings.showPivots, (v) => (settings.showPivots = v)));
 
   const range = scaleRange(data.config);
@@ -163,7 +164,7 @@ export function createArtPanel(data: ArtData, settings: ArtSettings, onChange: (
   document.body.append(btn, panel);
   return {
     isOpen: () => !panel.hidden,
-    showPlan: (plan) => (status.textContent = statusText(plan)),
+    showPlan: (plan, envText) => (status.textContent = envText ? `${statusText(plan)}\n${envText}` : statusText(plan)),
   };
 }
 

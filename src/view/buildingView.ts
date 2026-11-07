@@ -1,7 +1,15 @@
 import Phaser from 'phaser';
 import { COLOR, FONT } from './theme';
 
-/** 건물 placeholder — 원점 = 밑면 가운데. HP가 줄면 금이 간다. */
+/** M6 건물 그림 (없으면 도형) — 그림 밑면 = core 밑면 · 폭 = 건물 폭 × drawW · 세로는 비율대로 (H-42 Q3) */
+export interface BuildingArt {
+  key: string;
+  pivotY: number;
+  drawW: number;
+  tint: number | null;
+}
+
+/** 건물 — 원점 = 밑면 가운데. HP가 줄면 금이 간다. M6: 그림이 있으면 도형 대신 그림 (HP 바 · 금 · 번쩍 · 흔들림 · 밀림은 같게) */
 export class BuildingView {
   readonly root: Phaser.GameObjects.Container;
   readonly color: number;
@@ -12,11 +20,15 @@ export class BuildingView {
   private readonly h: number;
   private readonly scene: Phaser.Scene;
   private readonly crackSeed: number[];
-  private flashRect: Phaser.GameObjects.Rectangle | null = null;
+  private flashRect: Phaser.GameObjects.Rectangle | Phaser.GameObjects.Image | null = null;
+  /** M6 그림 (null = 도형) */
+  readonly image: Phaser.GameObjects.Image | null = null;
+  private readonly art: BuildingArt | null;
   private crackSteps = 6;
 
-  constructor(scene: Phaser.Scene, x: number, y: number, w: number, h: number, id: number, maxHp: number) {
+  constructor(scene: Phaser.Scene, x: number, y: number, w: number, h: number, id: number, maxHp: number, art: BuildingArt | null = null) {
     this.scene = scene;
+    this.art = art;
     this.w = w;
     this.h = h;
     this.color = COLOR.building[id % COLOR.building.length]!;
@@ -24,7 +36,16 @@ export class BuildingView {
     this.baseY = y;
     this.crackSeed = Array.from({ length: 12 }, (_, i) => ((id * 9301 + i * 49297) % 233280) / 233280);
 
+    if (art) {
+      // M6: 그림 한 장 — 기준점 = 밑면 가운데
+      const img = scene.add.image(0, 0, art.key).setOrigin(0.5, art.pivotY);
+      img.setScale((w * art.drawW) / img.width);
+      if (art.tint !== null) img.setTint(art.tint);
+      this.root.add(img);
+      this.image = img;
+    }
     const g = scene.add.graphics();
+    if (art) g.setVisible(false);
     // 지붕
     g.fillStyle(COLOR.buildingDark, 1);
     g.fillTriangle(-w * 0.55, -h, w * 0.55, -h, 0, -h - h * 0.28);
@@ -105,7 +126,10 @@ export class BuildingView {
   flash(alpha: number, ms: number): boolean {
     let created = false;
     if (!this.flashRect) {
-      this.flashRect = this.scene.add.rectangle(0, -this.h / 2, this.w, this.h, 0xffffff, 1).setAlpha(0);
+      // M6 그림이면 사각형 대신 그림 모양 그대로 흰색 (투명한 모서리가 하얗게 안 보이게 — H-42). 맨 위에 둠 (도형 모드와 같게 — HP 바 · 금도 같이 번쩍)
+      this.flashRect = this.image
+        ? this.scene.add.image(0, 0, this.image.texture.key).setOrigin(0.5, this.image.originY).setScale(this.image.scaleX, this.image.scaleY).setTintFill(0xffffff).setAlpha(0)
+        : this.scene.add.rectangle(0, -this.h / 2, this.w, this.h, 0xffffff, 1).setAlpha(0);
       this.root.add(this.flashRect);
       created = true;
     }
@@ -114,6 +138,11 @@ export class BuildingView {
     f.setAlpha(alpha);
     this.scene.tweens.add({ targets: f, alpha: 0, duration: ms, ease: 'Quad.easeOut' });
     return created;
+  }
+
+  /** 그림 모드인가 (smoke · 테스트용) */
+  get artMode(): 'image' | 'shape' {
+    return this.art ? 'image' : 'shape';
   }
 
   setCrackSteps(n: number): void {

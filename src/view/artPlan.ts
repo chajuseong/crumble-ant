@@ -21,6 +21,8 @@ export interface ArtConfig {
   head_scale?: number;
   /** M3-D 충격 별 그림 (art/game/fx/) — null이면 도형 별 */
   impact_file?: string | null;
+  /** M6 건물 · 배경 · 파괴 그림 기본값 (H-42 — [ART]에서 바꿈) */
+  env_enabled?: boolean;
 }
 export interface ArtPart {
   skin_id: string;
@@ -78,6 +80,8 @@ export interface ArtSettings {
   drawScale: number;
   weaponScale: number;
   showPivots: boolean;
+  /** M6 건물 · 배경 · 파괴 그림 (기본 = 시트 env_enabled) */
+  env: boolean;
 }
 
 export interface ArtPlan {
@@ -121,7 +125,7 @@ export function scaleRange(cfg: ArtConfig): { draw: [number, number]; weapon: [n
 export function defaultSettings(data: ArtData = ART_DATA): ArtSettings {
   const loadout: (string | null)[] = Array.from({ length: SLOTS }, () => null);
   for (const r of data.loadout) if (r.slot >= 1 && r.slot <= SLOTS) loadout[r.slot - 1] = r.weapon_id ?? null;
-  return { enabled: data.config.enabled, loadout, drawScale: data.config.draw_scale, weaponScale: data.config.weapon_scale, showPivots: false };
+  return { enabled: data.config.enabled, loadout, drawScale: data.config.draw_scale, weaponScale: data.config.weapon_scale, showPivots: false, env: data.config.env_enabled ?? false };
 }
 
 /** 저장해 둔 값 정리 — 모르는 무기 · 범위 밖 배율 · 틀린 형식은 시트 기본값으로 */
@@ -133,6 +137,7 @@ export function sanitizeSettings(raw: unknown, data: ArtData = ART_DATA): ArtSet
   const ids = new Set(data.weapons.map((w) => w.weapon_id));
   if (typeof r.enabled === 'boolean') base.enabled = r.enabled;
   if (typeof r.showPivots === 'boolean') base.showPivots = r.showPivots;
+  if (typeof r.env === 'boolean') base.env = r.env;
   if (typeof r.drawScale === 'number' && Number.isFinite(r.drawScale)) base.drawScale = clamp(r.drawScale, ...range.draw);
   if (typeof r.weaponScale === 'number' && Number.isFinite(r.weaponScale)) base.weaponScale = clamp(r.weaponScale, ...range.weapon);
   if (Array.isArray(r.loadout) && r.loadout.length === SLOTS) {
