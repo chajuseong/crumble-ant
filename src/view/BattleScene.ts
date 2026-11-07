@@ -202,7 +202,7 @@ export class BattleScene extends Phaser.Scene {
       const src = this.textures.get(key).getSourceImage() as HTMLImageElement;
       const c = this.textures.getPixel(Math.floor(src.width / 2), src.height - 1, key);
       const fill = c ? Phaser.Display.Color.GetColor(c.red, c.green, c.blue) : COLOR.soil;
-      this.strip.setArt({ key, groundRatio: p.strip.groundRatio, burrowX: p.strip.burrowX, fillColor: fill }, DEPTH.sky + 1);
+      this.strip.setArt({ key, groundRatio: p.strip.groundRatio, burrowX: p.strip.burrowX, fillColor: fill, popupY: p.strip.popupY }, DEPTH.sky + 1);
     } else this.strip.setArt(null, DEPTH.sky + 1);
     this.groundGfx?.setVisible(!p.strip);
     // 지금 떨어지는 건물을 새 계획으로 다시 (HP · 위치는 core 값 그대로)
