@@ -15,6 +15,8 @@ export interface EnvConfig {
   strip_file: string | null;
   strip_ground_ratio: number;
   strip_burrow_x: number;
+  /** H-49 그림 켬일 때 "+N" 높이 = 굴 입구 가운데 ÷ 띠 그림 높이 (없으면 일개미 줄 높이 — 지금 자리) */
+  strip_popup_y?: number | null;
   ring_file: string | null;
   dust_file: string | null;
   debris_file: string | null;
@@ -52,7 +54,7 @@ export interface EnvPlan {
   /** building_id → 그림 (null = 도형) */
   buildings: Record<string, BuildingArtPlan | null>;
   sky: string | null;
-  strip: { file: string; groundRatio: number; burrowX: number } | null;
+  strip: { file: string; groundRatio: number; burrowX: number; popupY: number | null } | null;
   ring: string | null;
   dust: string | null;
   /** 시트에는 있는데 못 읽은 파일 (켬일 때만) */
@@ -95,7 +97,7 @@ export function resolveEnvPlan(data: EnvData, on: boolean, available: ReadonlySe
   }
   plan.sky = pick(c.sky_file);
   const strip = pick(c.strip_file);
-  plan.strip = strip ? { file: strip, groundRatio: c.strip_ground_ratio, burrowX: c.strip_burrow_x } : null;
+  plan.strip = strip ? { file: strip, groundRatio: c.strip_ground_ratio, burrowX: c.strip_burrow_x, popupY: c.strip_popup_y ?? null } : null;
   plan.ring = pick(c.ring_file);
   plan.dust = pick(c.dust_file);
   return plan;

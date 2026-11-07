@@ -26,6 +26,8 @@ export class StripView {
   private burrowX: number;
   /** M6 띠 그림 (덤불 = 건물 · 개미 뒤 · 땅 = 이 레이어) — null = 도형 */
   private art: { top: Phaser.GameObjects.Image; bottom: Phaser.GameObjects.Image; fill: Phaser.GameObjects.Rectangle } | null = null;
+  /** "+N" 높이 (화면 y) — 기본 = 일개미 줄 위 · H-49 그림 켬 = 그림 굴 입구 가운데 */
+  private popupY: number;
   private readonly laneY: number;
   private readonly size: number;
   private ambientTimer = 0;
@@ -38,6 +40,7 @@ export class StripView {
     this.size = band.height * cfg.worker_size_ratio;
     this.burrowX = width * cfg.burrow_x_ratio;
     this.laneY = band.top + band.height * 0.56;
+    this.popupY = this.lanePopupY();
     this.layer = scene.add.container(0, 0);
 
     const g = scene.add.graphics();
@@ -63,7 +66,7 @@ export class StripView {
    *  - 아래 = 땅 → 이 레이어 맨 아래 (일개미 · 팝업 아래 · 잔해가 "땅속으로 쏙" 가려짐)
    * 풀 윗선 = 지면 (띠 맨 위). 그림 아래 남는 곳 = 그림 맨 아래 흙색 (fillColor)
    */
-  setArt(art: { key: string; groundRatio: number; burrowX: number; fillColor: number } | null, backDepth: number): void {
+  setArt(art: { key: string; groundRatio: number; burrowX: number; fillColor: number; popupY?: number | null } | null, backDepth: number): void {
     if (this.art) {
       this.art.top.destroy();
       this.art.bottom.destroy();
@@ -71,6 +74,7 @@ export class StripView {
       this.art = null;
     }
     this.burrowX = this.width * (art ? art.burrowX : this.cfg.burrow_x_ratio);
+    this.popupY = this.lanePopupY();
     if (!art) return;
     const mk = () => this.scene.add.image(0, 0, art.key).setOrigin(0, 0);
     const top = mk();
@@ -84,6 +88,17 @@ export class StripView {
     const fill = this.scene.add.rectangle(0, artBottom, this.width, Math.max(0, this.band.top + this.band.height - artBottom), art.fillColor).setOrigin(0, 0);
     this.layer.addAt([fill, bottom], 1); // 0 = 도형 흙 단면 (그 위를 덮음)
     this.art = { top, bottom, fill };
+    if (art.popupY !== null && art.popupY !== undefined) this.popupY = y0 + art.popupY * top.height * k; // 굴 입구 가운데 (일개미 줄은 그대로)
+  }
+
+  /** 지금 "+N" 자리 (일개미 줄 위 — 도형 띠 · 그림 키 없음) */
+  private lanePopupY(): number {
+    return this.laneY - this.size * 0.6;
+  }
+
+  /** "+N" 화면 y (검수용) */
+  get popupAt(): number {
+    return this.popupY;
   }
 
   /** M6 그림 켬인가 (smoke · 검수용) */
@@ -146,7 +161,7 @@ export class StripView {
   /** 굴 입구 "+N" — M4부터 core deposit(실제 재화 도착) 때 장면이 부름 */
   popup(amount: number): void {
     const t = this.scene.add
-      .text(this.burrowX, this.laneY - this.size * 0.6, `+${amount}`, {
+      .text(this.burrowX, this.popupY, `+${amount}`, {
         fontFamily: FONT,
         fontSize: `${Math.round(this.size * 0.55)}px`,
         color: COLOR.popup,
