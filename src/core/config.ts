@@ -43,7 +43,32 @@ export interface BattleConfig {
     height_mult: number;
     speed_mult: number;
     cooldown_s: number;
+    /** M7 강점프 입력 — tap = 아무 데나 탭 (지금 · 없으면 tap) · timing = 도움닫기 타이밍 (I-23 · H-51) */
+    mode?: 'tap' | 'timing';
   };
+  /** M7 도움닫기 타이밍 기회 (mode timing일 때) */
+  strong_timing?: {
+    chance_pct: number;
+    min_gap_jumps: number;
+    /** 맞는 창 끝 = 도움닫기 경과 비율 */
+    window_to: number;
+    /** 맞는 창 길이 — 실제 시간 (게임 시간 = × 배속) */
+    window_s: number;
+  };
+  /** M7 터치 과녁 (count_max 0 = 끔) */
+  targets?: {
+    chance_pct: number;
+    count_min: number;
+    count_max: number;
+    /** 수명 — 실제 시간 (게임 시간 = × 배속) */
+    life_s: number;
+    radius_ratio: number;
+    min_dist_ratio: number;
+    miss_limit: number;
+    perfect_bonus_strikes: number;
+  };
+  /** M7 core 시드 난수 시작값 */
+  rng_seed?: number;
   arms: ArmConfig[];
   strike_interval_s: number;
   /** M4 공격속도 강화 하한 (없으면 0) */
@@ -207,6 +232,33 @@ export function validateConfig(raw: unknown): string[] {
     num('battle.strong_jump.height_mult', strong.height_mult, { gt: 0 }),
     num('battle.strong_jump.speed_mult', strong.speed_mult, { gt: 0 }),
     num('battle.strong_jump.cooldown_s', strong.cooldown_s, { min: 0 }),
+    // M7 (I-23 · H-51) — 키가 있을 때만
+    (e) => {
+      if (strong.mode !== undefined && strong.mode !== 'tap' && strong.mode !== 'timing') e.push(`battle.strong_jump.mode: tap / timing 중 하나 (${String(strong.mode)})`);
+    },
+    ...(battle.strong_timing !== undefined
+      ? ((t) => [
+          num('battle.strong_timing.chance_pct', t.chance_pct, { min: 0, max: 100 }),
+          num('battle.strong_timing.min_gap_jumps', t.min_gap_jumps, { min: 0 }),
+          num('battle.strong_timing.window_to', t.window_to, { gt: 0, max: 1 }),
+          num('battle.strong_timing.window_s', t.window_s, { gt: 0 }),
+        ])(obj(battle.strong_timing))
+      : []),
+    ...(battle.targets !== undefined
+      ? ((t) => [
+          num('battle.targets.chance_pct', t.chance_pct, { min: 0, max: 100 }),
+          num('battle.targets.count_min', t.count_min, { min: 0, int: true }),
+          num('battle.targets.count_max', t.count_max, { min: 0, int: true }),
+          num('battle.targets.life_s', t.life_s, { gt: 0 }),
+          num('battle.targets.radius_ratio', t.radius_ratio, { gt: 0, max: 0.25 }),
+          num('battle.targets.min_dist_ratio', t.min_dist_ratio, { min: 0, max: 0.5 }),
+          num('battle.targets.miss_limit', t.miss_limit, { min: 1, int: true }),
+          num('battle.targets.perfect_bonus_strikes', t.perfect_bonus_strikes, { min: 0, int: true }),
+          (e: string[]) => {
+            if (typeof t.count_min === 'number' && typeof t.count_max === 'number' && t.count_min > t.count_max) e.push('battle.targets: count_min ≤ count_max');
+          },
+        ])(obj(battle.targets))
+      : []),
     num('battle.strike_interval_s', battle.strike_interval_s, { gt: 0 }),
     num('battle.combo_window_s', battle.combo_window_s, { gt: 0 }),
     bool('battle.arm_order_resets_each_jump', battle.arm_order_resets_each_jump),

@@ -10,6 +10,7 @@ import { ART_DATA, type ArtPlan, type ArtSettings, loadArtSettings, neededFiles,
 import { type BuildingArt, BuildingView } from './buildingView';
 import { ENV_DATA, type EnvPlan, envStatusText, neededEnvFiles, resolveEnvPlan } from './envPlan';
 import { StripView } from './stripView';
+import { TouchView } from './touchView';
 import { COLOR, FONT } from './theme';
 import { t } from './text';
 import { FX, type FxToggles, loadToggles } from './fx';
@@ -128,6 +129,8 @@ export class BattleScene extends Phaser.Scene {
   private skyImage: Phaser.GameObjects.Image | null = null;
   private groundGfx: Phaser.GameObjects.Graphics | null = null;
   private envLoading = false;
+  // ── M7 터치 과녁 · 타이밍 원 (I-23 · H-51) — 그리기만 (판정 = core) ──
+  touch!: TouchView;
   /** PR #2 1080폭 기준 px → 지금 프레임 px */
   private px(n: number): number {
     return n * this.scaleK;
@@ -251,6 +254,7 @@ export class BattleScene extends Phaser.Scene {
     // 땅속 띠 + 메뉴
     this.strip = new StripView(this, cfg.strip, L.strip, L.width);
     this.strip.layer.setDepth(DEPTH.strip);
+    this.touch = new TouchView(this, L, (n) => this.px(n), DEPTH.fx - 2);
     this.createMenu();
 
     this.createHud();
@@ -266,10 +270,12 @@ export class BattleScene extends Phaser.Scene {
     createFxPanel(this.fxOn, (t) => {
       this.fxOn = t;
       this.ant.setMotion(t.motion);
+      this.touch.visible = t.touch;
     }, () => this.sfx.unlock());
     this.applyArt();
     this.applyEnv();
     this.ant.setMotion(this.fxOn.motion);
+    this.touch.visible = this.fxOn.touch;
     const artPanel = createArtPanel(
       ART_DATA,
       this.artSettings,
@@ -308,6 +314,7 @@ export class BattleScene extends Phaser.Scene {
     }
     if (this.comboText?.visible && this.time.now >= this.comboHideAt) this.comboText.setVisible(false);
     this.syncViews();
+    this.updateTouch();
     this.updateDebris(dt);
     this.strip.update(dt);
     for (const c of this.clouds) {
@@ -468,8 +475,8 @@ export class BattleScene extends Phaser.Scene {
   private dispatch(actions: InputAction[]): void {
     for (const a of actions) {
       switch (a.type) {
-        case 'strongJump':
-          this.sim.tapStrongJump();
+        case 'battleTap':
+          this.sim.tapBattle(a.x, a.y);
           break;
         case 'challenge':
           this.sim.challenge();
@@ -552,7 +559,31 @@ export class BattleScene extends Phaser.Scene {
           this.buildingViewRow = b.buildingId;
           break;
         }
+        case 'timingChance':
+          this.touch.timingStart();
+          break;
+        case 'timingResult': {
+          const f = this.footAt();
+          this.touch.timingResult(e.ok, f.x, f.y);
+          if (e.ok && this.touch.visible) this.floatText(f.x, f.y - this.cfg.battle.ant.height_ratio * this.L.battle.height * 1.6, t('fx.timing_ok'), '#ffe08a', this.px(FX.perfect.text_px * 0.7), 900, 600);
+          break;
+        }
+        case 'targetsSpawn':
+          this.touch.spawn(e.targets);
+          break;
+        case 'targetHit':
+          this.touch.hit(e.id);
+          break;
+        case 'targetMiss':
+          break;
+        case 'targetsEnd':
+          if (e.reason !== 'perfect') this.touch.clearTargets(true);
+          break;
+        case 'perfect':
+          if (this.touch.visible) this.plateText(battleToScreenY(this.L, (this.sim.building?.y ?? 0.5)) - this.px(220), t('fx.perfect'), FX.perfect.text_px);
+          break;
         case 'jump':
+          this.touch.timingClear();
           this.ant.jump(e.kind === 'strong');
           if (e.kind === 'strong') this.dustRing();
           break;
@@ -560,7 +591,8 @@ export class BattleScene extends Phaser.Scene {
           const on = this.fxOn;
           const final = e.hpLeft <= 0; // 마지막 일격
           // M3-D: 마지막 일격 > 4연타 마무리 (core combo) > 일반 — A' 끔이면 마무리 없음
-          const kind: StrikeKind = strikeKind(e.combo, e.hpLeft, on.finisher);
+          const base: StrikeKind = strikeKind(e.combo, e.hpLeft, on.finisher);
+          const kind: StrikeKind = e.source === 'bonus' && base === 'hit' ? 'finisher' : base; // M7 PERFECT 보너스 = 마무리 크기
           const fin = kind === 'finisher';
           const interval = this.sim.stats.strikeIntervalS; // M4: 공격속도 강화 반영 (core 값)
           // E 펀치 과장 (끔 = M1 팔 찌르기) · 마무리 팔은 더 길게 (A')
@@ -710,6 +742,7 @@ export class BattleScene extends Phaser.Scene {
     this.tweens.timeScale = v;
     this.time.timeScale = v;
     this.ant.speed = v;
+    this.sim.setTimeScale(v); // M7: 과녁 · 타이밍 창 = 실제 시간 (core 입력 — H-51 Q2)
     this.speedText?.setText(t('hud.speed', { n: v }));
     this.speedBg?.setFillStyle(v > 1 ? COLOR.challenge : COLOR.menuBg, v > 1 ? 0.9 : 0.35);
     saveSpeed(v);
@@ -733,6 +766,24 @@ export class BattleScene extends Phaser.Scene {
     this.router.addButton({ id: 'speed', rect: { x: cx - bw / 2, y: cy - bh / 2 - this.px(10), w: bw, h: bh + this.px(20) }, mode: 'battle', action: { type: 'cycleSpeed' }, priority: 20 });
   }
 
+  /** 개미 발 화면 자리 */
+  private footAt(): { x: number; y: number } {
+    return { x: this.L.width / 2, y: this.ant.root.y };
+  }
+
+  /** M7 과녁 남은 시간 · 타이밍 원 (core 값을 그리기만) */
+  private updateTouch(): void {
+    const sim = this.sim;
+    if (this.touch.count > 0) this.touch.update(sim.targetLifeLeft, sim.targetLifeTotal);
+    const a = sim.ant;
+    if (this.touch.timingOn && a.winding && a.timingChance) {
+      const w = this.cfg.battle.jump.windup_s ?? 0;
+      const elapsed = w - a.windupLeft;
+      const f = this.footAt();
+      this.touch.timingUpdate(w > 0 ? elapsed / w : 1, !a.timingUsed && elapsed >= a.timingFrom && elapsed <= a.timingTo, f.x, f.y, this.cfg.battle.ant.width_ratio * this.L.width);
+    } else if (this.touch.timingOn && !a.winding) this.touch.timingClear();
+  }
+
   private dustRing(): void {
     const ring = this.add.ellipse(this.L.width / 2, this.L.groundY, this.px(120), this.px(36)).setStrokeStyle(this.px(8), 0xffffff, 0.9).setDepth(DEPTH.ant - 1);
     this.tweens.add({ targets: ring, scaleX: 3, scaleY: 2, alpha: 0, duration: 320, onComplete: () => ring.destroy() });
@@ -749,13 +800,18 @@ export class BattleScene extends Phaser.Scene {
 
   /** "와르르!" — 대비 켬이면 어두운 받침 판 + 굵은 테두리 (잼병 L-05) */
   private crumbleText(y: number): void {
+    this.plateText(y, t('fx.crumble'), FX.crumble_text.px);
+  }
+
+  /** "와르르!" · M7 "PERFECT!" — 받침 판 + 굵은 테두리 (L-05). 대비 끔 = M1 글자 */
+  private plateText(y: number, text: string, px: number): void {
     const c = FX.crumble_text;
     if (!this.fxOn.contrast) {
-      this.floatText(this.L.width / 2, y, t('fx.crumble'), '#ffe08a', this.px(c.px), 900, c.ms); // M1
+      this.floatText(this.L.width / 2, y, text, '#ffe08a', this.px(px), 900, c.ms); // M1
       return;
     }
     const tx = this.add
-      .text(0, 0, t('fx.crumble'), { fontFamily: FONT, fontSize: `${Math.round(this.px(c.px))}px`, color: '#ffe08a', fontStyle: '900', stroke: '#2a1a0c', strokeThickness: this.px(c.stroke_px) })
+      .text(0, 0, text, { fontFamily: FONT, fontSize: `${Math.round(this.px(px))}px`, color: '#ffe08a', fontStyle: '900', stroke: '#2a1a0c', strokeThickness: this.px(c.stroke_px) })
       .setOrigin(0.5)
       .setShadow(0, this.px(6), '#000000', this.px(10), true, true);
     const pad = this.px(24);
