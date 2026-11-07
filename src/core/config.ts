@@ -45,6 +45,8 @@ export interface BattleConfig {
     cooldown_s: number;
     /** M7 강점프 입력 — tap = 아무 데나 탭 (지금 · 없으면 tap) · timing = 도움닫기 타이밍 (I-23 · H-51) */
     mode?: 'tap' | 'timing';
+    /** I-24 링 PERFECT 높이 배수 (GOOD = height_mult) — 전투 구역 위를 넘으면 자름 */
+    perfect_height_mult?: number;
   };
   /** M7 도움닫기 타이밍 기회 (mode timing일 때) */
   strong_timing?: {
@@ -54,6 +56,15 @@ export interface BattleConfig {
     window_to: number;
     /** 맞는 창 길이 — 실제 시간 (게임 시간 = × 배속) */
     window_s: number;
+    /** I-24 circle = 지금 (창) · ring = 줄어드는 링 (없으면 circle) */
+    style?: 'circle' | 'ring';
+    /** ring: 링이 발밑 원에 겹치기까지 실제 시간 (기회 도움닫기 = ring_s + good_s · 실제 시간) */
+    ring_s?: number;
+    /** ring: PERFECT · GOOD 판정 폭 ± (실제 초) */
+    perfect_s?: number;
+    good_s?: number;
+    /** H-54 ③ 도움닫기 중 이 높이 (전투 구역 비율) 아래 탭만 타이밍 · 위 = 과녁 (없으면 구역 전체) */
+    tap_max_y?: number;
   };
   /** M7 터치 과녁 (count_max 0 = 끔) */
   targets?: {
@@ -66,6 +77,10 @@ export interface BattleConfig {
     min_dist_ratio: number;
     miss_limit: number;
     perfect_bonus_strikes: number;
+    /** H-54 ① FALSE = 건물 단위 (매달림이 끝나도 수명 동안 남음 · 탭 = 떨어지는 건물에 1타) · 없으면 TRUE (매달림 단위) */
+    end_on_hang?: boolean;
+    /** H-56 ① 개미가 건물에 닿기 이만큼 (실제 초) 전에 나옴 · 없으면 닿는 순간 */
+    lead_s?: number;
   };
   /** M7 core 시드 난수 시작값 */
   rng_seed?: number;
