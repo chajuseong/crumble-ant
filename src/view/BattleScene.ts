@@ -561,11 +561,21 @@ export class BattleScene extends Phaser.Scene {
         }
         case 'timingChance':
           this.touch.timingStart();
+          if ((this.cfg.battle.strong_timing?.style ?? 'circle') === 'ring' && this.touch.visible) this.antFlash(); // I-24 기회 = 개미 반짝
           break;
         case 'timingResult': {
           const f = this.footAt();
           this.touch.timingResult(e.ok, f.x, f.y);
-          if (e.ok && this.touch.visible) this.floatText(f.x, f.y - this.cfg.battle.ant.height_ratio * this.L.battle.height * 1.6, t('fx.timing_ok'), '#ffe08a', this.px(FX.perfect.text_px * 0.7), 900, 600);
+          if (!this.touch.visible) break;
+          const ring = (this.cfg.battle.strong_timing?.style ?? 'circle') === 'ring';
+          const ty = f.y - this.cfg.battle.ant.height_ratio * this.L.battle.height * 1.6;
+          if (!ring) {
+            if (e.ok) this.floatText(f.x, ty, t('fx.timing_ok'), '#ffe08a', this.px(FX.perfect.text_px * 0.7), 900, 600);
+          } else if (e.grade === 'perfect') {
+            this.floatText(f.x, ty, t('fx.timing_perfect'), '#ffe08a', this.px(FX.perfect.text_px), 900, 700, 1.4); // I-24 PERFECT = 큰 글자 + 흔들림
+            this.shake(FX.finisher.camera_ms, FX.finisher.camera_intensity);
+          } else if (e.grade === 'good') this.floatText(f.x, ty, t('fx.timing_good'), '#ffffff', this.px(FX.perfect.text_px * 0.75), 900, 600);
+          else this.floatText(f.x, ty, t('fx.timing_early'), '#c9c3b8', this.px(FX.perfect.text_px * 0.65), 900, 600);
           break;
         }
         case 'targetsSpawn':
@@ -584,8 +594,8 @@ export class BattleScene extends Phaser.Scene {
           break;
         case 'jump':
           this.touch.timingClear();
-          this.ant.jump(e.kind === 'strong');
-          if (e.kind === 'strong') this.dustRing();
+          this.ant.jump(e.kind !== 'auto'); // I-24 perfect = 강점프 모션 (높이만 core가 더 줌)
+          if (e.kind !== 'auto') this.dustRing();
           break;
         case 'strike': {
           const on = this.fxOn;
@@ -766,6 +776,14 @@ export class BattleScene extends Phaser.Scene {
     this.router.addButton({ id: 'speed', rect: { x: cx - bw / 2, y: cy - bh / 2 - this.px(10), w: bw, h: bh + this.px(20) }, mode: 'battle', action: { type: 'cycleSpeed' }, priority: 20 });
   }
 
+  /** I-24 기회 순간 개미 반짝 (흰 원이 퍼지며 사라짐) */
+  private antFlash(): void {
+    const f = this.footAt();
+    const h = this.cfg.battle.ant.height_ratio * this.L.battle.height;
+    const c = this.add.circle(f.x, f.y - h * 0.5, h * 0.9, 0xffffff, 0.55).setDepth(DEPTH.ant + 1);
+    this.tweens.add({ targets: c, scale: 1.5, alpha: 0, duration: FX.ring.flash_ms, ease: 'Quad.easeOut', onComplete: () => c.destroy() });
+  }
+
   /** 개미 발 화면 자리 */
   private footAt(): { x: number; y: number } {
     return { x: this.L.width / 2, y: this.ant.root.y };
@@ -777,10 +795,17 @@ export class BattleScene extends Phaser.Scene {
     if (this.touch.count > 0) this.touch.update(sim.targetLifeLeft, sim.targetLifeTotal);
     const a = sim.ant;
     if (this.touch.timingOn && a.winding && a.timingChance) {
-      const w = this.cfg.battle.jump.windup_s ?? 0;
-      const elapsed = w - a.windupLeft;
       const f = this.footAt();
-      this.touch.timingUpdate(w > 0 ? elapsed / w : 1, !a.timingUsed && elapsed >= a.timingFrom && elapsed <= a.timingTo, f.x, f.y, this.cfg.battle.ant.width_ratio * this.L.width);
+      const antW = this.cfg.battle.ant.width_ratio * this.L.width;
+      if ((this.cfg.battle.strong_timing?.style ?? 'circle') === 'ring') {
+        // I-24 링: 겹침 시각 = core ringAt · GOOD 폭 = timingFrom ~ timingTo (기회 도움닫기 전체 = timingTo)
+        const elapsed = a.timingTo - a.windupLeft;
+        this.touch.timingUpdate(a.ringAt > 0 ? elapsed / a.ringAt : 1, !a.timingUsed && elapsed >= a.timingFrom, f.x, f.y, antW, 'ring');
+      } else {
+        const w = this.cfg.battle.jump.windup_s ?? 0;
+        const elapsed = w - a.windupLeft;
+        this.touch.timingUpdate(w > 0 ? elapsed / w : 1, !a.timingUsed && elapsed >= a.timingFrom && elapsed <= a.timingTo, f.x, f.y, antW);
+      }
     } else if (this.touch.timingOn && !a.winding) this.touch.timingClear();
   }
 

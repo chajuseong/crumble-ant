@@ -18,7 +18,9 @@ import { type BattleStats, type BuyResult, buyCheck, deriveStats, initialLevels,
 import { Rng } from './rng';
 
 export type AntPhase = 'ground' | 'rise' | 'fall' | 'down';
-export type JumpKind = 'auto' | 'strong';
+/** I-24: perfect = 링 PERFECT 초강점프 */
+export type JumpKind = 'auto' | 'strong' | 'perfect';
+export type TimingGrade = 'perfect' | 'good' | 'early' | 'miss';
 export type StageStartReason = 'init' | 'advance' | 'repeat' | 'retreat' | 'restart' | 'challenge';
 export type TapIgnoredReason = 'airborne' | 'cooldown' | 'down' | 'pinned' | 'noChance' | 'noBuilding';
 /** M7 타격 출처 — auto = 자동 연타 · target = 과녁 탭 · bonus = PERFECT 보너스 */
@@ -65,6 +67,8 @@ export interface AntState {
   /** M7 맞는 창 = 도움닫기 경과 시간 (게임 초) from ~ to */
   timingFrom: number;
   timingTo: number;
+  /** I-24 ring: 링이 겹치는 도움닫기 경과 (게임 초) */
+  ringAt: number;
 }
 
 export interface BuildingState {
@@ -111,7 +115,7 @@ export type BattleEvent =
   /** M7: 이번 도움닫기에 강점프 기회 — 창 = 남은 도움닫기 시간 fromS ~ toS (fromS > toS) */
   | { type: 'timingChance'; fromS: number; toS: number }
   /** M7: 기회 중 탭 — ok = 창 안 (뒤이어 jump strong) · false = 창 밖 (기회 끝) */
-  | { type: 'timingResult'; ok: boolean }
+  | { type: 'timingResult'; ok: boolean; grade: TimingGrade }
   /** M7: 매달림 시작 — 과녁 묶음 (lifeS = 실제 시간) */
   | { type: 'targetsSpawn'; targets: TargetState[]; lifeS: number }
   | { type: 'targetHit'; id: number }
@@ -178,6 +182,8 @@ export class BattleSim {
   private nextTargetId = 1;
   /** 마지막 기회 뒤 점프 수 (min_gap_jumps) — 처음은 바로 기회 가능 */
   private jumpsSinceChance = Number.MAX_SAFE_INTEGER;
+  /** H-56 ① 이번 점프에서 아직 '닿기 직전' 과녁을 안 냈음 (점프마다 다시 켬) */
+  private leadArmed = false;
 
   constructor(cfg: GameConfig, startStage = 1, start: BattleStart | null = null) {
     this.cfg = cfg;
@@ -208,6 +214,7 @@ export class BattleSim {
       timingUsed: false,
       timingFrom: 0,
       timingTo: 0,
+      ringAt: 0,
     };
     this.stage = { stage: 1, autoAdvance: start ? start.autoAdvance : true, challenging: false, destroyed: 0, toClear: 1 };
     this.startStage(Math.max(1, Math.floor(start ? start.stage : startStage)), 'init');
@@ -256,6 +263,12 @@ export class BattleSim {
    * 반환 = 무엇을 했나 (테스트 · 측정용)
    */
   tapBattle(x: number, y: number): 'target' | 'miss' | 'strong' | 'timingMiss' | 'ignored' {
+    const zone = this.cfg.battle.strong_timing?.tap_max_y;
+    if (this.strongMode === 'timing' && zone !== undefined) {
+      // H-54 ③ 아래 = 타이밍만 · 위 = 과녁만 (엉뚱한 탭이 기회를 날리지 않게)
+      if (y <= zone) return this.tapTiming();
+      return this.targets.length > 0 ? this.tapTargets(x, y) : this.ignore('noChance') || 'ignored';
+    }
     if (this.targets.length > 0) return this.tapTargets(x, y);
     if (this.strongMode === 'tap') return this.tapStrongJump() ? 'strong' : 'ignored';
     return this.tapTiming();
@@ -364,7 +377,7 @@ export class BattleSim {
         if (a.contact && !wasContact) {
           a.strikeTimer = 0; // 닿는 순간 첫 타격
           if (bc.arm_order_resets_each_jump) a.nextArm = 0;
-          this.spawnTargets(falling);
+          if (bc.targets?.lead_s === undefined) this.spawnTargets(falling);
         }
         if (a.phase === 'fall' && a.y <= 0) this.toGround();
       } else if (a.contact) {
@@ -384,9 +397,23 @@ export class BattleSim {
       if (this.building === falling && falling.y <= antH + EPS) this.landBuilding(falling);
     }
 
-    // M7 과녁: 매달림이 끝나면 (상승 끝 · 파괴 · 착지) 남은 과녁 사라짐 · 수명 = 게임 시간 (= 실제 시간 × 배속)
+    // H-56 ① 닿기 직전 등장 — 상승 중 · 닿을 때까지 남은 시간 ≤ lead_s (실제) · 정점 전에 닿을 때만 · 남은 과녁 있으면 안 나옴
+    const tg = bc.targets;
+    const fb = this.building && this.building.state === 'falling' ? this.building : null;
+    if (tg && tg.lead_s !== undefined && fb && a.phase === 'rise' && !a.contact && this.targets.length === 0 && this.leadArmed) {
+      const gap = fb.y - (a.y + bc.ant.height_ratio);
+      const close = a.jumpSpeed + fb.fallSpeed;
+      const t = close > 0 ? gap / close : Infinity;
+      if (t >= 0 && t <= Math.min(a.riseTimeLeft, tg.lead_s * this.timeScale) + EPS) {
+        this.leadArmed = false;
+        this.spawnTargets(fb);
+      }
+    }
+    // M7 과녁 끝: 매달림 단위 = 매달림 끝 · 건물 단위 (H-54 ①) = 수명 · 파괴 · 착지 · 수명 = 게임 시간 (= 실제 × 배속)
     if (this.targets.length > 0) {
-      if (!a.contact) this.endTargets('hangEnd');
+      const perHang = tg?.end_on_hang ?? true;
+      if (perHang && !a.contact) this.endTargets('hangEnd');
+      else if (!perHang && (!this.building || this.building.state !== 'falling')) this.endTargets('hangEnd');
       else {
         this.targetLifeLeft -= dt;
         if (this.targetLifeLeft <= EPS) this.endTargets('expire');
@@ -398,8 +425,12 @@ export class BattleSim {
     const a = this.ant;
     const sj = this.cfg.battle.strong_jump;
     const st = this.stats;
-    const height = kind === 'strong' ? st.jumpHeight * sj.height_mult : st.jumpHeight;
-    const speed = kind === 'strong' ? st.riseSpeed * sj.speed_mult : st.riseSpeed;
+    const strongish = kind !== 'auto';
+    const mult = kind === 'perfect' ? (sj.perfect_height_mult ?? sj.height_mult) : sj.height_mult;
+    const ceiling = 1 - this.cfg.battle.ant.height_ratio; // 전투 구역 위를 넘지 않게 (PERFECT만 — 강점프는 데이터 검증이 막음)
+    const height = kind === 'auto' ? st.jumpHeight : kind === 'perfect' ? Math.min(st.jumpHeight * mult, ceiling) : st.jumpHeight * mult;
+    const speed = strongish ? st.riseSpeed * sj.speed_mult : st.riseSpeed;
+    this.leadArmed = true;
     a.phase = 'rise';
     a.jumpKind = kind;
     a.jumpSpeed = speed;
@@ -407,7 +438,7 @@ export class BattleSim {
     a.windupLeft = 0;
     a.timingChance = false;
     if (this.jumpsSinceChance < Number.MAX_SAFE_INTEGER) this.jumpsSinceChance += 1;
-    a.fallSpeed = kind === 'strong' ? st.fallSpeed * sj.speed_mult : st.fallSpeed;
+    a.fallSpeed = strongish ? st.fallSpeed * sj.speed_mult : st.fallSpeed;
     a.apex = height;
     a.riseTimeLeft = height / speed;
     a.contact = false;
@@ -465,9 +496,22 @@ export class BattleSim {
     const to = Math.min(w, Math.max(0, t.window_to * w));
     const from = Math.max(0, to - t.window_s * this.timeScale); // 창 길이 = 실제 시간 × 배속 · 도움닫기 시작보다 앞으로 안 감 (H-51 Q8)
     a.timingChance = true;
+    this.jumpsSinceChance = 0;
+    if ((t.style ?? 'circle') === 'ring') {
+      // I-24 링: 기회 도움닫기만 실제 시간 (배속 무시) — 겹침 = ring_s · 끝 = ring_s + good_s (늦게 누를 틈)
+      const k = this.timeScale;
+      const ring = (t.ring_s ?? w) * k;
+      const good = (t.good_s ?? 0) * k;
+      a.groundTimer = ring + good;
+      a.windupLeft = a.groundTimer;
+      a.ringAt = ring;
+      a.timingFrom = Math.max(0, ring - good);
+      a.timingTo = ring + good;
+      this.events.push({ type: 'timingChance', fromS: a.groundTimer - a.timingFrom, toS: 0 });
+      return;
+    }
     a.timingFrom = from;
     a.timingTo = to;
-    this.jumpsSinceChance = 0;
     this.events.push({ type: 'timingChance', fromS: w - from, toS: w - to });
   }
 
@@ -479,9 +523,23 @@ export class BattleSim {
     if (!this.building || this.building.state !== 'falling') return this.ignore(this.building ? 'pinned' : 'noBuilding') || 'ignored';
     if (!a.winding || !a.timingChance || a.timingUsed) return this.ignore('noChance') || 'ignored';
     a.timingUsed = true;
+    const t = this.cfg.battle.strong_timing!;
+    if ((t.style ?? 'circle') === 'ring') {
+      // I-24 등급 = 겹침과의 차이 (실제 초) — PERFECT ± perfect_s · GOOD ± good_s · 그보다 빠름 = 헛발 (기회 끝 · 끝에 보통 점프)
+      const total = a.timingTo; // 기회 도움닫기 전체 (게임 초)
+      const elapsed = Math.round((total - a.groundTimer) * 1e6) / 1e6;
+      const d = Math.round(((elapsed - a.ringAt) / this.timeScale) * 1e6) / 1e6;
+      const grade: TimingGrade = Math.abs(d) <= (t.perfect_s ?? 0) + EPS ? 'perfect' : Math.abs(d) <= (t.good_s ?? 0) + EPS ? 'good' : 'early';
+      const ok = grade !== 'early' && a.strongCooldownLeft <= EPS;
+      this.events.push({ type: 'timingResult', ok, grade: ok ? grade : 'early' });
+      if (!ok) return 'timingMiss';
+      this.beginJump(grade === 'perfect' ? 'perfect' : 'strong');
+      a.strongCooldownLeft = this.cfg.battle.strong_jump.cooldown_s;
+      return 'strong';
+    }
     const elapsed = Math.round((this.groundDelay - a.groundTimer) * 1e6) / 1e6; // 문턱 비교 전 반올림 (결정성)
     const ok = elapsed >= a.timingFrom - EPS && elapsed <= a.timingTo + EPS && a.strongCooldownLeft <= EPS;
-    this.events.push({ type: 'timingResult', ok });
+    this.events.push({ type: 'timingResult', ok, grade: ok ? 'good' : 'early' });
     if (!ok) return 'timingMiss';
     this.beginJump('strong');
     a.strongCooldownLeft = this.cfg.battle.strong_jump.cooldown_s;
@@ -515,7 +573,8 @@ export class BattleSim {
     for (let i = 0; i < n; i++) {
       for (let tries = 0; tries < TARGET_TRIES; tries++) {
         const x = TARGET_X[0] + this.rng.float() * (TARGET_X[1] - TARGET_X[0]);
-        const y = TARGET_Y[0] + this.rng.float() * (TARGET_Y[1] - TARGET_Y[0]);
+        const y0 = Math.max(TARGET_Y[0], (this.cfg.battle.strong_timing?.tap_max_y ?? -1) + 0.05); // H-54 ③ 과녁은 탭 구역 위쪽만
+        const y = y0 + this.rng.float() * (TARGET_Y[1] - y0);
         const nearAnt = Math.abs(x - 0.5) < ant.width_ratio * 1.5 && y < antTop + 0.05; // 개미 둘레 (머리 위까지)
         const onHpBar = Math.abs(y - b.y) < 0.06; // 건물 밑면 HP 바 줄
         const crowded = out.some((o) => this.dist(o.x, o.y, x, y) < t.min_dist_ratio);

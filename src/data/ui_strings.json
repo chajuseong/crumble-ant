@@ -29,7 +29,10 @@
     "crumble": "와르르!",
     "combo": "{n} HIT!",
     "perfect": "PERFECT!",
-    "timing_ok": "타이밍!"
+    "timing_ok": "타이밍!",
+    "timing_perfect": "PERFECT!",
+    "timing_good": "GOOD!",
+    "timing_early": "헛발!"
   },
   "ant": {
     "down": "@ @ 기절!"

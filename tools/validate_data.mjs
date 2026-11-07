@@ -55,6 +55,15 @@ const CONFIG_KEYS = [
   ["battle.targets.miss_limit", "int", { min: 1 }],
   ["battle.targets.perfect_bonus_strikes", "int", { min: 0 }],
   ["battle.rng_seed", "int", { min: 1, max: 4294967295 }],
+  // M7 링 (I-24 · H-56)
+  ["battle.strong_jump.perfect_height_mult", "num", { gt: 0 }],
+  ["battle.strong_timing.style", "str", { oneOf: ["circle", "ring"] }],
+  ["battle.strong_timing.ring_s", "num", { gt: 0 }],
+  ["battle.strong_timing.perfect_s", "num", { gt: 0 }],
+  ["battle.strong_timing.good_s", "num", { gt: 0 }],
+  ["battle.strong_timing.tap_max_y", "num", { gt: 0, max: 0.9 }],
+  ["battle.targets.end_on_hang", "bool"],
+  ["battle.targets.lead_s", "num", { min: 0 }],
   ["battle.arm_damage", "int4", { min: 0 }],
   ["battle.strike_interval_s", "num", { gt: 0 }],
   ["battle.strike_interval_min_s", "num", { gt: 0 }],
@@ -132,6 +141,7 @@ const FX_KEYS = [
   ["debris_img.size_mult", "num", { gt: 0 }], ["debris_img.flip_ratio", "num", { min: 0, max: 1 }],
   // M7 과녁 · 타이밍 원 · PERFECT (H-51)
   ["target.px", "num", { gt: 0 }], ["timing.ring_px", "num", { gt: 0 }], ["perfect.text_px", "num", { gt: 0 }],
+  ["ring.px", "num", { gt: 0 }], ["ring.flash_ms", "int", { min: 0 }],
 ];
 
 // ui_strings 필수 키 (view가 읽는 것)
@@ -144,7 +154,7 @@ const UI_KEYS = [
   "hud.debris", "upgrade.title", "upgrade.level", "upgrade.max", "upgrade.short", "upgrade.close", "upgrade.reset", "upgrade.reset_confirm",
   "upgrade.fx.attack_power", "upgrade.fx.attack_speed", "upgrade.fx.jump_power", "upgrade.fx.move_speed",
   "hud.speed",
-  "fx.perfect", "fx.timing_ok",
+  "fx.perfect", "fx.timing_ok", "fx.timing_perfect", "fx.timing_good", "fx.timing_early",
   "upgrade.now.attack_power", "upgrade.now.attack_speed", "upgrade.now.jump_power", "upgrade.now.move_speed",
 ];
 
@@ -267,6 +277,8 @@ export function validateAll(data) {
       walkKeys(c, "game_config", errors);
       for (const [key, kind, o] of CONFIG_KEYS) checkValue(`game_config.${key}`, get(c, key), kind, o, errors);
       const tg = get(c, "battle.targets");
+      const tm = get(c, "battle.strong_timing");
+      if (tm && isNum(tm.perfect_s) && isNum(tm.good_s) && tm.perfect_s > tm.good_s) errors.push(`game_config.battle.strong_timing: perfect_s (${tm.perfect_s}) ≤ good_s (${tm.good_s})여야 함`);
       if (tg && Number.isInteger(tg.count_min) && Number.isInteger(tg.count_max) && tg.count_min > tg.count_max) errors.push(`game_config.battle.targets: count_min (${tg.count_min}) ≤ count_max (${tg.count_max})여야 함`);
       const sum = ["hud_ratio", "battle_ratio", "strip_ratio"].reduce((s, k) => s + Number(get(c, `layout.${k}`)), 0);
       if (Number.isFinite(sum) && Math.abs(sum - 1) > 1e-6) errors.push(`game_config.layout: hud + battle + strip 비율 합이 1이어야 함 (${sum})`);
