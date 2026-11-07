@@ -1,6 +1,38 @@
 import Phaser from 'phaser';
 import { COLOR, FONT } from './theme';
 
+/** 그림 한 줄마다 불투명한 왼쪽 · 오른쪽 끝 (px) — 텍스처마다 한 번만 잼 (H-49 금 가림) */
+const SPANS = new Map<string, Int16Array>();
+function rowSpans(scene: Phaser.Scene, key: string): Int16Array | null {
+  const hit = SPANS.get(key);
+  if (hit) return hit;
+  const src = scene.textures.get(key).getSourceImage() as HTMLImageElement | HTMLCanvasElement;
+  const w = src.width;
+  const h = src.height;
+  const c = document.createElement('canvas');
+  c.width = w;
+  c.height = h;
+  const ctx = c.getContext('2d', { willReadFrequently: true });
+  if (!ctx) return null;
+  ctx.drawImage(src, 0, 0);
+  const a = ctx.getImageData(0, 0, w, h).data;
+  const out = new Int16Array(h * 2).fill(-1);
+  for (let y = 0; y < h; y++) {
+    let l = -1;
+    let r = -1;
+    for (let x = 0; x < w; x++) {
+      if (a[(y * w + x) * 4 + 3]! > 128) {
+        if (l < 0) l = x;
+        r = x;
+      }
+    }
+    out[y * 2] = l;
+    out[y * 2 + 1] = r;
+  }
+  SPANS.set(key, out);
+  return out;
+}
+
 /** M6 건물 그림 (없으면 도형) — 그림 밑면 = core 밑면 · 폭 = 건물 폭 × drawW · 세로는 비율대로 (H-42 Q3) */
 export interface BuildingArt {
   key: string;
@@ -140,6 +172,28 @@ export class BuildingView {
     return created;
   }
 
+  /**
+   * H-49 금이 그림 밖으로 안 나가게 — 그 높이(y, 밑면 = 0 · 위 = -)에서 그림이 있는 x 범위 (여백 12px 안쪽).
+   * 도형 모드 = 지금 범위 그대로 (판정 상자)
+   */
+  private crackRange(y: number): [number, number] {
+    const lo = -this.w / 2 + 12;
+    const hi = this.w / 2 - 12;
+    const img = this.image;
+    if (!img) return [lo, hi];
+    const spans = rowSpans(this.scene, img.texture.key);
+    if (!spans) return [lo, hi];
+    const row = Math.round(img.originY * img.height + y / img.scaleY);
+    if (row < 0 || row >= img.height) return [lo, hi];
+    const l = spans[row * 2]!;
+    const r = spans[row * 2 + 1]!;
+    if (l < 0) return [lo, hi];
+    const toX = (px: number) => (px - img.originX * img.width) * img.scaleX;
+    const a = Math.max(lo, toX(l) + 12);
+    const b = Math.min(hi, toX(r) - 12);
+    return a < b ? [a, b] : [lo, hi];
+  }
+
   /** 그림 모드인가 (smoke · 테스트용) */
   get artMode(): 'image' | 'shape' {
     return this.art ? 'image' : 'shape';
@@ -163,15 +217,17 @@ export class BuildingView {
     g.lineStyle(7, COLOR.crack, 0.85);
     for (let i = 0; i < n; i++) {
       const s = this.crackSeed;
+      // 도형 모드 = 지금 식 그대로 · 그림 모드 = 각 점을 그 높이의 그림 범위 안으로 (H-49)
+      const clamp = (px: number, py: number) => (this.image ? Phaser.Math.Clamp(px, ...this.crackRange(py)) : px);
       let x = -this.w / 2 + 12 + (this.w - 24) * s[i % s.length]!;
       let y = -this.h * (0.1 + 0.15 * s[(i + 3) % s.length]!);
       g.beginPath();
-      g.moveTo(x, 0);
-      g.lineTo(x, y);
+      g.moveTo(clamp(x, 0), 0);
+      g.lineTo(clamp(x, y), y);
       for (let k = 0; k < 3; k++) {
         x = Phaser.Math.Clamp(x + (s[(i + k) % s.length]! - 0.5) * this.w * 0.25, -this.w / 2 + 12, this.w / 2 - 12);
         y -= this.h * 0.18;
-        g.lineTo(x, y);
+        g.lineTo(clamp(x, y), y);
       }
       g.strokePath();
     }
