@@ -126,12 +126,11 @@ export class BuildingView {
   flash(alpha: number, ms: number): boolean {
     let created = false;
     if (!this.flashRect) {
-      // M6 그림이면 사각형 대신 그림 모양 그대로 흰색 (투명한 모서리가 하얗게 안 보이게 — H-42)
+      // M6 그림이면 사각형 대신 그림 모양 그대로 흰색 (투명한 모서리가 하얗게 안 보이게 — H-42). 맨 위에 둠 (도형 모드와 같게 — HP 바 · 금도 같이 번쩍)
       this.flashRect = this.image
         ? this.scene.add.image(0, 0, this.image.texture.key).setOrigin(0.5, this.image.originY).setScale(this.image.scaleX, this.image.scaleY).setTintFill(0xffffff).setAlpha(0)
         : this.scene.add.rectangle(0, -this.h / 2, this.w, this.h, 0xffffff, 1).setAlpha(0);
       this.root.add(this.flashRect);
-      if (this.image) this.root.moveAbove(this.flashRect, this.image);
       created = true;
     }
     const f = this.flashRect;
