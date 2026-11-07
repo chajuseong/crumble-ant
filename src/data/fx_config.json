@@ -143,5 +143,14 @@
   "debris_img": {
     "size_mult": 1.6,
     "flip_ratio": 0.5
+  },
+  "target": {
+    "px": 144
+  },
+  "timing": {
+    "ring_px": 260
+  },
+  "perfect": {
+    "text_px": 110
   }
 }
