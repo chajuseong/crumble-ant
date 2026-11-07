@@ -27,7 +27,9 @@
   },
   "fx": {
     "crumble": "와르르!",
-    "combo": "{n} HIT!"
+    "combo": "{n} HIT!",
+    "perfect": "PERFECT!",
+    "timing_ok": "타이밍!"
   },
   "ant": {
     "down": "@ @ 기절!"

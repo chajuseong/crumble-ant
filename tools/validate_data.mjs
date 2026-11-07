@@ -40,6 +40,21 @@ const CONFIG_KEYS = [
   ["battle.strong_jump.height_mult", "num", { gt: 0 }],
   ["battle.strong_jump.speed_mult", "num", { gt: 0 }],
   ["battle.strong_jump.cooldown_s", "num", { min: 0 }],
+  // M7 터치 개편 (I-23 · H-51) — 강점프 = 도움닫기 타이밍 · 터치 과녁 · 시드 난수
+  ["battle.strong_jump.mode", "str", { oneOf: ["tap", "timing"] }],
+  ["battle.strong_timing.chance_pct", "int", { min: 0, max: 100 }],
+  ["battle.strong_timing.min_gap_jumps", "int", { min: 0 }],
+  ["battle.strong_timing.window_to", "num", { gt: 0, max: 1 }],
+  ["battle.strong_timing.window_s", "num", { gt: 0 }],
+  ["battle.targets.chance_pct", "int", { min: 0, max: 100 }],
+  ["battle.targets.count_min", "int", { min: 0, max: 6 }],
+  ["battle.targets.count_max", "int", { min: 0, max: 6 }],
+  ["battle.targets.life_s", "num", { gt: 0 }],
+  ["battle.targets.radius_ratio", "num", { gt: 0, max: 0.25 }],
+  ["battle.targets.min_dist_ratio", "num", { min: 0, max: 0.5 }],
+  ["battle.targets.miss_limit", "int", { min: 1 }],
+  ["battle.targets.perfect_bonus_strikes", "int", { min: 0 }],
+  ["battle.rng_seed", "int", { min: 1, max: 4294967295 }],
   ["battle.arm_damage", "int4", { min: 0 }],
   ["battle.strike_interval_s", "num", { gt: 0 }],
   ["battle.strike_interval_min_s", "num", { gt: 0 }],
@@ -115,6 +130,8 @@ const FX_KEYS = [
   ["final_ring.px", "num", { gt: 0 }], ["final_ring.ms", "int", { gt: 0 }],
   ["destroy_dust.count", "int", { min: 0 }], ["destroy_dust.px", "num", { gt: 0 }], ["destroy_dust.spread_px", "num", { min: 0 }], ["destroy_dust.ms", "int", { gt: 0 }],
   ["debris_img.size_mult", "num", { gt: 0 }], ["debris_img.flip_ratio", "num", { min: 0, max: 1 }],
+  // M7 과녁 · 타이밍 원 · PERFECT (H-51)
+  ["target.px", "num", { gt: 0 }], ["timing.ring_px", "num", { gt: 0 }], ["perfect.text_px", "num", { gt: 0 }],
 ];
 
 // ui_strings 필수 키 (view가 읽는 것)
@@ -127,6 +144,7 @@ const UI_KEYS = [
   "hud.debris", "upgrade.title", "upgrade.level", "upgrade.max", "upgrade.short", "upgrade.close", "upgrade.reset", "upgrade.reset_confirm",
   "upgrade.fx.attack_power", "upgrade.fx.attack_speed", "upgrade.fx.jump_power", "upgrade.fx.move_speed",
   "hud.speed",
+  "fx.perfect", "fx.timing_ok",
   "upgrade.now.attack_power", "upgrade.now.attack_speed", "upgrade.now.jump_power", "upgrade.now.move_speed",
 ];
 
@@ -248,6 +266,8 @@ export function validateAll(data) {
     else {
       walkKeys(c, "game_config", errors);
       for (const [key, kind, o] of CONFIG_KEYS) checkValue(`game_config.${key}`, get(c, key), kind, o, errors);
+      const tg = get(c, "battle.targets");
+      if (tg && Number.isInteger(tg.count_min) && Number.isInteger(tg.count_max) && tg.count_min > tg.count_max) errors.push(`game_config.battle.targets: count_min (${tg.count_min}) ≤ count_max (${tg.count_max})여야 함`);
       const sum = ["hud_ratio", "battle_ratio", "strip_ratio"].reduce((s, k) => s + Number(get(c, `layout.${k}`)), 0);
       if (Number.isFinite(sum) && Math.abs(sum - 1) > 1e-6) errors.push(`game_config.layout: hud + battle + strip 비율 합이 1이어야 함 (${sum})`);
     }
