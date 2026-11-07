@@ -1,6 +1,7 @@
 # 와르르 개미 — 개발 기준 문서 (단일 기준)
 
-> 문서 버전: v0.17 (2026-11-06) — M6 건물 · 배경 아트 데이터 (꺼진 채): buildings.art_id · building_art 시트 · art_config env_* · fx_config 파괴 이펙트 · 연출 · 완료 조건 (H-42)
+> 문서 버전: v0.18 (2026-11-07) — M6 C 켬: art_config.env_enabled TRUE · impact_file impact.png · 로딩 시간 측정 · M6 A 머지 기록
+> v0.17 (2026-11-06) — M6 건물 · 배경 아트 데이터 (꺼진 채): buildings.art_id · building_art 시트 · art_config env_* · fx_config 파괴 이펙트 · 연출 · 완료 조건 (H-42)
 > v0.16 (2026-11-06) — M5-D 점프력 A안: 12%/Lv · 최대 Lv 3 · 비용 다시 맞춤 · 단일 강화 퇴보 0건 · 옛 세이브 Lv 자르기 (H-41)
 > v0.15 (2026-11-06) — M5-D 균형: 강화 비용 낮춤 (도움닫기 0.5 유지 — I-21) · 측정 · 점프력 퇴보 1건 남음 (효과 안은 [계획 먼저])
 > v0.14 (2026-11-06) — M5 C 도움닫기 켬: battle.jump.windup_s 0.5 · strip.ambient_carry_amount 지움 · 측정 (0 · 0.3 · 0.5) · M5 A · B 머지 기록
@@ -161,8 +162,8 @@ pivot · socket · grip = `art/game` 납품본 측정값 · draw_h · anchor · 
 | art_config (키-값) | skin_id · enabled | string · bool | 지금 스킨 · 그림으로 그리기 | black · TRUE |
 | | draw_scale · draw_scale_max · weapon_scale · weapon_scale_max | float | 그림 배율 · [ART] 슬라이더 상한 (판정 크기는 그대로 — H-12 Q1). 기본값 = 대표 폰 확인 (H-22) | 1.5 · 2.5 · 1.3 · 2.0 |
 | | head_scale | float | 머리만 따로 배율 (목 기준) — 표정 가독성 (H-22). 390pt 폰에서 머리 높이 45 → 58pt | 1.3 |
-| | impact_file? | string (빈칸 = 도형 별) | **M3-D** 충격 별 그림 (`art/game/` 안 파일 이름 — `env/impact.png`) — **M6 C에서 impact.png** | (빈칸) |
-| | env_enabled | bool | **M6** 건물 · 하늘 · 띠 · 파괴 이펙트를 그림으로 (A · B = FALSE 꺼진 채 → C = TRUE). 끄거나 파일 없음 = 지금 도형 | FALSE |
+| | impact_file? | string (빈칸 = 도형 별) | **M3-D** 충격 별 그림 (`art/game/` 안 파일 이름 — `env/impact.png`) — **M6 C부터 impact.png** | impact.png |
+| | env_enabled | bool | **M6** 건물 · 하늘 · 띠 · 파괴 이펙트를 그림으로 (A · B = FALSE 꺼진 채 → **C = TRUE**). [ART]에서 끄거나 파일 없음 = 도형. 켬이면 그림 약 6.9MB를 시작할 때 읽음 [프로토만] — 첫 화면 0.9 → 3.5초 (20Mbps · 60ms 측정) | TRUE |
 | | sky_file? · strip_file? | string | 하늘 (전체 화면 9:19.5) · 지면/굴 띠 (1440×312) — `art/game/env/` · 빈칸 = 도형 | sky.png · ground_strip.png |
 | | strip_ground_ratio | float | 띠 그림 풀 윗선 높이 ÷ 그림 높이 — 이 선 = 지면(groundY). 위 = 덤불 (건물 · 개미 뒤) · 아래 = 땅 (일개미 층) | 0.24 |
 | | strip_burrow_x | float | 띠 그림 굴 입구 가운데 — **그림 켬일 때만** 일개미 도착점 · "+N" 자리 (끄면 `strip.burrow_x_ratio` 0.93) | 0.887 |
@@ -324,4 +325,4 @@ pivot · socket · grip = `art/game` 납품본 측정값 · draw_h · anchor · 
 | M3-E | 배속 ×1 · ×1.5 · ×2 · ×3 (I-17 · H-28) | ① `npm run measure` 그대로 ② **배속별 같은 게임 시간 결과 동일** (테스트 — dt × 배속으로 돌린 sim과 ×1 sim이 같은 고정 스텝 수에서 상태 · 이벤트 같음) ③ ×3 smoke (콘솔 오류 0 · 파괴 수 오름) ④ 버튼 화면 컷 (×1 · ×1.5 · ×2 · ×3) ⑤ ×2 이상 가벼운 연출 · 모션 최소 길이 테스트 ⑥ 기절 · 후퇴 · [도전] · 개미굴 중 배속 유지 ⑦ PR에 "무료 ×3 = 재화 ×3" 확인 문구 (M4 운반 예약은 게임 시간) ⑧ 이 문서 §3 · §4 · §5 · §7 | A `c8d9c14` (PR #35) · B `6a257f1` (PR #36) |
 | M4 | 강화 4종 + 소프트 재화 (I-12 · I-13 · H-17) | ① 강화 0이면 `npm run measure` 표 = M3 표 ② `npm run measure -- --upgrades` = 진행 표 (§3-6 측정 · PR 본문에) · **단일 강화 Lv 0 ~ max 퇴보 0건** ③ 테스트: 비용 (정수 반복) · 효과 정수화 · 구매 (부족 · MAX) · deposit 시각 · 저장 왕복 · 깨진 저장 → 새로 시작 + `.bad` 보관 · 버전 · 도전 중 저장 · 강화가 다음 타격 · 점프부터 적용 ④ 실제 브라우저: 구매 → 새로고침 → 잔해 · Lv · 스테이지 그대로 ⑤ smoke ✅ + 강화 패널 열기 · 구매 1회 · 콘솔 오류 0 ⑥ 화면 컷: HUD 잔해 · 패널 (가능 · 부족 · MAX) · 구매 순간 — 360 / 390 / 430 ⑦ 이 문서 §3 · §4 · §5 · §7 | B `d5b82af` (PR #38) · A `7d483d7` (PR #24) |
 | M5 | 점프 도움닫기 (I-19 · I-20 · H-34) | ① `windup_s` 0 = M4 measure · `--upgrades` 표 그대로 (diff 0) ② 테스트: 도움닫기 길이 · `windupStart` · 도움닫기 중 탭 = 바로 강점프 1회 · 깔리면 취소 · 첫 점프에도 · 배속별 같은 결과 · 강화와 무관 ③ view: 웅크림 = 도움닫기 전체 · ×1 · ×3 화면 컷 ④ 켜는 C PR (0.5): measure · `--upgrades` 표 (0.3 · 0.5 비교) · smoke ⑤ 이 문서 §3 · §4 · §5 · §7 | A `5620daf` (PR #42) · B `f652c4c` (PR #43) · C `2218e36` (PR #46) |
-| M6 | 건물 · 배경 아트 적용 (I-22 · H-42) | ① `npm run measure` · `--upgrades` = M5-D 표 그대로 (diff 0) ② **[ART] 건물 · 배경 끔 = 지금 화면** (같은 장면 픽셀 비교) · [FX] 파괴 그림 끔 = 지금 ③ 그림 켬 화면 컷 (390 · 360 · 430): 8스테이지 건물마다 매달려 치는 순간 · 착지 · 마지막 일격 (별 + 링) · 파괴 (파편 · 먼지) · 일개미 굴 입구 도착 + "+N" · 덤불 뒤 개미 ④ 폴백 테스트 (순수 함수): 건물 그림 하나 없음 · `art_id` 빈칸 · 하늘 / 띠 없음 · 끔 ⑤ 데이터 검증: `art_id` FK · building_art PK · 파일 이름 · 파일 있는지 (이름으로 · 겹침 오류) · tint 형식 · `strip_*` 범위 ⑥ smoke ×1 · ×3 콘솔 오류 0 · 첫 화면까지 시간 (전 → 후 — 그림 약 6MB 시작 때 읽기 [프로토만]) ⑦ 이 문서 §3 · §5 · §7 · `docs/art.md` §7 | |
+| M6 | 건물 · 배경 아트 적용 (I-22 · H-42) | ① `npm run measure` · `--upgrades` = M5-D 표 그대로 (diff 0) ② **[ART] 건물 · 배경 끔 = 지금 화면** (같은 장면 픽셀 비교) · [FX] 파괴 그림 끔 = 지금 ③ 그림 켬 화면 컷 (390 · 360 · 430): 8스테이지 건물마다 매달려 치는 순간 · 착지 · 마지막 일격 (별 + 링) · 파괴 (파편 · 먼지) · 일개미 굴 입구 도착 + "+N" · 덤불 뒤 개미 ④ 폴백 테스트 (순수 함수): 건물 그림 하나 없음 · `art_id` 빈칸 · 하늘 / 띠 없음 · 끔 ⑤ 데이터 검증: `art_id` FK · building_art PK · 파일 이름 · 파일 있는지 (이름으로 · 겹침 오류) · tint 형식 · `strip_*` 범위 ⑥ smoke ×1 · ×3 콘솔 오류 0 · 첫 화면까지 시간 (전 → 후 — 그림 약 6MB 시작 때 읽기 [프로토만]) ⑦ 이 문서 §3 · §5 · §7 · `docs/art.md` §7 | A `b0176fa` (PR #57) |
