@@ -3,6 +3,8 @@
 // 사용: npm run measure   (CI에는 넣지 않음 — H-05 ⑤-3. 결과는 PR 본문에)
 //       npm run measure -- --upgrades  M4 강화 진행 표 (자동만 · 강점프 연타 — 살 수 있는 가장 싼 강화를 바로 구매 · 강화하면 [도전]) + 단일 강화 퇴보 검사
 //       npm run measure -- --hitstop   히트스톱으로 늘어나는 벽시계 시간 (스테이지 1 · 5 · 7) — M2 (일반 · 마지막) vs M3-D (+ 4연타 마무리 · 일반 ≤ 간격 × hit_ratio_max)
+//       npm run measure -- --touch     M7 터치 개편 — 매달림 길이 · 사람 모델 (과녁 맞히는 비율 × 타이밍 성공률 → 60분 진행) · 반응 모델 (×1 · ×2 · ×3) · 연타 모델
+//                                      데이터가 꺼져 있으면 (mode tap · count 0) 측정만 C 값 (timing · 2 ~ 3)으로 켜서 잼 — 결과는 C PR 표에
 // core(TypeScript)는 Vite로 불러온다 — 따로 빌드 도구를 늘리지 않음
 import fs from "node:fs";
 import path from "node:path";
@@ -143,6 +145,99 @@ try {
       }
     }
     console.log(`단일 강화 퇴보: ${bad.length ? bad.join(" · ") : "0건"}`);
+  }
+
+  if (process.argv.includes("--touch")) {
+    // 측정용 난수 (사람 손 흉내 — core 난수와 따로 · 결정적)
+    let seed = 12345;
+    const rnd = () => ((seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296);
+    const gauss = () => { const u = Math.max(1e-9, rnd()); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * rnd()); };
+    const on = (base) => {
+      const c = structuredClone(base);
+      if ((c.battle.strong_jump.mode ?? "tap") === "tap") c.battle.strong_jump.mode = "timing";
+      if (!c.battle.targets || c.battle.targets.count_max === 0) c.battle.targets = { ...(c.battle.targets ?? {}), count_min: 2, count_max: 3 };
+      return c;
+    };
+    const cfgOn = on(config);
+    const tg = cfgOn.battle.targets, st = cfgOn.battle.strong_timing;
+    console.log(`\nM7 터치 측정 — mode timing · 과녁 ${tg.count_min} ~ ${tg.count_max} · 수명 ${tg.life_s}초 · 기회 ${st.chance_pct}% (최소 간격 ${st.min_gap_jumps}) · 창 끝 ${st.window_to} · 창 ${st.window_s}초 (실제 시간)`);
+
+    // ① 매달림 길이 (과녁은 매달림이 끝나면 사라짐) — 스테이지 1 · 3 · 5 · 8 · 자동만 · 강화 0
+    console.log("① 매달림 길이 (게임 초 · 자동만 · 강화 0) — stage | 평균 | 최소 | 최대 | 과녁 묶음 수");
+    for (const stage of [1, 3, 5, 8]) {
+      const c = structuredClone(cfgOn); c.battle.ant.max_hp = 1e12; c.stages.rows = c.stages.rows.map((r) => ({ ...r, buildings_to_clear: 1e9 }));
+      const sim = new BattleSim(c, stage); const hangs = []; let t0 = null, batches = 0;
+      for (let i = 0; i < 120 * 300 && hangs.length < 200; i++) {
+        const was = sim.ant.contact; sim.update(1 / 120);
+        for (const e of sim.drainEvents()) if (e.type === "targetsSpawn") batches++;
+        if (!was && sim.ant.contact) t0 = sim.time; if (was && !sim.ant.contact && t0 !== null) { hangs.push(sim.time - t0); t0 = null; }
+      }
+      const avg = hangs.reduce((a, b) => a + b, 0) / hangs.length;
+      console.log(`${String(stage).padStart(5)} | ${avg.toFixed(2)} | ${Math.min(...hangs).toFixed(2)} | ${Math.max(...hangs).toFixed(2)} | ${batches}`);
+    }
+
+    // 사람 손: 과녁 = 나온 뒤 반응 (0.35 + 0.25 × 순서 초, 실제 시간) 뒤 탭 (비율 pT) · 타이밍 = 창 가운데 탭 (비율 pW, 실패 = 창 앞에 탭)
+    const play = (cfg, { pT, pW, speed = 1, minutes = 60, mash = false, reaction = false }) => {
+      const sim = new BattleSim(structuredClone(cfg), 1); sim.setTimeScale(speed);
+      const rows = cfg.upgrades.rows; const first = {}; let earned = 0, wall = 0;
+      const plan = []; // { at: 실제 초, x, y, chance? (타이밍 탭이면 그 기회 번호) }
+      let chanceNo = 0;
+      const s = { targets: 0, hits: 0, chances: 0, timingOk: 0, perfect: 0 };
+      const dtw = 1 / 120;
+      for (let i = 0; i < minutes * 60 * 120; i++) {
+        wall += dtw; sim.update(dtw * speed);
+        for (const e of sim.drainEvents()) {
+          if (e.type === "deposit") earned += e.amount;
+          if (e.type === "stageClear" && !(e.stage in first)) first[e.stage] = sim.time / 60 / speed;
+          if (e.type === "perfect") s.perfect++;
+          if (e.type === "timingResult" && e.ok) s.timingOk++;
+          if (e.type === "targetHit") s.hits++;
+          if (mash) continue;
+          if (e.type === "targetsSpawn") { s.targets += e.targets.length; e.targets.forEach((t, k) => { if (rnd() < pT) plan.push({ at: wall + 0.35 + 0.25 * k, x: t.x, y: t.y, target: t.id }); }); }
+          if (e.type === "timingChance") {
+            s.chances++; chanceNo++;
+            const w = cfg.battle.jump.windup_s; const win = [(w - e.fromS) / speed, (w - e.toS) / speed]; // 실제 초 (도움닫기 시작부터)
+            let at;
+            if (reaction) at = 0.30 + 0.08 * gauss(); // 원이 뜬 뒤 반응 (실제 시간)
+            else at = rnd() < pW ? (win[0] + win[1]) / 2 : Math.max(0, win[0] - 0.08);
+            plan.push({ at: wall + at, x: 0.5, y: 0.5, chance: chanceNo });
+          }
+        }
+        if (mash && i % 12 === 0) { const r = sim.tapBattle(0.1 + rnd() * 0.8, 0.08 + rnd() * 0.77); void r; }
+        plan.sort((a, b) => a.at - b.at);
+        while (plan.length && plan[0].at <= wall) {
+          const p = plan.shift();
+          if (p.chance !== undefined && (p.chance !== chanceNo || !sim.ant.winding)) { s.dropped = (s.dropped ?? 0) + 1; continue; } // 지난 기회 탭은 버림 (사람은 원이 없으면 안 누름)
+          if (p.target !== undefined && !sim.targets.some((t) => t.id === p.target)) { s.late = (s.late ?? 0) + 1; continue; } // 이미 사라진 과녁은 안 누름 (늦음)
+          const r = sim.tapBattle(p.x, p.y);
+          if (p.chance !== undefined) s[`t_${r}`] = (s[`t_${r}`] ?? 0) + 1;
+        }
+        sim.drainEvents().forEach((e) => { if (e.type === "targetHit") s.hits++; if (e.type === "timingResult" && e.ok) s.timingOk++; if (e.type === "perfect") s.perfect++; if (e.type === "deposit") earned += e.amount; });
+        let bought = false;
+        for (;;) {
+          const c = rows.filter((r) => sim.levels[r.upgrade_id] < r.max_level).map((r) => ({ id: r.upgrade_id, cost: upgradeCost(r, sim.levels[r.upgrade_id]) })).sort((a, b) => a.cost - b.cost || (a.id < b.id ? -1 : 1))[0];
+          if (!c || sim.buyUpgrade(c.id) !== "ok") break; bought = true;
+        }
+        const maxed = rows.every((r) => sim.levels[r.upgrade_id] >= r.max_level);
+        if ((bought || (maxed && i % (120 * 120) === 0)) && sim.challengeAvailable) sim.challenge(); // 강화를 사면 [도전] · 다 샀으면 2분마다 [도전]
+      }
+      return { first, earned, ...s };
+    };
+    const f = (x) => (x === undefined ? "—" : x.toFixed(1));
+    // ② 사람 모델 — 60분 · ×1
+    console.log("\n② 사람 모델 (60분 · ×1 · 가장 싼 강화부터) — 과녁 맞힘 pT | 타이밍 pW | stage 3 / 5 / 8 첫 클리어 (실제 분) | 60분 번 잔해 | 과녁 맞힌 수 / 나온 수 | 타이밍 성공 / 기회 | PERFECT");
+    const auto = play(cfgOn, { pT: 0, pW: 0 });
+    console.log(`  자동만 (탭 없음 · 켬) | ${f(auto.first[3])} / ${f(auto.first[5])} / ${f(auto.first[8])} | ${auto.earned}`);
+    for (const pT of [0.5, 0.8, 1]) for (const pW of [0.5, 0.8, 1]) {
+      const r = play(cfgOn, { pT, pW });
+      console.log(`  ${pT} | ${pW} | ${f(r.first[3])} / ${f(r.first[5])} / ${f(r.first[8])} | ${r.earned} | ${r.hits} / ${r.targets} | ${r.timingOk} / ${r.chances} | ${r.perfect}`, process.env.TOUCH_DEBUG ? JSON.stringify({ late: r.late, dropped: r.dropped, strong: r.t_strong, miss: r.t_timingMiss, ign: r.t_ignored, tgt: r.t_target, m: r.t_miss }) : "");
+    }
+    // ③ 반응 모델 — 원이 뜬 뒤 0.30 ± 0.08초에 탭 · 과녁 반응 0.35 + 0.25 × 순서 (pT 1) · 배속별
+    console.log("\n③ 반응 모델 (10분 · 과녁 다 노림 · 타이밍 = 원 뜬 뒤 0.30 ± 0.08초 탭) — 배속 | 타이밍 성공 / 기회 | 과녁 맞힌 수 / 나온 수");
+    for (const speed of [1, 2, 3]) { const r = play(cfgOn, { pT: 1, pW: 0, speed, minutes: 10, reaction: true }); console.log(`  ×${speed} | ${r.timingOk} / ${r.chances} (${Math.round((r.timingOk / Math.max(1, r.chances)) * 100)}%) | ${r.hits} / ${r.targets} (${Math.round((r.hits / Math.max(1, r.targets)) * 100)}%)`); }
+    // ④ 연타 모델 — 0.1초마다 아무 데나 탭
+    const m = play(cfgOn, { pT: 0, pW: 0, minutes: 10, mash: true });
+    console.log(`\n④ 연타 모델 (10분 · 0.1초마다 아무 데나) — 과녁 맞힘 ${m.hits} · 타이밍 성공 ${m.timingOk} · PERFECT ${m.perfect} · stage 8 ${f(m.first[8])}분`);
   }
 } finally {
   await server.close();

@@ -15,11 +15,22 @@
 
 import { type GameConfig, buildingForStage, stageRow } from './config';
 import { type BattleStats, type BuyResult, buyCheck, deriveStats, initialLevels, type Levels } from './economy';
+import { Rng } from './rng';
 
 export type AntPhase = 'ground' | 'rise' | 'fall' | 'down';
 export type JumpKind = 'auto' | 'strong';
 export type StageStartReason = 'init' | 'advance' | 'repeat' | 'retreat' | 'restart' | 'challenge';
-export type TapIgnoredReason = 'airborne' | 'cooldown' | 'down' | 'pinned';
+export type TapIgnoredReason = 'airborne' | 'cooldown' | 'down' | 'pinned' | 'noChance' | 'noBuilding';
+/** M7 타격 출처 — auto = 자동 연타 · target = 과녁 탭 · bonus = PERFECT 보너스 */
+export type StrikeSource = 'auto' | 'target' | 'bonus';
+export type TargetsEndReason = 'expire' | 'missLimit' | 'hangEnd' | 'perfect';
+
+/** M7 터치 과녁 — 좌표 = 전투 구역 비율 (x: 0 왼쪽 ~ 1 오른쪽 · y: 0 지면 ~ 1 맨 위) */
+export interface TargetState {
+  id: number;
+  x: number;
+  y: number;
+}
 
 export interface AntState {
   phase: AntPhase;
@@ -48,6 +59,12 @@ export interface AntState {
   nextArm: number;
   strongCooldownLeft: number;
   downTimer: number;
+  /** M7 이번 도움닫기에 타이밍 기회가 있는가 (mode timing) · 이미 한 번 탭했는가 */
+  timingChance: boolean;
+  timingUsed: boolean;
+  /** M7 맞는 창 = 도움닫기 경과 시간 (게임 초) from ~ to */
+  timingFrom: number;
+  timingTo: number;
 }
 
 export interface BuildingState {
@@ -84,13 +101,23 @@ export type BattleEvent =
   | { type: 'spawn'; buildingId: number; hp: number }
   | { type: 'jump'; kind: JumpKind; apex: number }
   /** combo = 같은 건물에서 이어진 연타 수 (1부터) — 표시용, 판정에는 쓰지 않음 (docs/dev.md §4) */
-  | { type: 'strike'; arm: number; damage: number; buildingId: number; hpLeft: number; combo: number }
+  | { type: 'strike'; arm: number; damage: number; buildingId: number; hpLeft: number; combo: number; source: StrikeSource }
   | { type: 'destroy'; buildingId: number; y: number; debrisReward: number }
   | { type: 'land'; buildingId: number; damage: number; antHp: number }
   | { type: 'antDown'; stage: number }
   | { type: 'tapIgnored'; reason: TapIgnoredReason }
   /** M5: 도움닫기 시작 — 끝나면 자동 점프 · 그 사이 탭 = 바로 강점프 (skip — I-20) · 깔리면 취소 */
   | { type: 'windupStart' }
+  /** M7: 이번 도움닫기에 강점프 기회 — 창 = 남은 도움닫기 시간 fromS ~ toS (fromS > toS) */
+  | { type: 'timingChance'; fromS: number; toS: number }
+  /** M7: 기회 중 탭 — ok = 창 안 (뒤이어 jump strong) · false = 창 밖 (기회 끝) */
+  | { type: 'timingResult'; ok: boolean }
+  /** M7: 매달림 시작 — 과녁 묶음 (lifeS = 실제 시간) */
+  | { type: 'targetsSpawn'; targets: TargetState[]; lifeS: number }
+  | { type: 'targetHit'; id: number }
+  | { type: 'targetMiss'; missesLeft: number }
+  | { type: 'targetsEnd'; reason: TargetsEndReason }
+  | { type: 'perfect' }
   /** M4: 파괴 뒤 economy.carry_delay_s가 지나 잔해가 굴에 도착 — wallet += amount (docs/dev.md §4) */
   | { type: 'deposit'; amount: number; wallet: number }
   /** M4: 강화 구매 — 데미지 · 간격은 다음 타격부터, 점프력 · 이동속도는 다음 점프부터 */
@@ -106,6 +133,10 @@ export interface BattleStart {
 
 export const FIXED_STEP_S = 1 / 120;
 const EPS = 1e-9;
+/** M7 과녁 자리 범위 (전투 구역 비율 — 모양 상수: 화면 가장자리 · 위쪽 [도전] 줄 · 지면 피함) · 과녁마다 위치 시도 횟수 */
+const TARGET_X: readonly [number, number] = [0.1, 0.9];
+const TARGET_Y: readonly [number, number] = [0.08, 0.85];
+const TARGET_TRIES = 24;
 
 export class BattleSim {
   readonly cfg: GameConfig;
@@ -133,10 +164,25 @@ export class BattleSim {
   private accumulator = 0;
   private nextBuildingId = 1;
   private events: BattleEvent[] = [];
+  // ── M7 터치 개편 (I-23 · H-51) ──
+  /** 시드 난수 — 뽑는 순서: 도움닫기 시작마다 1번 (mode timing) · 매달림 시작마다 확률 1번 + 개수 1번 + 위치 시도 (count_max > 0) */
+  private readonly rng: Rng;
+  /** 배속 (view가 알려 줌) — 과녁 수명 · 타이밍 창을 실제 시간으로 맞출 때만 씀. 자동 결과에는 영향 없음 */
+  private timeScale = 1;
+  /** 지금 살아 있는 과녁 · 남은 수명 (게임 초) · 이번 묶음 빈 곳 탭 수 */
+  targets: TargetState[] = [];
+  targetLifeLeft = 0;
+  targetLifeTotal = 0;
+  private targetMisses = 0;
+  private targetBatch = 0;
+  private nextTargetId = 1;
+  /** 마지막 기회 뒤 점프 수 (min_gap_jumps) — 처음은 바로 기회 가능 */
+  private jumpsSinceChance = Number.MAX_SAFE_INTEGER;
 
   constructor(cfg: GameConfig, startStage = 1, start: BattleStart | null = null) {
     this.cfg = cfg;
     const b = cfg.battle;
+    this.rng = new Rng(b.rng_seed ?? 1);
     this.levels = { ...initialLevels(cfg), ...(start?.levels ?? {}) };
     this.stats = deriveStats(cfg, this.levels);
     this.wallet = start ? start.debris : cfg.economy.start_debris;
@@ -158,6 +204,10 @@ export class BattleSim {
       nextArm: 0,
       strongCooldownLeft: 0,
       downTimer: 0,
+      timingChance: false,
+      timingUsed: false,
+      timingFrom: 0,
+      timingTo: 0,
     };
     this.stage = { stage: 1, autoAdvance: start ? start.autoAdvance : true, challenging: false, destroyed: 0, toClear: 1 };
     this.startStage(Math.max(1, Math.floor(start ? start.stage : startStage)), 'init');
@@ -189,6 +239,26 @@ export class BattleSim {
     this.beginJump('strong');
     a.strongCooldownLeft = this.cfg.battle.strong_jump.cooldown_s;
     return true;
+  }
+
+  /** M7 강점프 입력 방식 (없으면 tap = 지금) */
+  get strongMode(): 'tap' | 'timing' {
+    return this.cfg.battle.strong_jump.mode ?? 'tap';
+  }
+
+  /** M7 배속 알림 (view) — 과녁 수명 · 타이밍 창 = 실제 시간 기준 (H-51 Q2 · Q8). 자동 결과에는 영향 없음 */
+  setTimeScale(scale: number): void {
+    this.timeScale = Math.max(0.01, scale);
+  }
+
+  /**
+   * M7 전투 구역 탭 (x · y = 전투 구역 비율 좌표). 판정 순서: 과녁 → 강점프 (tap / timing) → 무시
+   * 반환 = 무엇을 했나 (테스트 · 측정용)
+   */
+  tapBattle(x: number, y: number): 'target' | 'miss' | 'strong' | 'timingMiss' | 'ignored' {
+    if (this.targets.length > 0) return this.tapTargets(x, y);
+    if (this.strongMode === 'tap') return this.tapStrongJump() ? 'strong' : 'ignored';
+    return this.tapTiming();
   }
 
   /** [도전] 버튼 — auto_advance OFF이고 도전 중이 아닐 때만. 실패했던 스테이지(현재 + 1)를 다시 시작. */
@@ -262,6 +332,7 @@ export class BattleSim {
           if (this.windupOn && !a.winding) {
             a.winding = true;
             this.events.push({ type: 'windupStart' });
+            this.rollTimingChance();
           }
           a.groundTimer -= dt;
           if (a.winding) a.windupLeft = Math.max(0, a.groundTimer);
@@ -293,6 +364,7 @@ export class BattleSim {
         if (a.contact && !wasContact) {
           a.strikeTimer = 0; // 닿는 순간 첫 타격
           if (bc.arm_order_resets_each_jump) a.nextArm = 0;
+          this.spawnTargets(falling);
         }
         if (a.phase === 'fall' && a.y <= 0) this.toGround();
       } else if (a.contact) {
@@ -303,13 +375,22 @@ export class BattleSim {
       if (a.contact) {
         a.strikeTimer -= dt;
         while (a.strikeTimer <= EPS && this.building === falling) {
-          this.strike(falling);
+          this.strike(falling, 'auto');
           a.strikeTimer += this.stats.strikeIntervalS;
         }
       }
 
       // 착지 판정: 건물 밑면이 개미 키까지 내려옴 (= 개미를 지면까지 눌렀음)
       if (this.building === falling && falling.y <= antH + EPS) this.landBuilding(falling);
+    }
+
+    // M7 과녁: 매달림이 끝나면 (상승 끝 · 파괴 · 착지) 남은 과녁 사라짐 · 수명 = 게임 시간 (= 실제 시간 × 배속)
+    if (this.targets.length > 0) {
+      if (!a.contact) this.endTargets('hangEnd');
+      else {
+        this.targetLifeLeft -= dt;
+        if (this.targetLifeLeft <= EPS) this.endTargets('expire');
+      }
     }
   }
 
@@ -324,6 +405,8 @@ export class BattleSim {
     a.jumpSpeed = speed;
     a.winding = false; // 도움닫기 중 탭 = 남은 도움닫기를 건너뛰고 바로 강점프 (skip — I-20)
     a.windupLeft = 0;
+    a.timingChance = false;
+    if (this.jumpsSinceChance < Number.MAX_SAFE_INTEGER) this.jumpsSinceChance += 1;
     a.fallSpeed = kind === 'strong' ? st.fallSpeed * sj.speed_mult : st.fallSpeed;
     a.apex = height;
     a.riseTimeLeft = height / speed;
@@ -340,6 +423,7 @@ export class BattleSim {
     a.groundTimer = this.groundDelay;
     a.winding = false; // 깔리면 · 다시 시작하면 도움닫기 취소 → 다음 건물이 떨어질 때 처음부터
     a.windupLeft = 0;
+    a.timingChance = false;
   }
 
   /** M5 도움닫기 켜짐 (windup_s > 0) */
@@ -352,7 +436,7 @@ export class BattleSim {
     return this.windupOn ? this.cfg.battle.jump.windup_s! : this.cfg.battle.jump.ground_delay_s;
   }
 
-  private strike(b: BuildingState): void {
+  private strike(b: BuildingState, source: StrikeSource): void {
     const a = this.ant;
     const damage = this.stats.armDamage[a.nextArm]!;
     b.hp = Math.max(0, b.hp - damage);
@@ -361,9 +445,137 @@ export class BattleSim {
     this.combo = this.comboBuildingId === b.id && gap <= this.cfg.battle.combo_window_s ? this.combo + 1 : 1;
     this.comboBuildingId = b.id;
     this.lastStrikeTime = this.time;
-    this.events.push({ type: 'strike', arm: a.nextArm + 1, damage, buildingId: b.id, hpLeft: b.hp, combo: this.combo });
+    this.events.push({ type: 'strike', arm: a.nextArm + 1, damage, buildingId: b.id, hpLeft: b.hp, combo: this.combo, source });
     a.nextArm = (a.nextArm + 1) % this.cfg.battle.arms.length;
     if (b.hp <= 0) this.destroyBuilding(b);
+  }
+
+  // ── M7 ─────────────────────────────────────────────────
+
+  /** 도움닫기 시작 — mode timing이면 기회 뽑기 (난수 1번 · 최소 간격은 뽑은 뒤 적용 — 뽑는 순서 고정) */
+  private rollTimingChance(): void {
+    const a = this.ant;
+    a.timingChance = false;
+    a.timingUsed = false;
+    const t = this.cfg.battle.strong_timing;
+    if (this.strongMode !== 'timing' || !t) return;
+    const roll = this.rng.int(100);
+    if (roll >= t.chance_pct || this.jumpsSinceChance < t.min_gap_jumps) return;
+    const w = this.groundDelay;
+    const to = Math.min(w, Math.max(0, t.window_to * w));
+    const from = Math.max(0, to - t.window_s * this.timeScale); // 창 길이 = 실제 시간 × 배속 · 도움닫기 시작보다 앞으로 안 감 (H-51 Q8)
+    a.timingChance = true;
+    a.timingFrom = from;
+    a.timingTo = to;
+    this.jumpsSinceChance = 0;
+    this.events.push({ type: 'timingChance', fromS: w - from, toS: w - to });
+  }
+
+  /** mode timing 탭 — 기회 · 도움닫기 중 · 한 번만 */
+  private tapTiming(): 'strong' | 'timingMiss' | 'ignored' {
+    const a = this.ant;
+    if (a.phase === 'down') return this.ignore('down') || 'ignored';
+    if (a.phase !== 'ground') return this.ignore('airborne') || 'ignored';
+    if (!this.building || this.building.state !== 'falling') return this.ignore(this.building ? 'pinned' : 'noBuilding') || 'ignored';
+    if (!a.winding || !a.timingChance || a.timingUsed) return this.ignore('noChance') || 'ignored';
+    a.timingUsed = true;
+    const elapsed = Math.round((this.groundDelay - a.groundTimer) * 1e6) / 1e6; // 문턱 비교 전 반올림 (결정성)
+    const ok = elapsed >= a.timingFrom - EPS && elapsed <= a.timingTo + EPS && a.strongCooldownLeft <= EPS;
+    this.events.push({ type: 'timingResult', ok });
+    if (!ok) return 'timingMiss';
+    this.beginJump('strong');
+    a.strongCooldownLeft = this.cfg.battle.strong_jump.cooldown_s;
+    return 'strong';
+  }
+
+  /** 전투 구역 세로 ÷ 가로 (비율 좌표 거리를 가로 폭 단위로 재려고) */
+  private get aspect(): number {
+    const l = this.cfg.layout;
+    return (l.frame_height * l.battle_ratio) / l.frame_width;
+  }
+
+  /** 과녁끼리 · 탭과 과녁 사이 거리 (가로 폭 단위) */
+  private dist(ax: number, ay: number, bx: number, by: number): number {
+    const dx = ax - bx;
+    const dy = (ay - by) * this.aspect;
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+
+  /** 매달림 시작 — 과녁 묶음 (확률 1번 · 개수 1번 · 과녁마다 위치 시도 최대 24번 — 뽑는 순서 고정) */
+  private spawnTargets(b: BuildingState): void {
+    const t = this.cfg.battle.targets;
+    if (!t || t.count_max <= 0) return;
+    if (this.targets.length > 0) this.endTargets('hangEnd');
+    const roll = this.rng.int(100);
+    const n = t.count_min + this.rng.int(t.count_max - t.count_min + 1);
+    if (roll >= t.chance_pct || n <= 0) return;
+    const ant = this.cfg.battle.ant;
+    const antTop = this.ant.y + ant.height_ratio;
+    const out: TargetState[] = [];
+    for (let i = 0; i < n; i++) {
+      for (let tries = 0; tries < TARGET_TRIES; tries++) {
+        const x = TARGET_X[0] + this.rng.float() * (TARGET_X[1] - TARGET_X[0]);
+        const y = TARGET_Y[0] + this.rng.float() * (TARGET_Y[1] - TARGET_Y[0]);
+        const nearAnt = Math.abs(x - 0.5) < ant.width_ratio * 1.5 && y < antTop + 0.05; // 개미 둘레 (머리 위까지)
+        const onHpBar = Math.abs(y - b.y) < 0.06; // 건물 밑면 HP 바 줄
+        const crowded = out.some((o) => this.dist(o.x, o.y, x, y) < t.min_dist_ratio);
+        if (nearAnt || onHpBar || crowded) continue;
+        out.push({ id: this.nextTargetId++, x: Math.round(x * 1e4) / 1e4, y: Math.round(y * 1e4) / 1e4 });
+        break;
+      }
+    }
+    if (out.length === 0) return;
+    this.targets = out;
+    this.targetBatch = out.length;
+    this.targetMisses = 0;
+    this.targetLifeTotal = t.life_s * this.timeScale; // 실제 시간 → 게임 시간
+    this.targetLifeLeft = this.targetLifeTotal;
+    this.events.push({ type: 'targetsSpawn', targets: out.map((o) => ({ ...o })), lifeS: t.life_s });
+  }
+
+  /** 과녁이 있을 때 탭 — 반지름 안 가장 가까운 과녁 하나 (같은 거리면 id 작은 것) · 빗나가면 miss */
+  private tapTargets(x: number, y: number): 'target' | 'miss' {
+    const t = this.cfg.battle.targets!;
+    let best: TargetState | null = null;
+    let bestD = Infinity;
+    for (const o of this.targets) {
+      const d = Math.round(this.dist(o.x, o.y, x, y) * 1e6) / 1e6;
+      if (d <= t.radius_ratio + EPS && (d < bestD || (d === bestD && best !== null && o.id < best.id))) {
+        best = o;
+        bestD = d;
+      }
+    }
+    if (!best) {
+      this.targetMisses += 1;
+      const left = Math.max(0, t.miss_limit - this.targetMisses);
+      this.events.push({ type: 'targetMiss', missesLeft: left });
+      if (left <= 0) this.endTargets('missLimit');
+      return 'miss';
+    }
+    const hit = best;
+    this.targets = this.targets.filter((o) => o !== hit);
+    this.events.push({ type: 'targetHit', id: hit.id });
+    const b = this.building;
+    if (b && b.state === 'falling') this.strike(b, 'target');
+    if (this.targets.length === 0 && this.targetBatch > 0) {
+      this.targetBatch = 0;
+      this.events.push({ type: 'targetsEnd', reason: 'perfect' });
+      this.events.push({ type: 'perfect' });
+      for (let i = 0; i < t.perfect_bonus_strikes; i++) {
+        const cur = this.building;
+        if (!cur || cur !== b || cur.state !== 'falling') break;
+        this.strike(cur, 'bonus');
+      }
+    }
+    return 'target';
+  }
+
+  private endTargets(reason: TargetsEndReason): void {
+    if (this.targets.length === 0) return;
+    this.targets = [];
+    this.targetBatch = 0;
+    this.targetLifeLeft = 0;
+    this.events.push({ type: 'targetsEnd', reason });
   }
 
   private resetCombo(): void {

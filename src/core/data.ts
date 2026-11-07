@@ -36,6 +36,10 @@ export function fromData(raw: RawGameData): GameConfig {
       arm_order_resets_each_jump: battle.arm_order_resets_each_jump as boolean,
       landing_damage_coeff: battle.landing_damage_coeff as number,
       building: o(battle.building) as unknown as GameConfig['battle']['building'],
+      // M7 (I-23 · H-51) — 없으면 끔 (mode tap · 과녁 없음)
+      ...(typeof battle.strong_timing === 'object' && battle.strong_timing !== null ? { strong_timing: o(battle.strong_timing) as unknown as NonNullable<GameConfig['battle']['strong_timing']> } : {}),
+      ...(typeof battle.targets === 'object' && battle.targets !== null ? { targets: o(battle.targets) as unknown as NonNullable<GameConfig['battle']['targets']> } : {}),
+      ...(typeof battle.rng_seed === 'number' ? { rng_seed: battle.rng_seed } : {}),
     },
     buildings: { rows: Array.isArray(raw.buildings) ? raw.buildings : [] },
     stages: {

@@ -21,7 +21,7 @@ const tap = (r: InputRouter, x: number, y: number, id = 1) => [...r.down({ id, x
 describe('InputRouter — battle 모드', () => {
   it('전투 구역 탭 → 강점프 (손가락이 닿는 순간)', () => {
     const r = make();
-    expect(r.down({ id: 1, x: 540, y: 1200, t: 0 })).toEqual([{ type: 'strongJump' }]);
+    expect(r.down({ id: 1, x: 540, y: 1200, t: 0 })).toMatchObject([{ type: 'battleTap' }]);
     expect(r.up({ id: 1, x: 540, y: 1200, t: 80 })).toEqual([]);
   });
 
@@ -63,7 +63,7 @@ describe('InputRouter — battle 모드', () => {
   });
 
   it('[도전] 버튼이 숨겨져 있으면 그 자리 탭 = 강점프', () => {
-    expect(make(false).down({ id: 1, x: challenge.x + 20, y: challenge.y + 20, t: 0 })).toEqual([{ type: 'strongJump' }]);
+    expect(make(false).down({ id: 1, x: challenge.x + 20, y: challenge.y + 20, t: 0 })).toMatchObject([{ type: 'battleTap' }]);
   });
 
   it('전투 구역에서 시작한 아래 스와이프는 개미굴로 가지 않는다', () => {
@@ -74,7 +74,7 @@ describe('InputRouter — battle 모드', () => {
 
   it('멀티터치: 포인터마다 따로 판정', () => {
     const r = make();
-    expect(r.down({ id: 1, x: 540, y: 1200, t: 0 })).toEqual([{ type: 'strongJump' }]);
+    expect(r.down({ id: 1, x: 540, y: 1200, t: 0 })).toMatchObject([{ type: 'battleTap' }]);
     r.down({ id: 2, x: 800, y: stripY, t: 10 });
     expect(r.up({ id: 2, x: 800, y: stripY, t: 90 })).toEqual([{ type: 'openNest', via: 'tap' }]);
   });

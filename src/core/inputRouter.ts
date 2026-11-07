@@ -18,7 +18,8 @@ import { type Layout, zoneAt } from './layout';
 export type RouterMode = 'battle' | 'nest' | 'upgrade';
 
 export type InputAction =
-  | { type: 'strongJump' }
+  /** M7: 전투 구역 탭 → core tapBattle (과녁 → 강점프 tap / timing → 무시). x · y = 전투 구역 비율 (y 0 = 지면) */
+  | { type: 'battleTap'; x: number; y: number }
   | { type: 'challenge' }
   | { type: 'menu'; id: string }
   | { type: 'openNest'; via: 'tap' | 'swipe_down' | 'button' }
@@ -93,6 +94,13 @@ export class InputRouter {
     this.downs.clear(); // 모드가 바뀌면 진행 중이던 제스처는 버린다
   }
 
+  /** 화면 px → 전투 구역 비율 좌표 (소수 4자리 — 결정성) */
+  private battleTap(px: number, py: number): InputAction {
+    const b = this.layout.battle;
+    const r = (v: number) => Math.round(v * 1e4) / 1e4;
+    return { type: 'battleTap', x: r(px / this.layout.width), y: r((b.bottom - py) / b.height) };
+  }
+
   /** 지금 눌려 있는 버튼 id (눌림 표시용) */
   pressedButtonIds(): string[] {
     return [...this.downs.values()].flatMap((d) => (d.button ? [d.button.id] : []));
@@ -115,7 +123,7 @@ export class InputRouter {
     }
     switch (zoneAt(this.layout, p.y)) {
       case 'battle':
-        return [{ type: 'strongJump' }]; // 반응성을 위해 손가락이 닿는 순간 발동
+        return [this.battleTap(p.x, p.y)]; // 반응성을 위해 손가락이 닿는 순간 발동 · 판정은 core (M7)
       case 'strip':
         rec.gesture = 'strip';
         return [];
