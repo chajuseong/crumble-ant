@@ -150,6 +150,10 @@
   "timing": {
     "ring_px": 260
   },
+  "ring": {
+    "px": 340,
+    "flash_ms": 200
+  },
   "perfect": {
     "text_px": 110
   }
