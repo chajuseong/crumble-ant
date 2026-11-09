@@ -81,6 +81,17 @@ export interface BattleConfig {
     end_on_hang?: boolean;
     /** H-56 ① 개미가 건물에 닿기 이만큼 (실제 초) 전에 나옴 · 없으면 닿는 순간 */
     lead_s?: number;
+    /** I-26 building = 묶음 (M7 C) · chain = 매달려 연타 체인 (1개씩 · 맞히면 매달림 연장 → 다음) */
+    mode?: 'building' | 'chain';
+    /** chain: 첫 과녁 수명 · 다음마다 줄임 (실제 초) */
+    chain_life_s?: number;
+    chain_life_step?: number;
+    /** I-26 맞히면 다음 과녁 수명 동안 매달려 버팀 */
+    chain_hold?: boolean;
+    /** H-61 이 배속보다 높으면 체인 대신 building 묶음 */
+    chain_max_speed?: number;
+    /** 이 배속보다 높으면 과녁 없음 (없으면 제한 없음 — ×2 · ×3은 개미가 실제 0.3초 안에 착지해서 과녁을 못 누름) */
+    max_speed?: number;
   };
   /** M7 core 시드 난수 시작값 */
   rng_seed?: number;

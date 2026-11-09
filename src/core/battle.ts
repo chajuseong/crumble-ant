@@ -229,7 +229,8 @@ export class BattleSim {
 
   /** 가변 프레임 dt → 고정 스텝으로 나눠 진행 (프레임레이트와 무관하게 같은 결과) */
   update(dtSeconds: number): void {
-    this.accumulator += Math.max(0, Math.min(dtSeconds, 0.25));
+    // H-61 링 기회 동안 슬로 (게임 시간 × windup_s ÷ (ring_s + good_s) — 기회 도움닫기 = 게임 시간 그대로 · 실제 시간만 늘어남)
+    this.accumulator += Math.max(0, Math.min(dtSeconds, 0.25)) * this.slowNow;
     while (this.accumulator >= FIXED_STEP_S - EPS) {
       this.step(FIXED_STEP_S);
       this.accumulator -= FIXED_STEP_S;
@@ -246,6 +247,27 @@ export class BattleSim {
     this.beginJump('strong');
     a.strongCooldownLeft = this.cfg.battle.strong_jump.cooldown_s;
     return true;
+  }
+
+  /** I-26 지금 슬로 배수 (링 기회 도움닫기 중 · 아직 안 누름) */
+  get slowNow(): number {
+    const a = this.ant;
+    return a.winding && a.timingChance && !a.timingUsed ? this.ringSlow : 1;
+  }
+
+  /** H-61 링 슬로 배수 = windup_s ÷ (ring_s + good_s) (키 없음 — 링 방식 · 도움닫기 켬일 때만 · 1을 넘지 않음) */
+  get ringSlow(): number {
+    const t = this.cfg.battle.strong_timing;
+    const w = this.cfg.battle.jump.windup_s ?? 0;
+    if (!t || (t.style ?? 'circle') !== 'ring' || w <= 0) return 1;
+    const real = (t.ring_s ?? w) + (t.good_s ?? 0);
+    return real > w ? w / real : 1;
+  }
+
+  /** H-61 체인 과녁 켬 (mode chain · 배속 ≤ chain_max_speed) — 아니면 building 묶음 */
+  private get chainOn(): boolean {
+    const t = this.cfg.battle.targets;
+    return t?.mode === 'chain' && this.timeScale <= (t.chain_max_speed ?? Infinity) + EPS;
   }
 
   /** M7 강점프 입력 방식 (없으면 tap = 지금) */
@@ -377,7 +399,13 @@ export class BattleSim {
         if (a.contact && !wasContact) {
           a.strikeTimer = 0; // 닿는 순간 첫 타격
           if (bc.arm_order_resets_each_jump) a.nextArm = 0;
-          if (bc.targets?.lead_s === undefined) this.spawnTargets(falling);
+          if (bc.targets?.lead_s === undefined) {
+            if (this.chainOn) this.startChain(falling);
+            else this.spawnTargets(falling);
+          } else if (this.chainOn && this.pendingExtend > 0) {
+            a.riseTimeLeft += this.pendingExtend; // 닿기 전에 맞힌 연장
+            this.pendingExtend = 0;
+          }
         }
         if (a.phase === 'fall' && a.y <= 0) this.toGround();
       } else if (a.contact) {
@@ -406,13 +434,16 @@ export class BattleSim {
       const t = close > 0 ? gap / close : Infinity;
       if (t >= 0 && t <= Math.min(a.riseTimeLeft, tg.lead_s * this.timeScale) + EPS) {
         this.leadArmed = false;
-        this.spawnTargets(fb);
+        if (this.chainOn) this.startChain(fb);
+        else this.spawnTargets(fb);
       }
     }
     // M7 과녁 끝: 매달림 단위 = 매달림 끝 · 건물 단위 (H-54 ①) = 수명 · 파괴 · 착지 · 수명 = 게임 시간 (= 실제 × 배속)
     if (this.targets.length > 0) {
-      const perHang = tg?.end_on_hang ?? true;
-      if (perHang && !a.contact) this.endTargets('hangEnd');
+      const chain = this.targetsChain;
+      const perHang = chain || (tg?.end_on_hang ?? true);
+      if (chain && (a.phase === 'fall' || a.phase === 'ground' || !this.building || this.building.state !== 'falling')) this.endTargets('hangEnd'); // 체인: 개미가 떨어지거나 땅 · 건물 끝 = 즉시 끝 (닿기 직전은 OK)
+      else if (!chain && perHang && !a.contact) this.endTargets('hangEnd');
       else if (!perHang && (!this.building || this.building.state !== 'falling')) this.endTargets('hangEnd');
       else {
         this.targetLifeLeft -= dt;
@@ -455,6 +486,7 @@ export class BattleSim {
     a.winding = false; // 깔리면 · 다시 시작하면 도움닫기 취소 → 다음 건물이 떨어질 때 처음부터
     a.windupLeft = 0;
     a.timingChance = false;
+    if (this.targets.length > 0) this.endTargets('hangEnd'); // H-61 개미 착지 = 과녁 끝 (묶음 · 체인 공통)
   }
 
   /** M5 도움닫기 켜짐 (windup_s > 0) */
@@ -499,10 +531,10 @@ export class BattleSim {
     this.jumpsSinceChance = 0;
     if ((t.style ?? 'circle') === 'ring') {
       // I-24 링: 기회 도움닫기만 실제 시간 (배속 무시) — 겹침 = ring_s · 끝 = ring_s + good_s (늦게 누를 틈)
-      const k = this.timeScale;
+      const k = this.timeScale * this.ringSlow; // 실제 1초 = 게임 배속 × 슬로 (슬로 = 계산 — 기회 도움닫기 게임 시간 = windup_s × 배속)
       const ring = (t.ring_s ?? w) * k;
       const good = (t.good_s ?? 0) * k;
-      a.groundTimer = ring + good;
+      a.groundTimer = this.ringSlow < 1 ? w * this.timeScale : ring + good; // 슬로면 게임 시간으로 정확히 (반올림 오차 없게)
       a.windupLeft = a.groundTimer;
       a.ringAt = ring;
       a.timingFrom = Math.max(0, ring - good);
@@ -528,7 +560,7 @@ export class BattleSim {
       // I-24 등급 = 겹침과의 차이 (실제 초) — PERFECT ± perfect_s · GOOD ± good_s · 그보다 빠름 = 헛발 (기회 끝 · 끝에 보통 점프)
       const total = a.timingTo; // 기회 도움닫기 전체 (게임 초)
       const elapsed = Math.round((total - a.groundTimer) * 1e6) / 1e6;
-      const d = Math.round(((elapsed - a.ringAt) / this.timeScale) * 1e6) / 1e6;
+      const d = Math.round(((elapsed - a.ringAt) / (this.timeScale * this.ringSlow)) * 1e6) / 1e6;
       const grade: TimingGrade = Math.abs(d) <= (t.perfect_s ?? 0) + EPS ? 'perfect' : Math.abs(d) <= (t.good_s ?? 0) + EPS ? 'good' : 'early';
       const ok = grade !== 'early' && a.strongCooldownLeft <= EPS;
       this.events.push({ type: 'timingResult', ok, grade: ok ? grade : 'early' });
@@ -564,6 +596,8 @@ export class BattleSim {
     const t = this.cfg.battle.targets;
     if (!t || t.count_max <= 0) return;
     if (this.targets.length > 0) this.endTargets('hangEnd');
+    this.targetsChain = false;
+    if (!this.targetsAllowed) return;
     const roll = this.rng.int(100);
     const n = t.count_min + this.rng.int(t.count_max - t.count_min + 1);
     if (roll >= t.chance_pct || n <= 0) return;
@@ -593,8 +627,87 @@ export class BattleSim {
   }
 
   /** 과녁이 있을 때 탭 — 반지름 안 가장 가까운 과녁 하나 (같은 거리면 id 작은 것) · 빗나가면 miss */
+  // ── I-26 매달려 연타 체인 ──
+  private chainIndex = 0;
+  /** 지금 과녁이 체인으로 나왔는가 (배속이 중간에 바뀌어도 그 과녁은 그 규칙대로) */
+  private targetsChain = false;
+  private pendingExtend = 0;
+  private chainPrev: { x: number; y: number } | null = null;
+
+  /** 배속이 targets.max_speed보다 높으면 과녁 없음 */
+  private get targetsAllowed(): boolean {
+    return this.timeScale <= (this.cfg.battle.targets?.max_speed ?? Infinity) + EPS;
+  }
+
+  private startChain(b: BuildingState): void {
+    if (this.targets.length > 0) this.endTargets('hangEnd');
+    if (!this.targetsAllowed) return;
+    this.targetsChain = true;
+    this.chainIndex = 0;
+    this.chainPrev = null;
+    this.pendingExtend = 0;
+    this.spawnChainTarget(b);
+  }
+
+  /** 체인 과녁 1개 — 건물 그림 안 (밑면 위 0.04 ~ 0.22 · 탭 구역 위) · 앞 과녁과 min_dist 떨어짐 · 수명 = 첫 수명 − 순서 × step (실제 초) */
+  private spawnChainTarget(b: BuildingState): void {
+    const t = this.cfg.battle.targets!;
+    const zone = (this.cfg.battle.strong_timing?.tap_max_y ?? -1) + 0.05;
+    const lo = Math.max(b.y + 0.04, zone, TARGET_Y[0]);
+    const hi = Math.max(lo + 0.05, Math.min(b.y + 0.22, TARGET_Y[1]));
+    let pos = { x: 0.5, y: lo };
+    for (let tries = 0; tries < TARGET_TRIES; tries++) {
+      const x = 0.3 + this.rng.float() * 0.4;
+      const y = lo + this.rng.float() * (hi - lo);
+      pos = { x, y };
+      if (!this.chainPrev || this.dist(this.chainPrev.x, this.chainPrev.y, x, y) >= t.min_dist_ratio) break;
+    }
+    const o = { id: this.nextTargetId++, x: Math.round(pos.x * 1e4) / 1e4, y: Math.round(pos.y * 1e4) / 1e4 };
+    this.chainPrev = o;
+    this.targets = [o];
+    this.targetBatch = 1;
+    this.targetMisses = 0;
+    const life = Math.max(0.15, (t.chain_life_s ?? t.life_s) - (t.chain_life_step ?? 0) * this.chainIndex);
+    this.targetLifeTotal = life * this.timeScale;
+    this.targetLifeLeft = this.targetLifeTotal;
+    this.events.push({ type: 'targetsSpawn', targets: [{ ...o }], lifeS: life });
+  }
+
+  private tapChain(x: number, y: number): 'target' | 'miss' {
+    const t = this.cfg.battle.targets!;
+    const o = this.targets[0]!;
+    if (Math.round(this.dist(o.x, o.y, x, y) * 1e6) / 1e6 > t.radius_ratio + EPS) {
+      this.events.push({ type: 'targetMiss', missesLeft: 0 });
+      this.endTargets('missLimit'); // 체인은 빗나가면 바로 끝
+      return 'miss';
+    }
+    this.targets = [];
+    this.events.push({ type: 'targetHit', id: o.id });
+    const b = this.building;
+    if (b && b.state === 'falling') this.strike(b, 'target');
+    this.chainIndex += 1;
+    const nextLife = Math.max(0.15, (t.chain_life_s ?? t.life_s) - (t.chain_life_step ?? 0) * this.chainIndex) * this.timeScale;
+    const ext = t.chain_hold && this.chainIndex < t.count_max ? nextLife : 0;
+    if (this.ant.contact) this.ant.riseTimeLeft = t.chain_hold ? Math.max(this.ant.riseTimeLeft, ext) : this.ant.riseTimeLeft + ext; // 맞히면 매달림 연장 (게임 초)
+    else this.pendingExtend += ext;
+    const cur = this.building;
+    if (!cur || cur !== b || cur.state !== 'falling') return 'target';
+    if (this.chainIndex >= t.count_max) {
+      this.targetBatch = 0;
+      this.events.push({ type: 'targetsEnd', reason: 'perfect' });
+      this.events.push({ type: 'perfect' });
+      for (let i = 0; i < t.perfect_bonus_strikes; i++) {
+        const c2 = this.building;
+        if (!c2 || c2 !== b || c2.state !== 'falling') break;
+        this.strike(c2, 'bonus');
+      }
+    } else if (this.ant.phase === 'rise') this.spawnChainTarget(cur);
+    return 'target';
+  }
+
   private tapTargets(x: number, y: number): 'target' | 'miss' {
     const t = this.cfg.battle.targets!;
+    if (this.targetsChain) return this.tapChain(x, y);
     let best: TargetState | null = null;
     let bestD = Infinity;
     for (const o of this.targets) {

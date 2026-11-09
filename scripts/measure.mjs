@@ -166,7 +166,7 @@ try {
     const play = (cfg, { sigma = null, tgt = false, speed = 1, minutes = 60, mash = null, buy = true }) => {
       const sim = new BattleSim(structuredClone(cfg), 1); sim.setTimeScale(speed);
       const rows = cfg.upgrades.rows; const first = {}; let earned = 0, wall = 0, chanceNo = 0; const plan = [];
-      const g = { perfect: 0, good: 0, early: 0, chances: 0, tHit: 0, tAll: 0, batch: 0 };
+      const g = { perfect: 0, good: 0, early: 0, chances: 0, tHit: 0, tAll: 0, batch: 0, seq: 0, pos: [0, 0, 0, 0, 0], posHit: [0, 0, 0, 0, 0] };
       const zoneY = (cfg.battle.strong_timing.tap_max_y ?? 0.5) / 2;
       const handle = (ev) => { for (const e of ev) {
         if (e.type === "deposit") earned += e.amount;
@@ -174,10 +174,18 @@ try {
         if (e.type === "timingResult") g[e.grade]++;
         if (e.type === "targetHit") g.tHit++;
         if (e.type === "perfect") g.batch++;
-        if (e.type === "targetsSpawn") { g.tAll += e.targets.length; if (tgt) e.targets.forEach((t, k) => plan.push({ at: wall + 0.35 + 0.25 * k, x: t.x, y: t.y, target: t.id })); }
+        if (e.type === "targetsSpawn") {
+          g.tAll += e.targets.length;
+          const chain = e.targets.length === 1 && cfg.battle.targets.mode === "chain";
+          g.pos[Math.min(g.seq, 4)]++;
+          if (tgt) e.targets.forEach((t, k) => plan.push({ at: wall + (chain ? Math.max(0.15, 0.42 + 0.10 * gauss()) : 0.35 + 0.25 * k), x: t.x, y: t.y, target: t.id, p: Math.min(g.seq, 4) }));
+        }
+        if (e.type === "targetHit") g.seq++;
+        if (e.type === "targetsEnd") g.seq = 0;
         if (e.type === "timingChance") { g.chances++; chanceNo++;
           if (sigma !== null) { const aim = ringMode ? cfg.battle.strong_timing.ring_s : ((cfg.battle.jump.windup_s - e.fromS) + (cfg.battle.jump.windup_s - e.toS)) / 2 / speed;
-            plan.push({ at: wall + aim + sigma * gauss(), x: 0.5, y: zoneY, chance: chanceNo }); } }
+            const floor = ringMode ? 0.30 + 0.08 * gauss() : 0; // 링이 뜬 걸 보고 나서야 누를 수 있음 (반응 하한)
+            plan.push({ at: wall + Math.max(floor, aim + sigma * gauss()), x: 0.5, y: zoneY, chance: chanceNo }); } }
       } };
       for (let i = 0; i < minutes * 60 * 120; i++) {
         wall += 1 / 120; sim.update(speed / 120); handle(sim.drainEvents());
@@ -187,7 +195,8 @@ try {
           const p = plan.shift();
           if (p.chance !== undefined && (p.chance !== chanceNo || !sim.ant.winding)) continue; // 지난 기회 탭은 버림
           if (p.target !== undefined && !sim.targets.some((t) => t.id === p.target)) continue; // 사라진 과녁은 안 누름
-          sim.tapBattle(p.x, p.y);
+          const r = sim.tapBattle(p.x, p.y);
+          if (p.target !== undefined && r === "target") g.posHit[p.p]++;
         }
         handle(sim.drainEvents());
         if (buy) {
@@ -220,6 +229,22 @@ try {
     console.log("④ 자동만 · 배속 (실제 20분) — 설정 | ×2 stage 8 · 잔해 | ×3 stage 8 · 잔해");
     for (const [name, c] of [["키 끔", structuredClone(config)], ["켬", cfgOn]]) console.log(`  ${name} | ${[2, 3].map((speed) => { const r = play(c, { speed, minutes: 20 }); return `${f(r.first[8])} · ${r.earned}`; }).join(" | ")}`);
     const mL = play(cfgOn, { mash: "low", minutes: 10 }), mH = play(cfgOn, { mash: "high", minutes: 10 });
+    // M7-D (I-26 · H-61) — C 값: ring 0.6 (계산 슬로) · 체인 (×1 · ×1.5) · ×2 이상 묶음 수명 후보
+    const d = (o = {}) => { const c = structuredClone(cfgOn); Object.assign(c.battle.strong_timing, { ring_s: 0.6 }); Object.assign(c.battle.targets, { mode: "chain", ...o }); return c; };
+    const ph = (r) => [0, 1, 2].map((k) => pct(r.posHit[k], r.pos[k])).join(" / ");
+    console.log("⑥ M7-D (ring 0.6 · 슬로 계산 · 체인 lead 0.3 · 버팀 · 첫 수명 0.6 · step 0.1)");
+    console.log(`  링 예측 (반응 하한 0.30 ± 0.08 + σ) GOOD 이상 ×1 / ×2 / ×3 — σ 0.06: ${[1, 2, 3].map((speed) => { const r = play(d(), { sigma: 0.06, speed, minutes: 10, buy: false }); return pct(r.perfect + r.good, r.chances); }).join(" / ")} · σ 0.08: ${[1, 2, 3].map((speed) => { const r = play(d(), { sigma: 0.08, speed, minutes: 10, buy: false }); return pct(r.perfect + r.good, r.chances); }).join(" / ")}`);
+    for (const speed of [1, 1.5]) { const r = play(d(), { tgt: true, speed, minutes: 10 }); console.log(`  체인 ×${speed} — 1 / 2 / 3번째 맞힘 ${ph(r)} · PERFECT 묶음 ${r.batch}`); }
+    for (const life of [1.2, 0.9, 0.7]) console.log(`  묶음 (×2 이상) 수명 ${life} — 맞힘 ×2 / ×3 ${[2, 3].map((speed) => { const r = play(d({ life_s: life }), { tgt: true, speed, minutes: 10 }); return pct(r.tHit, r.tAll); }).join(" / ")}`);
+    const autoD = play(d(), {}), handD = play(d(), { sigma: 0.06, tgt: true });
+    console.log(`  60분 ×1 — 자동만 stage 8 ${f(autoD.first[8])}분 · ${autoD.earned} | 손 (σ 0.06 · 과녁 다 노림) ${f(handD.first[8])}분 · ${handD.earned} · 손 ÷ 자동 ${autoD.first[8] && handD.first[8] ? (autoD.first[8] / handD.first[8]).toFixed(1) + "배" : "—"}`);
+    const a3 = play(d(), { speed: 3, minutes: 20 });
+    console.log(`  자동만 ×3 (실제 20분) 잔해 ${a3.earned}`);
+    // 후보: targets.max_speed 1.5 (×2 · ×3 과녁 없음 — 착지 = 끝 규칙에서 묶음을 못 누름)
+    const a3m = play(d({ max_speed: 1.5 }), { speed: 3, minutes: 20 }), h3m = play(d({ max_speed: 1.5 }), { sigma: 0.06, tgt: true, speed: 3, minutes: 20 }), h3 = play(d(), { sigma: 0.06, tgt: true, speed: 3, minutes: 20 });
+    console.log(`  후보 max_speed 1.5 — 자동만 ×3 잔해 ${a3m.earned} · 손 ×3 (σ 0.06) ${h3m.earned} (과녁 있을 때 ${h3.earned})`);
+    const mLd = play(d(), { mash: "low", minutes: 10 }), mHd = play(d(), { mash: "high", minutes: 10 });
+    console.log(`  연타 — 아래: 강점프 ${mLd.perfect + mLd.good} | 위: 과녁 ${mHd.tHit} / ${mHd.tAll} · PERFECT ${mHd.batch}`);
     console.log(`⑤ 연타 (10분 · 0.1초마다) — 아래 절반: 강점프 ${mL.perfect + mL.good} · 헛발 ${mL.early} / 기회 ${mL.chances} | 위 절반: 과녁 ${mH.tHit} / ${mH.tAll} · PERFECT 묶음 ${mH.batch} · 강점프 ${mH.perfect + mH.good}`);
   }
 } finally {
