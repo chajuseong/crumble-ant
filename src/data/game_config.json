@@ -35,7 +35,7 @@
       "window_to": 0.9,
       "window_s": 0.15,
       "style": "ring",
-      "ring_s": 0.4,
+      "ring_s": 0.6,
       "perfect_s": 0.05,
       "good_s": 0.1,
       "tap_max_y": 0.5
@@ -51,11 +51,12 @@
       "perfect_bonus_strikes": 1,
       "end_on_hang": false,
       "lead_s": 0.3,
-      "mode": "building",
-      "chain_life_s": 0.6,
-      "chain_life_step": 0.1,
+      "mode": "chain",
+      "chain_life_s": 0.7,
+      "chain_life_step": 0,
       "chain_hold": true,
-      "chain_max_speed": 1.5
+      "chain_max_speed": 1,
+      "max_speed": 1
     },
     "rng_seed": 20261107,
     "arm_damage": [

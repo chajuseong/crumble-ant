@@ -70,6 +70,7 @@ const CONFIG_KEYS = [
   ["battle.targets.chain_life_step", "num", { min: 0 }],
   ["battle.targets.chain_hold", "bool"],
   ["battle.targets.chain_max_speed", "num", { gt: 0 }],
+  ["battle.targets.max_speed", "num", { gt: 0 }],
   ["battle.arm_damage", "int4", { min: 0 }],
   ["battle.strike_interval_s", "num", { gt: 0 }],
   ["battle.strike_interval_min_s", "num", { gt: 0 }],
