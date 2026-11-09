@@ -131,6 +131,10 @@ export class BattleScene extends Phaser.Scene {
   private envLoading = false;
   // ── M7 터치 과녁 · 타이밍 원 (I-23 · H-51) — 그리기만 (판정 = core) ──
   touch!: TouchView;
+  /** H-61 기회 예고 "!" · 아래 절반 밝힘 · "탭!" 안내 (그림만) */
+  private alert: Phaser.GameObjects.Text | null = null;
+  private zoneGlow: Phaser.GameObjects.Rectangle | null = null;
+  private hintShown = false;
   /** PR #2 1080폭 기준 px → 지금 프레임 px */
   private px(n: number): number {
     return n * this.scaleK;
@@ -561,9 +565,13 @@ export class BattleScene extends Phaser.Scene {
         }
         case 'timingChance':
           this.touch.timingStart();
-          if ((this.cfg.battle.strong_timing?.style ?? 'circle') === 'ring' && this.touch.visible) this.antFlash(); // I-24 기회 = 개미 반짝
+          if ((this.cfg.battle.strong_timing?.style ?? 'circle') === 'ring' && this.touch.visible) {
+            this.antFlash(); // I-24 기회 = 개미 반짝
+            this.ringAlertOn(); // H-61 "!" · 아래 절반 밝힘
+          }
           break;
         case 'timingResult': {
+          this.ringAlertOff();
           const f = this.footAt();
           this.touch.timingResult(e.ok, f.x, f.y);
           if (!this.touch.visible) break;
@@ -594,6 +602,7 @@ export class BattleScene extends Phaser.Scene {
           break;
         case 'jump':
           this.touch.timingClear();
+          this.ringAlertOff();
           this.ant.jump(e.kind !== 'auto'); // I-24 perfect = 강점프 모션 (높이만 core가 더 줌)
           if (e.kind !== 'auto') this.dustRing();
           break;
@@ -784,6 +793,55 @@ export class BattleScene extends Phaser.Scene {
     this.tweens.add({ targets: c, scale: 1.5, alpha: 0, duration: FX.ring.flash_ms, ease: 'Quad.easeOut', onComplete: () => c.destroy() });
   }
 
+  /** H-61 개미 몸 가운데 (링 자리) */
+  private bodyAt(): { x: number; y: number } {
+    const f = this.footAt();
+    return { x: f.x, y: f.y - this.cfg.battle.ant.height_ratio * this.L.battle.height * 0.55 };
+  }
+
+  /** H-61 기회 예고 — 머리 위 "!" + 화면 아래 절반 (탭 구역) 살짝 밝힘 */
+  private ringAlertOn(): void {
+    this.ringAlertOff();
+    const L = this.L;
+    const h = this.cfg.battle.ant.height_ratio * L.battle.height;
+    const f = this.footAt();
+    this.alert = this.add
+      .text(f.x, f.y - h * 1.7, t('fx.timing_alert'), { fontFamily: FONT, fontSize: `${Math.round(this.px(120))}px`, color: '#ffe08a', fontStyle: '900', stroke: COLOR.damageStroke, strokeThickness: this.px(12) })
+      .setOrigin(0.5)
+      .setDepth(DEPTH.fx);
+    this.tweens.add({ targets: this.alert, scale: { from: 1.6, to: 1 }, duration: 160, ease: 'Back.easeOut' });
+    const zone = this.cfg.battle.strong_timing?.tap_max_y ?? 0.5;
+    const top = battleToScreenY(L, zone);
+    this.zoneGlow = this.add.rectangle(0, top, L.width, L.groundY - top, 0xffffff, 0.12).setOrigin(0, 0).setDepth(DEPTH.ant - 2);
+    this.hintShown = false;
+  }
+
+  private ringAlertOff(): void {
+    this.alert?.destroy();
+    this.alert = null;
+    this.zoneGlow?.destroy();
+    this.zoneGlow = null;
+  }
+
+  /** H-61 겹침 때 "탭!" — 이 브라우저에서 처음 ring.hint_count번만 */
+  private ringHint(body: { x: number; y: number }): void {
+    this.hintShown = true;
+    const KEY = 'crumble-ant.ring-hints';
+    let n = 0;
+    try {
+      n = Number(localStorage.getItem(KEY) ?? 0) || 0;
+    } catch {
+      /* 저장소 못 씀 — 매번 처음 */
+    }
+    if (n >= FX.ring.hint_count) return;
+    try {
+      localStorage.setItem(KEY, String(n + 1));
+    } catch {
+      /* 무시 */
+    }
+    this.floatText(body.x + this.px(170), body.y, t('fx.timing_hint'), '#ffffff', this.px(FX.perfect.text_px * 0.7), 900, 500, 1.3);
+  }
+
   /** 개미 발 화면 자리 */
   private footAt(): { x: number; y: number } {
     return { x: this.L.width / 2, y: this.ant.root.y };
@@ -798,9 +856,12 @@ export class BattleScene extends Phaser.Scene {
       const f = this.footAt();
       const antW = this.cfg.battle.ant.width_ratio * this.L.width;
       if ((this.cfg.battle.strong_timing?.style ?? 'circle') === 'ring') {
-        // I-24 링: 겹침 시각 = core ringAt · GOOD 폭 = timingFrom ~ timingTo (기회 도움닫기 전체 = timingTo)
+        // I-24 링: 겹침 시각 = core ringAt · GOOD 폭 = timingFrom ~ timingTo (기회 도움닫기 전체 = timingTo) · H-61 = 개미 몸 중심
         const elapsed = a.timingTo - a.windupLeft;
-        this.touch.timingUpdate(a.ringAt > 0 ? elapsed / a.ringAt : 1, !a.timingUsed && elapsed >= a.timingFrom, f.x, f.y, antW, 'ring');
+        const hot = !a.timingUsed && elapsed >= a.timingFrom;
+        const body = this.bodyAt();
+        this.touch.timingUpdate(a.ringAt > 0 ? elapsed / a.ringAt : 1, hot, body.x, body.y, antW, 'ring');
+        if (hot && !this.hintShown && this.touch.visible) this.ringHint(body);
       } else {
         const w = this.cfg.battle.jump.windup_s ?? 0;
         const elapsed = w - a.windupLeft;

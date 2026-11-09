@@ -381,11 +381,11 @@ describe('I-24 줄어드는 링 · H-56 과녁 건물 단위', () => {
     }
   });
 
-  it('건물 단위: 매달림이 끝나도 남음 → 수명에 끝 · 매달리지 않아도 탭 = 건물에 1타', () => {
+  it('건물 단위: 매달림이 끝나도 남음 · 매달리지 않아도 탭 = 건물에 1타 · 개미가 땅에 닿으면 끝 (H-61)', () => {
     const sim = new BattleSim(unitTargets());
     const ev = until(sim, (e) => e.some((x) => x.type === 'targetsSpawn'));
     const s = ev.find((e) => e.type === 'targetsSpawn') as Extract<BattleEvent, { type: 'targetsSpawn' }>;
-    until(sim, () => !sim.ant.contact && sim.ant.phase === 'fall'); // 매달림 끝
+    until(sim, () => !sim.ant.contact && sim.ant.phase === 'fall'); // 매달림 끝 · 떨어지는 중
     expect(sim.targets.length).toBe(3);
     const hp = sim.building!.hp;
     sim.tapBattle(s.targets[0]!.x, s.targets[0]!.y);
@@ -393,14 +393,148 @@ describe('I-24 줄어드는 링 · H-56 과녁 건물 단위', () => {
     expect(hitEv.find((e) => e.type === 'strike')).toMatchObject({ source: 'target' });
     expect(sim.building!.hp).toBeLessThan(hp);
     const end = until(sim, (e) => e.some((x) => x.type === 'targetsEnd'));
-    expect(end.find((e) => e.type === 'targetsEnd')).toMatchObject({ reason: 'expire' });
+    expect(end.find((e) => e.type === 'targetsEnd')).toMatchObject({ reason: 'hangEnd' });
+    expect(sim.ant.phase).toBe('ground'); // 개미 착지 = 끝
   });
 
-  it('건물 단위: 건물이 착지하면 끝 (hangEnd) · 남은 과녁 있으면 새로 안 나옴', () => {
-    const sim = new BattleSim(unitTargets((c) => (c.battle.targets!.life_s = 60)));
-    until(sim, (e) => e.some((x) => x.type === 'targetsSpawn'));
-    const ev = until(sim, (e) => e.some((x) => x.type === 'targetsEnd'), 60);
-    expect(types(ev).filter((t) => t === 'targetsSpawn')).toHaveLength(0); // 그 사이 점프가 있어도 새 묶음 없음
-    expect(types(ev)).toContain('land');
+  it('땅에서는 과녁 0개 — 30초 동안 개미가 지면일 때 살아 있는 과녁이 없음 (묶음 · 체인 · ×1 · ×3)', () => {
+    for (const mode of ['building', 'chain'] as const)
+      for (const speed of [1, 3]) {
+        const sim = new BattleSim(unitTargets((c) => { c.battle.targets!.mode = mode; c.battle.targets!.life_s = 60; c.battle.targets!.chain_life_s = 60; }));
+        sim.setTimeScale(speed);
+        let seen = 0;
+        for (let i = 0; i < 30 * 120; i++) {
+          sim.update(speed / 120);
+          sim.drainEvents();
+          if (sim.ant.phase === 'ground') expect(sim.targets).toEqual([]);
+          if (sim.targets.length) seen++;
+        }
+        expect(seen).toBeGreaterThan(0);
+      }
+  });
+});
+
+describe('I-26 매달려 연타 체인 · H-61 계산 슬로', () => {
+  const chain = (extra?: Patch) =>
+    makeConfig((c) => {
+      c.battle.strong_jump.mode = 'tap'; // 과녁만 (링 기회 도움닫기 안 섞이게)
+      c.battle.ant.max_hp = 1e9;
+      c.battle.targets = { chance_pct: 100, count_min: 1, count_max: 3, life_s: 1.2, radius_ratio: 0.08, min_dist_ratio: 0.15, miss_limit: 2, perfect_bonus_strikes: 1, end_on_hang: false, lead_s: 0.3, mode: 'chain', chain_life_s: 0.6, chain_life_step: 0.1, chain_hold: true, chain_max_speed: 1.5 };
+      c.buildings.rows.forEach((r) => (r.hp = 100000));
+      extra?.(c);
+    });
+  const spawnOf = (ev: BattleEvent[]) => ev.find((e) => e.type === 'targetsSpawn') as Extract<BattleEvent, { type: 'targetsSpawn' }> | undefined;
+
+  it('첫 과녁 = 닿기 직전 1개 · 맞히면 그 자리 1타 + 다음 과녁 (수명 0.6 → 0.5) · 버팀 = 매달림 연장', () => {
+    const sim = new BattleSim(chain());
+    const s1 = spawnOf(until(sim, (e) => e.some((x) => x.type === 'targetsSpawn')))!;
+    expect(s1.targets).toHaveLength(1);
+    expect(s1.lifeS).toBeCloseTo(0.6, 9);
+    expect(sim.ant.contact).toBe(false);
+    until(sim, () => sim.ant.contact);
+    const before = sim.ant.riseTimeLeft;
+    sim.tapBattle(s1.targets[0]!.x, s1.targets[0]!.y);
+    const ev = sim.drainEvents();
+    expect(types(ev).slice(0, 3)).toEqual(['targetHit', 'strike', 'targetsSpawn']);
+    expect(ev.find((e) => e.type === 'strike')).toMatchObject({ source: 'target' });
+    expect(spawnOf(ev)!.lifeS).toBeCloseTo(0.5, 9);
+    expect(sim.ant.riseTimeLeft).toBeGreaterThanOrEqual(Math.max(before, 0.5) - 1e-9);
+  });
+
+  it('빗나가면 바로 체인 끝 · 시간 끝 = 끝 · count_max개 다 맞히면 PERFECT + 보너스', () => {
+    const miss = new BattleSim(chain());
+    until(miss, (e) => e.some((x) => x.type === 'targetsSpawn'));
+    expect(miss.tapBattle(0.01, 0.99)).toBe('miss');
+    expect(types(miss.drainEvents())).toEqual(['targetMiss', 'targetsEnd']);
+
+    const all = new BattleSim(chain());
+    let s = spawnOf(until(all, (e) => e.some((x) => x.type === 'targetsSpawn')))!;
+    until(all, () => all.ant.contact);
+    const got: BattleEvent[] = [];
+    for (let k = 0; k < 3; k++) {
+      all.tapBattle(s.targets[0]!.x, s.targets[0]!.y);
+      const ev = all.drainEvents();
+      got.push(...ev);
+      const next = spawnOf(ev);
+      if (next) s = next;
+    }
+    expect(got.filter((e) => e.type === 'targetHit')).toHaveLength(3);
+    expect(types(got)).toContain('perfect');
+    expect(got.filter((e) => e.type === 'strike' && e.source === 'bonus')).toHaveLength(1);
+  });
+
+  it('배속 > chain_max_speed (×2 · ×3) = 체인 대신 묶음 (2 ~ 3개)', () => {
+    const sim = new BattleSim(chain((c) => { c.battle.targets!.count_min = 2; }));
+    sim.setTimeScale(3);
+    const s = spawnOf(until(sim, (e) => e.some((x) => x.type === 'targetsSpawn'), 60))!;
+    expect(s.targets.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('targets.max_speed (없으면 제한 없음): 배속 > max_speed = 과녁 없음 · ×1은 그대로', () => {
+    for (const [speed, want] of [[1, true], [2, false], [3, false]] as const) {
+      const sim = new BattleSim(chain((c) => { c.battle.targets!.max_speed = 1.5; }));
+      sim.setTimeScale(speed);
+      let seen = false;
+      for (let i = 0; i < 60 * 120 && !seen; i++) {
+        sim.update(speed / 120);
+        if (sim.drainEvents().some((e) => e.type === 'targetsSpawn')) seen = true;
+      }
+      expect(seen).toBe(want);
+    }
+  });
+
+  it('계산 슬로: ring 0.6 + good 0.1 → 슬로 0.5 ÷ 0.7 · 기회 도움닫기 게임 시간 = windup_s 그대로 → ×1 자동 결과 그대로', () => {
+    const ringCfg = (r: number) =>
+      makeConfig((c) => {
+        c.battle.strong_jump.mode = 'timing';
+        c.battle.strong_timing = { ...c.battle.strong_timing!, style: 'ring', ring_s: r, good_s: 0.1, perfect_s: 0.05, chance_pct: 35, min_gap_jumps: 2 };
+        c.battle.ant.max_hp = 1e9;
+      });
+    const s = new BattleSim(ringCfg(0.6));
+    expect(s.ringSlow).toBeCloseTo(0.5 / 0.7, 12);
+    const core = (cfg: GameConfig) => {
+      const sim = new BattleSim(cfg, 2);
+      const out: string[] = [];
+      for (let i = 0; i < 120 * 120; i++) {
+        sim.update(1 / 120);
+        for (const e of sim.drainEvents()) if (['strike', 'destroy', 'land', 'jump'].includes(e.type)) out.push(JSON.stringify(e));
+      }
+      return out;
+    };
+    const steps = (cfg: GameConfig) => {
+      const sim = new BattleSim(cfg, 2);
+      const out: string[] = [];
+      for (let i = 0; i < 200000 && out.length < 400; i++) {
+        sim.update(1 / 120);
+        for (const e of sim.drainEvents()) if (['strike', 'destroy', 'land', 'jump'].includes(e.type)) out.push(`${sim.time.toFixed(4)} ${JSON.stringify(e)}`);
+      }
+      return out;
+    };
+    // 게임 시간 기준 이벤트 순서 · 시각이 ring 0.4 (슬로 없음)와 같음 — 실제 시간만 늘어남
+    expect(steps(ringCfg(0.6))).toEqual(steps(ringCfg(0.4)));
+    expect(core(ringCfg(0.6)).length).toBeLessThan(core(ringCfg(0.4)).length + 1); // 벽시계 120초 동안은 슬로만큼 덜 진행 (같거나 적음)
+  });
+
+  it('링 0.6 + 슬로: 실제 0.6초 (= 게임 0.6 × 0.714)에 탭 = PERFECT (×1 · ×3)', () => {
+    for (const speed of [1, 3]) {
+      const sim = new BattleSim(
+        makeConfig((c) => {
+          c.battle.strong_jump.mode = 'timing';
+          c.battle.strong_timing = { ...c.battle.strong_timing!, style: 'ring', ring_s: 0.6, good_s: 0.1, perfect_s: 0.05, chance_pct: 100, min_gap_jumps: 0, tap_max_y: 0.5 };
+          c.battle.ant.max_hp = 1e9;
+        }),
+      );
+      sim.setTimeScale(speed);
+      until(sim, (e) => e.some((x) => x.type === 'timingChance'));
+      let wall = 0;
+      while (wall < 0.6 - 1e-9) {
+        sim.update(speed / 120);
+        wall += 1 / 120;
+      }
+      sim.drainEvents();
+      sim.tapBattle(0.5, 0.2);
+      const r = sim.drainEvents().find((e) => e.type === 'timingResult') as Extract<BattleEvent, { type: 'timingResult' }>;
+      expect(r.grade).toBe('perfect');
+    }
   });
 });

@@ -117,11 +117,16 @@ export class TouchView {
     if (!g || this.ringDone) return;
     g.clear().setVisible(this.visible);
     if (style === 'ring') {
-      const foot = antW * 1.4;
+      // H-61 링 = 개미 몸 중심 (footX · footY = 몸 가운데) · 몸 원 (body_px)으로 줄어듦 · 진한 받침 + 굵은 테두리 (L-05)
+      const body = this.px(FX.ring.body_px);
       const d0 = this.px(FX.ring.px);
-      const d = Math.max(foot * 0.85, d0 + (foot - d0) * Math.max(0, k));
-      g.lineStyle(this.px(5), hot ? RING_HOT : RING_IDLE, 0.9).strokeEllipse(footX, footY, foot, foot * 0.34); // 발밑 원
-      g.lineStyle(this.px(hot ? 12 : 8), hot ? RING_HOT : RING_IDLE, hot ? 1 : 0.8).strokeEllipse(footX, footY, d, d * 0.34); // 줄어드는 링
+      const d = Math.max(body * 0.85, d0 + (body - d0) * Math.max(0, k));
+      const col = hot ? RING_HOT : RING_IDLE;
+      g.lineStyle(this.px(14), TARGET_RIM, 0.55).strokeCircle(footX, footY, body / 2); // 몸 원 받침
+      g.lineStyle(this.px(6), col, 0.95).strokeCircle(footX, footY, body / 2);
+      g.lineStyle(this.px(hot ? 18 : 14), TARGET_RIM, 0.45).strokeCircle(footX, footY, d / 2); // 줄어드는 링 받침
+      g.lineStyle(this.px(hot ? 10 : 7), col, hot ? 1 : 0.85).strokeCircle(footX, footY, d / 2);
+      if (hot) g.fillStyle(RING_HOT, 0.18).fillCircle(footX, footY, body / 2); // 겹침 = 안쪽 원 번쩍
       return;
     }
     const d0 = this.px(FX.timing.ring_px);
