@@ -271,7 +271,7 @@ describe('M7 결정성 · 자동만 그대로', () => {
       }
       return out;
     };
-    const off = core(makeConfig((c) => (c.battle.ant.max_hp = 1e9)));
+    const off = core(makeConfig((c) => { c.battle.ant.max_hp = 1e9; c.battle.strong_jump.mode = 'tap'; c.battle.targets!.count_max = 0; })); // 시트 기본값과 상관없이 끈 상태 (M7-D C = 링 0.6 슬로 · 체인)
     const on = core(both());
     expect(on.length).toBeGreaterThan(100);
     expect(on).toEqual(off);
@@ -357,7 +357,7 @@ describe('I-24 줄어드는 링 · H-56 과녁 건물 단위', () => {
       }
       return out;
     };
-    const off = core(makeConfig((c) => (c.battle.ant.max_hp = 1e9)));
+    const off = core(makeConfig((c) => { c.battle.ant.max_hp = 1e9; c.battle.strong_jump.mode = 'tap'; c.battle.targets!.count_max = 0; })); // 시트 기본값과 상관없이 끈 상태 (M7-D C = 링 0.6 슬로 · 체인)
     const on = core(ring({ chance_pct: 35, min_gap_jumps: 2 }, (c) => (c.battle.targets = { chance_pct: 100, count_min: 2, count_max: 3, life_s: 1.2, radius_ratio: 0.08, min_dist_ratio: 0.22, miss_limit: 2, perfect_bonus_strikes: 1, end_on_hang: false, lead_s: 0.3 })));
     expect(on).toEqual(off);
   });

@@ -641,7 +641,7 @@ export class BattleSim {
 
   private startChain(b: BuildingState): void {
     if (this.targets.length > 0) this.endTargets('hangEnd');
-    if (!this.targetsAllowed) return;
+    if (!this.targetsAllowed || (this.cfg.battle.targets?.count_max ?? 0) <= 0) return; // count_max 0 = 끔 (묶음과 같음)
     this.targetsChain = true;
     this.chainIndex = 0;
     this.chainPrev = null;
