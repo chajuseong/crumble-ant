@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>와르르 개미 · 파편 비교</title>
+<style>
+  :root{font-family:'Malgun Gothic',sans-serif;color:#272723;background:#f7f1e4}
+  *{box-sizing:border-box}body{margin:0;padding:24px 16px 44px}main{max-width:920px;margin:auto}
+  h1{font-size:clamp(23px,4vw,32px);margin:0 0 8px;letter-spacing:-.05em}p{margin:0;line-height:1.65;color:#625c51}
+  .intro{max-width:700px}.bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:20px 0}
+  button{font:inherit;font-weight:700;background:#fff;border:1px solid #d4cab8;border-radius:12px;padding:10px 14px;color:#493923;cursor:pointer}button:hover{background:#fff5db}button:focus-visible{outline:3px solid #b9571c;outline-offset:3px}
+  button[aria-pressed=true]{background:#eab552;border-color:#d09a35}.cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+  article{background:white;border:1px solid #e8dfd0;border-radius:18px;overflow:hidden;box-shadow:0 8px 24px #4934170d}
+  h2{font-size:19px;margin:16px 16px 0} .desc{font-size:13px;margin:4px 16px 12px}
+  .backdrop{--bg:#8dd8f7;background:var(--bg);display:grid;grid-template-columns:1fr 1fr;gap:0;min-height:188px;align-items:center;padding:18px 8px}
+  .backdrop.dark{--bg:#302b32}.tile{display:grid;place-items:center;gap:8px;min-width:0}.tile+.tile{border-left:1px solid #fff6}
+  .tile img{width:var(--size,112px);height:var(--size,112px);object-fit:contain;transform:rotate(-8deg)}.tile strong{font-size:13px;color:#182d38;background:#fffddd;border-radius:20px;padding:4px 10px}
+  .backdrop.dark .tile strong{background:#222e;color:#fff}.building{display:flex;align-items:center;gap:10px;padding:10px 16px;border-top:1px solid #eee7dc;font-size:12px;color:#756b5d}.building img{width:56px;height:56px;object-fit:contain}
+  .notice{margin-top:18px;font-size:13px}.error{color:#b32318}label{font-size:13px;color:#625c51;display:flex;gap:8px;align-items:center}
+  @media(max-width:640px){.cards{grid-template-columns:1fr}body{padding:18px 12px}.backdrop{min-height:170px}}
+</style>
+</head>
+<body><main>
+  <h1>건물 파편 · 기존과 수정 후보</h1>
+  <p class="intro">같은 크기의 정지 이미지 비교야. 실제 게임의 파편 개수·움직임·표시 크기와는 다를 수 있어.</p>
+  <div class="bar"><button id="background" type="button" aria-pressed="false">어두운 배경으로 보기</button><label for="size">파편 크기 <input id="size" type="range" min="50" max="140" value="112"> <output id="size-value">112px</output></label></div>
+  <section class="cards" aria-label="건물별 파편 비교">
+    <article><h2>아파트</h2><p class="desc">본체에 없는 은색 난간을 제거한 후보</p><div class="backdrop"><div class="tile"><img src="../../game/fx/building_debris/debris_apartment.png" alt="기존 아파트 파편"><strong>기존</strong></div><div class="tile"><img src="comparison-256/apartment.png" alt="난간을 제거한 아파트 파편 후보"><strong>수정 후보</strong></div></div><div class="building"><img src="../../game/buildings/building_apartment.png" alt="아파트 건물"><span>기준: 현재 아파트 건물</span></div></article>
+    <article><h2>공장</h2><p class="desc">빨간 줄무늬를 본체와 비슷한 짙은 회색으로 변경한 후보</p><div class="backdrop"><div class="tile"><img src="../../game/fx/building_debris/debris_factory.png" alt="기존 공장 파편"><strong>기존</strong></div><div class="tile"><img src="comparison-256/factory.png" alt="줄무늬 색을 수정한 공장 파편 후보"><strong>수정 후보</strong></div></div><div class="building"><img src="../../game/buildings/building_factory.png" alt="공장 건물"><span>기준: 현재 공장 건물</span></div></article>
+  </section>
+  <p class="notice">수정 후보는 다시 그리는 과정에서 균열과 윤곽도 일부 바뀌었어. 게임 반입 전 실제 폰 화면에서 확인이 필요해.</p><p id="status" class="notice" role="status"></p>
+</main>
+<script>
+const backgrounds=document.querySelectorAll('.backdrop');const toggle=document.getElementById('background');const slider=document.getElementById('size');const value=document.getElementById('size-value');
+toggle.addEventListener('click',()=>{let dark=toggle.getAttribute('aria-pressed')!=='true';toggle.setAttribute('aria-pressed',String(dark));toggle.textContent=dark?'밝은 배경으로 보기':'어두운 배경으로 보기';backgrounds.forEach(x=>x.classList.toggle('dark',dark))});
+slider.addEventListener('input',()=>{backgrounds.forEach(x=>x.style.setProperty('--size',`${slider.value}px`));value.textContent=`${slider.value}px`});
+const status=document.getElementById('status');let bad=0;document.querySelectorAll('img').forEach(im=>{if(im.complete&&!im.naturalWidth){bad++;status.textContent='일부 이미지를 불러오지 못했어. 파일 위치를 확인해 줘.';status.className='notice error'}im.addEventListener('error',()=>{bad++;status.textContent='일부 이미지를 불러오지 못했어. 파일 위치를 확인해 줘.';status.className='notice error'})});
+</script></body></html>
