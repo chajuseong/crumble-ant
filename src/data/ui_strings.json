@@ -32,7 +32,9 @@
     "timing_ok": "타이밍!",
     "timing_perfect": "PERFECT!",
     "timing_good": "GOOD!",
-    "timing_early": "헛발!"
+    "timing_early": "헛발!",
+    "timing_hint": "탭!",
+    "timing_alert": "!"
   },
   "ant": {
     "down": "@ @ 기절!"
