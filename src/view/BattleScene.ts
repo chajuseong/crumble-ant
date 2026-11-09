@@ -575,7 +575,7 @@ export class BattleScene extends Phaser.Scene {
             this.floatText(f.x, ty, t('fx.timing_perfect'), '#ffe08a', this.px(FX.perfect.text_px), 900, 700, 1.4); // I-24 PERFECT = 큰 글자 + 흔들림
             this.shake(FX.finisher.camera_ms, FX.finisher.camera_intensity);
           } else if (e.grade === 'good') this.floatText(f.x, ty, t('fx.timing_good'), '#ffffff', this.px(FX.perfect.text_px * 0.75), 900, 600);
-          else this.floatText(f.x, ty, t('fx.timing_early'), '#c9c3b8', this.px(FX.perfect.text_px * 0.65), 900, 600);
+          else this.floatText(f.x, ty, t('fx.timing_early'), '#ffc9b8', this.px(FX.perfect.text_px * 0.7), 900, 700); // 헛발 = 옅은 빨강 + 진한 테두리 (밝은 하늘 위 대비 — L-05)
           break;
         }
         case 'targetsSpawn':
