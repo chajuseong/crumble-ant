@@ -26,7 +26,7 @@
       "height_mult": 1.6,
       "speed_mult": 1,
       "cooldown_s": 0,
-      "mode": "tap",
+      "mode": "timing",
       "perfect_height_mult": 1.9
     },
     "strong_timing": {
@@ -42,8 +42,8 @@
     },
     "targets": {
       "chance_pct": 100,
-      "count_min": 0,
-      "count_max": 0,
+      "count_min": 2,
+      "count_max": 3,
       "life_s": 1.2,
       "radius_ratio": 0.08,
       "min_dist_ratio": 0.22,
