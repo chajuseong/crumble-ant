@@ -1,0 +1,12 @@
+<!doctype html>
+<html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>파편 비교 시안</title>
+<style>
+body{font-family:system-ui,sans-serif;max-width:860px;margin:24px auto;padding:0 16px;background:#f6eadb;color:#35261d}h1{font-size:1.4rem}.row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-bottom:22px}.card{background:#fff9ef;border-radius:12px;padding:12px}.stage{height:180px;display:flex;justify-content:center;align-items:center;background:linear-gradient(#ffe6c3,#a9d2ee);border-radius:8px}.stage.dark{background:#384655}.stage img{width:112px;height:112px;object-fit:contain}.small img{width:48px;height:48px}.small{height:80px}p{line-height:1.5}strong{display:block;margin-bottom:8px}
+</style>
+<h1>아파트·공장 파편 비교</h1><p>기존 게임 파편과 PR #70의 후보를 밝은/어두운 배경에서 같은 크기로 비교합니다. 실제 게임 화면이나 움직임은 아닙니다.</p>
+<div id="content"></div><script>
+const data=[['아파트','debris_apartment.png','apartment-candidate.png'],['공장','debris_factory.png','factory-candidate.png']];
+const root=document.getElementById('content');
+for(const [name,oldFile,newFile] of data){const section=document.createElement('section');const heading=document.createElement('h2');heading.textContent=name;section.append(heading);const row=document.createElement('div');row.className='row';for(const [label,src] of [['현재 게임용','../../game/fx/building_debris/'+oldFile],['PR #70 후보',newFile]]){const card=document.createElement('div');card.className='card';const title=document.createElement('strong');title.textContent=label;card.append(title);for(const cls of ['stage','stage small','stage dark','stage dark small']){const box=document.createElement('div');box.className=cls;const img=document.createElement('img');img.src=src;img.alt=name+' '+label;box.append(img);card.append(box)}row.append(card)}section.append(row);root.append(section)}
+</script></html>
