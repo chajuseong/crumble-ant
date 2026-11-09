@@ -16,6 +16,7 @@ const targets = (over: Partial<NonNullable<GameConfig['battle']['targets']>> = {
   makeConfig((c) => {
     c.battle.targets = { chance_pct: 100, count_min: 2, count_max: 3, life_s: 1.2, radius_ratio: 0.08, min_dist_ratio: 0.22, miss_limit: 2, perfect_bonus_strikes: 1, end_on_hang: true, ...over }; // M7 B 규칙 (매달림 단위 · 닿는 순간) — H-56은 아래 따로
     c.battle.ant.max_hp = 1e9;
+    c.battle.strong_jump.mode = 'tap'; // 과녁만 보는 테스트 — 링 기회 도움닫기 (실제 시간)가 섞이지 않게
     extra?.(c);
   });
 const step = (sim: BattleSim, seconds: number) => {
@@ -49,7 +50,14 @@ describe('M7 시드 난수', () => {
 
 describe('M7 꺼진 채 (mode tap · count 0) = 지금 규칙', () => {
   it('tapBattle = 지금 강점프 (도움닫기 중 skip) · 과녁 없음', () => {
-    const sim = new BattleSim(makeConfig());
+    // 시트 기본값과 상관없이 끈 상태로 (M7 C에서 시트가 timing · 과녁 2 ~ 3이 됨)
+    const sim = new BattleSim(
+      makeConfig((c) => {
+        c.battle.strong_jump.mode = 'tap';
+        c.battle.targets!.count_min = 0;
+        c.battle.targets!.count_max = 0;
+      }),
+    );
     until(sim, (e) => e.some((x) => x.type === 'windupStart'));
     expect(sim.tapBattle(0.5, 0.5)).toBe('strong');
     expect(sim.ant.jumpKind).toBe('strong');
