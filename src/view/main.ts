@@ -11,7 +11,11 @@ import { COLOR } from './theme';
 
 const { config, errors } = loadGameConfig();
 const host = document.getElementById('game')!;
+const story = document.getElementById('story-loading')!;
+const storyImage = document.getElementById('story-image') as HTMLImageElement;
+const storyContinue = document.getElementById('story-continue') as HTMLButtonElement;
 if (errors.length) {
+  story.remove();
   host.innerHTML = `<div id="config-error">데이터 오류 — 게임을 시작하지 않습니다.\n\n${errors.join('\n')}</div>`;
 } else {
   const params = new URLSearchParams(location.search);
@@ -35,7 +39,34 @@ if (errors.length) {
     fps: { smoothStep: false }, // 느린 기기 · 백그라운드 복귀에서도 실제 시간대로 진행 (core는 고정 스텝, 한 프레임 최대 0.25초)
     scene: [],
   });
-  game.scene.add('battle', BattleScene, true, data);
+  // 준비 중에도 이야기를 볼 수 있지만, 로딩 화면 뒤에서 전투가 진행되지는 않는다.
+  class StartupBattleScene extends BattleScene {
+    create(): void {
+      super.create();
+      this.scene.pause();
+      let finished = false;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const start = () => {
+        if (finished) return;
+        finished = true;
+        if (timer) clearTimeout(timer);
+        story.remove();
+        this.scene.resume();
+      };
+      const imageReady = () => {
+        if (!storyImage.naturalWidth) { start(); return; }
+        storyContinue.hidden = false;
+        storyContinue.addEventListener('click', start, { once: true });
+        timer = setTimeout(start, 5000);
+      };
+      if (storyImage.complete) imageReady();
+      else {
+        storyImage.addEventListener('load', imageReady, { once: true });
+        storyImage.addEventListener('error', imageReady, { once: true });
+      }
+    }
+  }
+  game.scene.add('battle', StartupBattleScene, true, data);
   game.scene.add('nest', NestScene, false);
   (window as unknown as { __game?: Phaser.Game }).__game = game; // 검수 · smoke 확인용
 }
