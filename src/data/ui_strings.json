@@ -30,8 +30,8 @@
     "combo": "{n} HIT!",
     "perfect": "PERFECT!",
     "timing_ok": "타이밍!",
-    "timing_perfect": "PERFECT!",
-    "timing_good": "GOOD!",
+    "timing_perfect": "완벽 점프!",
+    "timing_good": "점프!",
     "timing_early": "헛발!",
     "timing_hint": "탭!",
     "timing_alert": "!"
