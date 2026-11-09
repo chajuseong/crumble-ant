@@ -26,13 +26,19 @@
       "height_mult": 1.6,
       "speed_mult": 1,
       "cooldown_s": 0,
-      "mode": "tap"
+      "mode": "tap",
+      "perfect_height_mult": 1.9
     },
     "strong_timing": {
       "chance_pct": 35,
       "min_gap_jumps": 2,
       "window_to": 0.9,
-      "window_s": 0.15
+      "window_s": 0.15,
+      "style": "ring",
+      "ring_s": 0.4,
+      "perfect_s": 0.05,
+      "good_s": 0.1,
+      "tap_max_y": 0.5
     },
     "targets": {
       "chance_pct": 100,
@@ -42,7 +48,9 @@
       "radius_ratio": 0.08,
       "min_dist_ratio": 0.22,
       "miss_limit": 2,
-      "perfect_bonus_strikes": 1
+      "perfect_bonus_strikes": 1,
+      "end_on_hang": false,
+      "lead_s": 0.3
     },
     "rng_seed": 20261107,
     "arm_damage": [
