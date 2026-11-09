@@ -152,7 +152,9 @@
   },
   "ring": {
     "px": 340,
-    "flash_ms": 200
+    "flash_ms": 200,
+    "body_px": 220,
+    "hint_count": 3
   },
   "perfect": {
     "text_px": 110

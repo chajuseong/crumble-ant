@@ -50,7 +50,12 @@
       "miss_limit": 2,
       "perfect_bonus_strikes": 1,
       "end_on_hang": false,
-      "lead_s": 0.3
+      "lead_s": 0.3,
+      "mode": "building",
+      "chain_life_s": 0.6,
+      "chain_life_step": 0.1,
+      "chain_hold": true,
+      "chain_max_speed": 1.5
     },
     "rng_seed": 20261107,
     "arm_damage": [

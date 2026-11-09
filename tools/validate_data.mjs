@@ -64,6 +64,12 @@ const CONFIG_KEYS = [
   ["battle.strong_timing.tap_max_y", "num", { gt: 0, max: 0.9 }],
   ["battle.targets.end_on_hang", "bool"],
   ["battle.targets.lead_s", "num", { min: 0 }],
+  // M7-D (I-26 · H-61)
+  ["battle.targets.mode", "str", { oneOf: ["building", "chain"] }],
+  ["battle.targets.chain_life_s", "num", { gt: 0 }],
+  ["battle.targets.chain_life_step", "num", { min: 0 }],
+  ["battle.targets.chain_hold", "bool"],
+  ["battle.targets.chain_max_speed", "num", { gt: 0 }],
   ["battle.arm_damage", "int4", { min: 0 }],
   ["battle.strike_interval_s", "num", { gt: 0 }],
   ["battle.strike_interval_min_s", "num", { gt: 0 }],
@@ -142,6 +148,7 @@ const FX_KEYS = [
   // M7 과녁 · 타이밍 원 · PERFECT (H-51)
   ["target.px", "num", { gt: 0 }], ["timing.ring_px", "num", { gt: 0 }], ["perfect.text_px", "num", { gt: 0 }],
   ["ring.px", "num", { gt: 0 }], ["ring.flash_ms", "int", { min: 0 }],
+  ["ring.body_px", "num", { gt: 0 }], ["ring.hint_count", "int", { min: 0 }],
 ];
 
 // ui_strings 필수 키 (view가 읽는 것)
@@ -154,7 +161,7 @@ const UI_KEYS = [
   "hud.debris", "upgrade.title", "upgrade.level", "upgrade.max", "upgrade.short", "upgrade.close", "upgrade.reset", "upgrade.reset_confirm",
   "upgrade.fx.attack_power", "upgrade.fx.attack_speed", "upgrade.fx.jump_power", "upgrade.fx.move_speed",
   "hud.speed",
-  "fx.perfect", "fx.timing_ok", "fx.timing_perfect", "fx.timing_good", "fx.timing_early",
+  "fx.perfect", "fx.timing_ok", "fx.timing_perfect", "fx.timing_good", "fx.timing_early", "fx.timing_hint", "fx.timing_alert",
   "upgrade.now.attack_power", "upgrade.now.attack_speed", "upgrade.now.jump_power", "upgrade.now.move_speed",
 ];
 
