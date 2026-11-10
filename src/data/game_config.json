@@ -56,7 +56,21 @@
       "chain_life_step": 0,
       "chain_hold": true,
       "chain_max_speed": 1,
-      "max_speed": 1
+      "max_speed": 1,
+      "action": "strike",
+      "tap_route": "zone"
+    },
+    "defend": {
+      "push_power": 0.04,
+      "push_s": 0.15,
+      "decay_pct": 30,
+      "max_per_building": 3,
+      "lift_max_y": 0.9,
+      "auto_power_ratio": 0.5,
+      "auto_pct": 0,
+      "target_dx_ratio": 0.2,
+      "target_dy_ratio": 0.04,
+      "target_jitter_ratio": 0.04
     },
     "rng_seed": 20261107,
     "arm_damage": [
@@ -101,6 +115,8 @@
   },
   "economy": {
     "carry_delay_s": 4,
+    "carry_ants": 1,
+    "carry_interval_s": 0,
     "start_debris": 0
   },
   "speed": {

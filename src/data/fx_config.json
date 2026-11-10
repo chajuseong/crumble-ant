@@ -154,9 +154,27 @@
     "px": 340,
     "flash_ms": 200,
     "body_px": 220,
-    "hint_count": 3
+    "hint_count": 3,
+    "plate_alpha": 0.45
   },
   "perfect": {
     "text_px": 110
+  },
+  "defend": {
+    "target_px": 180,
+    "pop_scale": 1.4,
+    "pop_ms": 120,
+    "blink_ms": 200,
+    "hitstop_ms": 30,
+    "shake_px": 6,
+    "shake_ms": 120,
+    "chain_grow": 0.25,
+    "text_px": 72,
+    "arm_deg": 30,
+    "pose_ms": 180,
+    "dust_count": 6,
+    "miss_drop_px": 10,
+    "miss_ms": 160,
+    "auto_scale": 0.5
   }
 }

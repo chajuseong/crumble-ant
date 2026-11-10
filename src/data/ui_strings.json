@@ -34,7 +34,11 @@
     "timing_good": "점프!",
     "timing_early": "헛발!",
     "timing_hint": "탭!",
-    "timing_alert": "!"
+    "timing_alert": "!",
+    "defend_target": "받쳐!",
+    "defend_hold": "버텨!",
+    "defend_miss": "놓침",
+    "chain_count": "{n} / {m}"
   },
   "ant": {
     "down": "@ @ 기절!"
@@ -56,13 +60,19 @@
       "attack_power": "데미지 {a} → {b}",
       "attack_speed": "초당 {a} → {b}회",
       "jump_power": "점프 +{a}% → +{b}%",
-      "move_speed": "하강 +{a}% → +{b}%"
+      "move_speed": "하강 +{a}% → +{b}%",
+      "max_hp": "체력 {a} → {b}",
+      "push_power": "받치는 힘 +{a}% → +{b}%",
+      "auto_defend": "자동 받치기 {a}% → {b}%"
     },
     "now": {
       "attack_power": "데미지 {a}",
       "attack_speed": "초당 {a}회",
       "jump_power": "점프 +{a}%",
-      "move_speed": "하강 +{a}%"
+      "move_speed": "하강 +{a}%",
+      "max_hp": "체력 {a}",
+      "push_power": "받치는 힘 +{a}%",
+      "auto_defend": "자동 받치기 {a}%"
     }
   }
 }
