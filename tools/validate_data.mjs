@@ -71,6 +71,19 @@ const CONFIG_KEYS = [
   ["battle.targets.chain_hold", "bool"],
   ["battle.targets.chain_max_speed", "num", { gt: 0 }],
   ["battle.targets.max_speed", "num", { gt: 0 }],
+  // M7-E 받치기 · 탭 길 (I-28 · H-69) — strike · zone = 꺼진 채 (지금 그대로)
+  ["battle.targets.action", "str", { oneOf: ["strike", "defend"] }],
+  ["battle.targets.tap_route", "str", { oneOf: ["zone", "state"] }],
+  ["battle.defend.push_power", "num", { gt: 0 }],
+  ["battle.defend.push_s", "num", { min: 0 }],
+  ["battle.defend.decay_pct", "int", { min: 0, max: 99 }],
+  ["battle.defend.max_per_building", "int", { min: 1 }],
+  ["battle.defend.lift_max_y", "num", { gt: 0 }], // 위 상한 없음 — M9 월드 좌표 (I-29)
+  ["battle.defend.auto_power_ratio", "num", { min: 0, max: 1 }],
+  ["battle.defend.auto_pct", "int", { min: 0, max: 100 }],
+  ["battle.defend.target_dx_ratio", "num", { min: 0, max: 0.5 }],
+  ["battle.defend.target_dy_ratio", "num", { min: 0 }],
+  ["battle.defend.target_jitter_ratio", "num", { min: 0 }],
   ["battle.arm_damage", "int4", { min: 0 }],
   ["battle.strike_interval_s", "num", { gt: 0 }],
   ["battle.strike_interval_min_s", "num", { gt: 0 }],
@@ -98,6 +111,8 @@ const CONFIG_KEYS = [
   ["strip.popup_rise_ratio", "num", { min: 0 }],
   ["strip.popup_duration_s", "num", { gt: 0 }],
   ["economy.carry_delay_s", "num", { min: 0 }],
+  ["economy.carry_ants", "int", { min: 1 }], // M7-E 운반 개미마다 돈 (I-30)
+  ["economy.carry_interval_s", "num", { min: 0 }],
   ["economy.start_debris", "int", { min: 0 }],
   ["speed.levels", "levels"],
 ];
@@ -150,6 +165,12 @@ const FX_KEYS = [
   ["target.px", "num", { gt: 0 }], ["timing.ring_px", "num", { gt: 0 }], ["perfect.text_px", "num", { gt: 0 }],
   ["ring.px", "num", { gt: 0 }], ["ring.flash_ms", "int", { min: 0 }],
   ["ring.body_px", "num", { gt: 0 }], ["ring.hint_count", "int", { min: 0 }],
+  // M7-E 받치기 연출 · 링 받침 (H-66)
+  ["defend.target_px", "num", { gt: 0 }], ["defend.pop_scale", "num", { gt: 0 }], ["defend.pop_ms", "int", { min: 0 }], ["defend.blink_ms", "int", { min: 0 }],
+  ["defend.hitstop_ms", "int", { min: 0 }], ["defend.shake_px", "num", { min: 0 }], ["defend.shake_ms", "int", { min: 0 }], ["defend.chain_grow", "num", { min: 0 }],
+  ["defend.text_px", "num", { gt: 0 }], ["defend.arm_deg", "num", { min: -90, max: 90 }], ["defend.pose_ms", "int", { min: 0 }], ["defend.dust_count", "int", { min: 0 }],
+  ["defend.miss_drop_px", "num", { min: 0 }], ["defend.miss_ms", "int", { min: 0 }], ["defend.auto_scale", "num", { gt: 0, max: 1 }],
+  ["ring.plate_alpha", "num", { min: 0, max: 1 }],
 ];
 
 // ui_strings 필수 키 (view가 읽는 것)
@@ -164,10 +185,16 @@ const UI_KEYS = [
   "hud.speed",
   "fx.perfect", "fx.timing_ok", "fx.timing_perfect", "fx.timing_good", "fx.timing_early", "fx.timing_hint", "fx.timing_alert",
   "upgrade.now.attack_power", "upgrade.now.attack_speed", "upgrade.now.jump_power", "upgrade.now.move_speed",
+  // M7-E (H-66 · I-28)
+  "fx.defend_target", "fx.defend_hold", "fx.defend_miss", "fx.chain_count",
+  "upgrade.fx.max_hp", "upgrade.fx.push_power", "upgrade.fx.auto_defend", "upgrade.now.max_hp", "upgrade.now.push_power", "upgrade.now.auto_defend",
 ];
 
-// 강화 4종 (M4 — I-12 · H-17). stat은 코드가 아는 4종 고정 — 각 1행
-const UPGRADE_STATS = ["attack_power", "attack_speed", "jump_power", "move_speed"];
+// 강화 (M4 — I-12 · H-17). stat은 코드가 아는 것만 — 4종 = 각 1행 필수 · M7-E 3종 = 있으면 1행 (H-67 · I-28)
+const UPGRADE_STATS_REQUIRED = ["attack_power", "attack_speed", "jump_power", "move_speed"];
+const UPGRADE_STATS = [...UPGRADE_STATS_REQUIRED, "max_hp", "push_power", "auto_defend"];
+// 고정 +값 stat (per_level_add > 0 · per_level_pct 0) — 나머지는 % (per_level_pct > 0 · per_level_add 0)
+const UPGRADE_ADD_STATS = ["max_hp", "auto_defend"];
 /** C# int 상한 (Unity 이식 — 비용이 넘치면 안 됨) */
 const INT32_MAX = 2147483647;
 /** 정수 반복 비용 (src/core/economy.ts와 같은 식): Lv 0 → 1 = base, 다음 = floor(이전 × growth / 100) */
@@ -407,9 +434,16 @@ export function validateAll(data) {
         ids.add(r.upgrade_id);
         checkValue(`${w}.name`, r.name, "str", {}, errors);
         if (!UPGRADE_STATS.includes(r.stat)) errors.push(`${w}.stat: ${UPGRADE_STATS.join(" · ")} 중 하나 (${JSON.stringify(r.stat)})`);
-        else if (stats.has(r.stat)) errors.push(`${w}.stat: ${r.stat}이 두 번 (4종 각 1행)`);
+        else if (stats.has(r.stat)) errors.push(`${w}.stat: ${r.stat}이 두 번 (stat마다 1행)`);
         stats.add(r.stat);
-        checkValue(`${w}.per_level_pct`, r.per_level_pct, "int", { gt: 0 }, errors);
+        const add = r.per_level_add ?? 0; // 칸이 없던 옛 시트 = 0
+        if (UPGRADE_ADD_STATS.includes(r.stat)) {
+          checkValue(`${w}.per_level_add`, add, "int", { gt: 0 }, errors);
+          checkValue(`${w}.per_level_pct`, r.per_level_pct, "int", { min: 0, max: 0 }, errors);
+        } else {
+          checkValue(`${w}.per_level_pct`, r.per_level_pct, "int", { gt: 0 }, errors);
+          checkValue(`${w}.per_level_add`, add, "int", { min: 0, max: 0 }, errors);
+        }
         checkValue(`${w}.max_level`, r.max_level, "int", { min: 1 }, errors);
         checkValue(`${w}.cost_base`, r.cost_base, "int", { min: 1 }, errors);
         checkValue(`${w}.cost_growth_pct`, r.cost_growth_pct, "int", { min: 100 }, errors);
@@ -419,7 +453,7 @@ export function validateAll(data) {
         if ([r.max_level, r.cost_base, r.cost_growth_pct].every(Number.isInteger) && r.max_level >= 1 && upgradeCost(r, r.max_level - 1) > INT32_MAX)
           errors.push(`${w}: 마지막 Lv 비용이 C# int 상한을 넘음 (${upgradeCost(r, r.max_level - 1)})`);
       });
-      for (const st of UPGRADE_STATS) if (!stats.has(st)) errors.push(`upgrades: stat ${st} 행 없음`);
+      for (const st of UPGRADE_STATS_REQUIRED) if (!stats.has(st)) errors.push(`upgrades: stat ${st} 행 없음`);
       // 강화 끝까지 올렸을 때 판정이 깨지지 않는지 (game_config와 함께)
       const c = data.game_config, b = isPlainObject(c) ? c.battle : null;
       const maxPct = (st) => { const r = rows.find((x) => x.stat === st); return r && Number.isInteger(r.per_level_pct) && Number.isInteger(r.max_level) ? 100 + r.per_level_pct * r.max_level : null; };
@@ -430,11 +464,18 @@ export function validateAll(data) {
         const sp = maxPct("attack_speed");
         const iv = sp && isNum(b.strike_interval_s) ? (b.strike_interval_s * 100) / sp : null;
         if (iv !== null && isNum(b.strike_interval_min_s) && iv < b.strike_interval_min_s - 1e-9) errors.push(`upgrades attack_speed: 최대 Lv 타격 간격 ${iv.toFixed(3)}초 < 하한 battle.strike_interval_min_s ${b.strike_interval_min_s}`);
+        // M7-E: 자동 받치기 % 최대 Lv ≤ 100 · 받치기 강화는 battle.defend가 있어야 함
+        const ad = rows.find((x) => x.stat === "auto_defend");
+        if (ad && Number.isInteger(ad.per_level_add) && Number.isInteger(ad.max_level) && isNum(b.defend?.auto_pct) && b.defend.auto_pct + ad.per_level_add * ad.max_level > 100)
+          errors.push(`upgrades auto_defend: 최대 Lv 자동 받치기 ${b.defend.auto_pct + ad.per_level_add * ad.max_level}% > 100`);
       }
     }
   }
   if (isPlainObject(data.game_config?.battle) && isNum(data.game_config.battle.strike_interval_min_s) && isNum(data.game_config.battle.strike_interval_s) && data.game_config.battle.strike_interval_min_s > data.game_config.battle.strike_interval_s)
     errors.push("game_config.battle.strike_interval_min_s: strike_interval_s 이하여야 함");
+  // M7-E: 받치기 과녁은 건물 밑면 아래 (아래 절반) → 탭 길 state가 있어야 닿음 (H-69)
+  if (data.game_config?.battle?.targets?.action === "defend" && data.game_config.battle.targets.tap_route !== "state")
+    errors.push("game_config.battle.targets.tap_route: action defend면 state여야 함 (받치기 과녁 = 아래 절반 — H-69)");
 
   // ui_strings
   if ("ui_strings" in data) {
