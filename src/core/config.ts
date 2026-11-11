@@ -185,6 +185,8 @@ export interface DefendConfig {
   target_dx_ratio: number;
   target_dy_ratio: number;
   target_jitter_ratio: number;
+  /** I-32 반동 — 받친 뒤 개미 하강 속도 배수 (없으면 1 · C에서 키) */
+  recoil_fall_mult?: number;
 }
 
 /** M4 강화 (upgrades 시트 — docs/dev.md §3-6). stat = 코드가 아는 것 (M7-E 3종 추가 — 고정값 = per_level_add) */
@@ -330,6 +332,7 @@ export function validateConfig(raw: unknown): string[] {
           num('battle.defend.target_dx_ratio', d.target_dx_ratio, { min: 0, max: 0.5 }),
           num('battle.defend.target_dy_ratio', d.target_dy_ratio, { min: 0 }),
           num('battle.defend.target_jitter_ratio', d.target_jitter_ratio, { min: 0 }),
+          ...(d.recoil_fall_mult !== undefined ? [num('battle.defend.recoil_fall_mult', d.recoil_fall_mult, { gt: 0 })] : []),
         ])(obj(battle.defend))
       : []),
     num('battle.strike_interval_s', battle.strike_interval_s, { gt: 0 }),

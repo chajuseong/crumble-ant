@@ -894,7 +894,12 @@ export class BattleScene extends Phaser.Scene {
    */
   private defendFx(e: Extract<BattleEvent, { type: 'defend' }>): void {
     const v = this.buildingView;
-    if (!v || !this.touch.visible) return;
+    if (!v) return;
+    // I-32 건물 = core는 바로 올라감 · 그림만 ease-out (lift_ms — 키 없으면 바로) · 개미 반동 찌그러짐 (recoil_* — 키 없으면 없음)
+    const R = FX.defend as typeof FX.defend & { lift_ms?: number; recoil_squash?: number; recoil_ms?: number };
+    if ((R.lift_ms ?? 0) > 0) v.push(-e.lift * this.L.battle.height, R.lift_ms!);
+    if (!e.auto && R.recoil_squash !== undefined && (R.recoil_ms ?? 0) > 0) this.ant.recoil(R.recoil_squash, R.recoil_ms!);
+    if (!this.touch.visible) return;
     const D = FX.defend;
     const y = v.bottomY;
     const s = e.auto ? D.auto_scale : 1;
