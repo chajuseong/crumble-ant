@@ -807,7 +807,7 @@ export class BattleScene extends Phaser.Scene {
     this.speedBg = this.add.rectangle(cx, cy, bw, bh, COLOR.menuBg, 0.35).setStrokeStyle(this.px(3), 0xffffff, 0.6).setDepth(DEPTH.hud);
     this.speedText = this.add.text(cx, cy, '', { fontFamily: FONT, fontSize: `${Math.round(bh * 0.7)}px`, fontStyle: '900', color: COLOR.hudText }).setOrigin(0.5).setDepth(DEPTH.hud);
     this.speedHint = this.add
-      .text(cx, h + this.px(10), hasText('hud.targets_x1') ? t('hud.targets_x1') : '', { fontFamily: FONT, fontSize: `${Math.round(bh * 0.55)}px`, fontStyle: '900', color: '#ffe08a', stroke: COLOR.damageStroke, strokeThickness: this.px(8) })
+      .text(cx, h + this.px(12), hasText('hud.targets_x1') ? t('hud.targets_x1') : '', { fontFamily: FONT, fontSize: `${Math.round(h * 0.26)}px`, fontStyle: '900', color: '#ffe08a', stroke: COLOR.damageStroke, strokeThickness: this.px(10), backgroundColor: '#1b1a17aa', padding: { x: this.px(14), y: this.px(6) } })
       .setOrigin(0.5, 0)
       .setDepth(DEPTH.hud)
       .setVisible(false);
