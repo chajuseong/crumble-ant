@@ -232,6 +232,11 @@ export class AntView {
     if (this.motionOn) this.pushPose = { at: this.motionT, dur: ms / 1000, deg };
   }
 
+  /** I-32 받치기 반동 — 위아래로 납작했다 돌아옴 (squash = 세로 배율 · 가로는 반대로) */
+  recoil(squash: number, ms: number): void {
+    this.playSquash(2 - squash, squash, ms);
+  }
+
   /** 점프 시작 — 늘어나기 (모션 켬 = 도약 단계로) */
   jump(strong: boolean): void {
     if (this.motionOn) {

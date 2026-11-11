@@ -37,9 +37,11 @@ const defendCfg = (extra?: Patch) =>
     c.buildings.rows.forEach((r) => (r.hp = 100000));
     c.battle.targets!.action = 'defend';
     c.battle.targets!.tap_route = 'state';
+    c.battle.defend!.recoil_fall_mult = RECOIL; // I-32 키는 C에서 — 테스트에서만 넣음
     extra?.(c);
   });
 const d0 = makeConfig().battle.defend!;
+const RECOIL = 1.5;
 
 /** 강화 행 (C에서 시트에 들어갈 모양 — 테스트에서만 넣음) */
 const row = (stat: UpgradeRow['stat'], over: Partial<UpgradeRow> = {}): UpgradeRow => ({
@@ -77,24 +79,32 @@ describe('M7-E 꺼진 채 = 지금 그대로 (시트 값: action strike · auto 
   });
 });
 
-describe('M7-E 받치기 (I-28)', () => {
-  it('lift = push_power ÷ weight × (1 − decay)^n · 건물 올라감 · 낙하 멈춤 push_s · 개미 같이 올라감', () => {
+describe('M7-E 받치기 (I-28) · 반동 (I-32 · H-73)', () => {
+  /** 다음 받치기 과녁이 나올 때까지 → (닿을 때까지 기다렸다가) 탭. 반환 = 탭한 순간 이벤트 */
+  const hitNext = (sim: BattleSim, atContact = true) => {
+    const s = spawnOf(until(sim, (e) => e.some((x) => x.type === 'targetsSpawn')))!;
+    if (atContact) until(sim, () => sim.ant.contact);
+    sim.tapBattle(s.targets[0]!.x, s.targets[0]!.y);
+    return { spawn: s, ev: sim.drainEvents() };
+  };
+
+  it('lift = push_power ÷ weight · 건물 올라감 · 낙하 멈춤 push_s · 개미 = 반동 (매달림 끝 · 하강 × recoil_fall_mult) · 그 점프 과녁 하나', () => {
     const sim = new BattleSim(defendCfg());
-    const s = hitAtContact(sim);
+    const s = spawnOf(until(sim, (e) => e.some((x) => x.type === 'targetsSpawn')))!;
+    until(sim, () => sim.ant.contact);
     const b = sim.building!;
     const y0 = b.y;
     sim.tapBattle(s.targets[0]!.x, s.targets[0]!.y);
     const ev = sim.drainEvents();
-    expect(ev.map((e) => e.type).slice(0, 3)).toEqual(['targetHit', 'defend', 'targetsSpawn']);
-    expect(of(ev, 'strike')).toHaveLength(0); // PERFECT 전에는 받치기만 (1타 없음)
+    expect(ev.map((e) => e.type)).toEqual(['targetHit', 'defend']); // 다음 과녁 = 다음 점프 (버팀 없음)
     const d = of(ev, 'defend')[0]!;
     expect(d).toMatchObject({ auto: false, n: 1, buildingId: b.id });
     expect(d.lift).toBeCloseTo(d0.push_power, 6);
     expect(b.y).toBeCloseTo(y0 + d0.push_power, 6);
     expect(b.pauseLeft).toBeCloseTo(d0.push_s, 9);
-    expect(sim.ant.y).toBeCloseTo(b.y - sim.cfg.battle.ant.height_ratio, 9);
-    expect(sim.ant.contact).toBe(true);
-    // 멈춤 동안 밑면 그대로 → 끝나면 다시 떨어짐
+    expect([sim.ant.phase, sim.ant.contact]).toEqual(['fall', false]);
+    expect(sim.ant.fallSpeed).toBeCloseTo(sim.stats.fallSpeed * RECOIL, 9);
+    expect(sim.targets).toHaveLength(0);
     const yHold = b.y;
     step(sim, d0.push_s * 0.5);
     expect(b.y).toBeCloseTo(yHold, 9);
@@ -102,52 +112,69 @@ describe('M7-E 받치기 (I-28)', () => {
     expect(b.y).toBeLessThan(yHold);
   });
 
-  it('연속 감쇠 · 건물당 max_per_building (넘으면 이벤트 없음) · 무게 2 = 절반', () => {
-    const sim = new BattleSim(defendCfg((c) => { c.battle.targets!.count_max = 5; c.battle.targets!.chain_life_s = 5; }));
-    let s = hitAtContact(sim);
+  it('체인 = 점프를 넘어서 셈 (1 / 3 → 2 / 3 → 3 / 3) · 감쇠 · 3 / 3 = 그 순간 마무리 1타 → 받치기 → 다음은 1 / 3', () => {
+    const sim = new BattleSim(defendCfg());
     const lifts: number[] = [];
-    for (let k = 0; k < 5; k++) {
-      sim.tapBattle(s.targets[0]!.x, s.targets[0]!.y);
-      const ev = sim.drainEvents();
-      lifts.push(...of(ev, 'defend').map((e) => e.lift));
-      const nx = spawnOf(ev);
-      if (!nx) break;
-      s = nx;
+    const steps: number[] = [];
+    let last: BattleEvent[] = [];
+    for (let k = 0; k < 3; k++) {
+      until(sim, (e) => e.some((x) => x.type === 'targetsSpawn'));
+      steps.push(sim.chainStep!.n);
+      until(sim, () => sim.ant.contact);
+      const t = sim.targets[0]!;
+      sim.tapBattle(t.x, t.y);
+      last = sim.drainEvents();
+      lifts.push(...of(last, 'defend').map((e) => e.lift));
     }
+    expect(steps).toEqual([1, 2, 3]);
     const k = 1 - d0.decay_pct / 100;
-    expect(lifts).toHaveLength(d0.max_per_building);
     lifts.forEach((l, i) => expect(l).toBeCloseTo(d0.push_power * k ** i, 6));
+    expect(last.map((e) => e.type)).toEqual(['targetHit', 'targetsEnd', 'perfect', 'strike', 'defend']);
+    expect(of(last, 'strike')[0]).toMatchObject({ source: 'bonus' });
+    until(sim, (e) => e.some((x) => x.type === 'targetsSpawn'));
+    expect(sim.chainStep!.n).toBe(1);
+  });
+
+  it('놓치면 체인 끝 (다음 점프 = 1 / 3) · 건물당 max_per_building · 무게 2 = 절반', () => {
+    const sim = new BattleSim(defendCfg());
+    hitNext(sim);
+    until(sim, (e) => e.some((x) => x.type === 'targetsSpawn'));
+    expect(sim.chainStep!.n).toBe(2);
+    until(sim, (e) => e.some((x) => x.type === 'targetsEnd')); // 안 누름 → 놓침
+    until(sim, (e) => e.some((x) => x.type === 'targetsSpawn'));
+    expect(sim.chainStep!.n).toBe(1);
+
+    const cap = new BattleSim(defendCfg((c) => { c.battle.targets!.count_max = 9; }));
+    const n: number[] = [];
+    for (let i = 0; i < 5; i++) n.push(of(hitNext(cap).ev, 'defend').length);
+    expect(n).toEqual([1, 1, 1, 0, 0]);
 
     const heavy = new BattleSim(defendCfg((c) => c.buildings.rows.forEach((r) => (r.weight = 2))));
-    const h = hitAtContact(heavy);
-    heavy.tapBattle(h.targets[0]!.x, h.targets[0]!.y);
-    expect(of(heavy.drainEvents(), 'defend')[0]!.lift).toBeCloseTo(d0.push_power / 2, 6);
+    expect(of(hitNext(heavy).ev, 'defend')[0]!.lift).toBeCloseTo(d0.push_power / 2, 6);
   });
 
   it('lift_max_y 하나로 자름 (밑면이 이보다 안 올라감 · 내려가지도 않음)', () => {
     const sim = new BattleSim(defendCfg((c) => { c.battle.defend!.push_power = 5; }));
-    const s = hitAtContact(sim);
-    sim.tapBattle(s.targets[0]!.x, s.targets[0]!.y);
+    hitNext(sim);
     expect(sim.building!.y).toBeCloseTo(d0.lift_max_y, 9);
-    expect(sim.ant.y).toBeCloseTo(d0.lift_max_y - sim.cfg.battle.ant.height_ratio, 9);
+    expect(sim.ant.phase).toBe('fall');
   });
 
-  it('닿기 전에 맞힘 = 닿는 순간 받치기 (손 · 건물이 같은 순간)', () => {
+  it('닿기 전에 맞힘 = 닿는 순간 1타 친 뒤 받치기 + 반동', () => {
     const sim = new BattleSim(defendCfg());
-    const s = spawnOf(until(sim, (e) => e.some((x) => x.type === 'targetsSpawn')))!;
+    const { ev } = hitNext(sim, false);
     expect(sim.ant.contact).toBe(false);
-    sim.tapBattle(s.targets[0]!.x, s.targets[0]!.y);
-    expect(of(sim.drainEvents(), 'defend')).toHaveLength(0);
-    const ev = until(sim, () => sim.ant.contact);
-    expect(of(ev, 'defend')).toHaveLength(1);
-    expect(sim.ant.y).toBeCloseTo(sim.building!.y - sim.cfg.battle.ant.height_ratio, 9);
+    expect(of(ev, 'defend')).toHaveLength(0);
+    const after = until(sim, (e) => e.some((x) => x.type === 'defend'));
+    const types = after.map((e) => e.type);
+    expect(types.indexOf('strike')).toBeGreaterThanOrEqual(0);
+    expect(types.indexOf('strike')).toBeLessThan(types.indexOf('defend'));
+    expect(sim.ant.phase).toBe('fall');
   });
 
-  it('닿기 전에 맞혔는데 끝내 못 닿고 정점 = 그 자리에서 받치기 (탭을 버리지 않음 · 개미는 안 따라 올라감)', () => {
+  it('닿기 전에 맞혔는데 끝내 못 닿고 정점 = 그 자리에서 받치기 (탭을 버리지 않음)', () => {
     const sim = new BattleSim(defendCfg());
-    const s = spawnOf(until(sim, (e) => e.some((x) => x.type === 'targetsSpawn')))!;
-    sim.tapBattle(s.targets[0]!.x, s.targets[0]!.y);
-    sim.drainEvents();
+    hitNext(sim, false);
     const y0 = sim.building!.y;
     sim.ant.riseTimeLeft = 1e-6; // 다음 스텝에 정점 (닿기 전)
     const ev = step(sim, 1 / 120);
@@ -156,31 +183,35 @@ describe('M7-E 받치기 (I-28)', () => {
     expect(sim.building!.y).toBeGreaterThan(y0);
   });
 
-  it('과녁 자리 = 건물 밑면 − dy · 개미 가운데 ± dx (체인마다 좌우 번갈아 · 흔들기 안)', () => {
+  it('과녁 자리 = 건물 밑면 − dy · 개미 가운데 ± dx (체인 순서마다 좌우 번갈아 · 흔들기 안)', () => {
     const sim = new BattleSim(defendCfg());
-    let s = hitAtContact(sim);
     const xs: number[] = [];
-    for (let k = 0; k < 3; k++) {
-      const t = s.targets[0]!;
-      const b = sim.building!;
+    for (let k = 0; k < 2; k++) {
+      const { spawn } = hitNext(sim, false);
+      const t = spawn.targets[0]!;
       expect(Math.abs(Math.abs(t.x - 0.5) - d0.target_dx_ratio)).toBeLessThanOrEqual(d0.target_jitter_ratio + 1e-4);
-      if (k > 0) expect(Math.abs(t.y - (b.y - d0.target_dy_ratio))).toBeLessThanOrEqual(d0.target_jitter_ratio + 1e-4);
       xs.push(t.x);
-      sim.tapBattle(t.x, t.y);
-      const nx = spawnOf(sim.drainEvents());
-      if (!nx) break;
-      s = nx;
     }
     expect(Math.sign(xs[0]! - 0.5)).toBe(-Math.sign(xs[1]! - 0.5));
   });
 
-  it('자동 받치기: auto_pct 100 = 매달림마다 auto 받치기 (힘 × auto_power_ratio) · 받치는 힘 강화 % 반영', () => {
-    const sim = new BattleSim(defendCfg((c) => { c.battle.defend!.auto_pct = 100; c.upgrades.rows.push(row('push_power', { per_level_pct: 8 })); }), 1, { stage: 1, autoAdvance: true, debris: 0, levels: { push_power: 2 } });
+  it('자동 받치기 = 매달림 시작에 뽑고 끝날 때 받침 (그 매달림 타격은 그대로 · 힘 × auto_power_ratio · 받치는 힘 강화 %)', () => {
+    const sim = new BattleSim(defendCfg((c) => { c.battle.defend!.auto_pct = 100; c.battle.targets!.count_max = 0; c.upgrades.rows.push(row('push_power', { per_level_pct: 8 })); }), 1, { stage: 1, autoAdvance: true, debris: 0, levels: { push_power: 2 } });
     const ev = until(sim, (e) => e.some((x) => x.type === 'defend'));
     const d = of(ev, 'defend')[0]!;
     expect(d.auto).toBe(true);
+    const types = ev.map((e) => e.type);
+    expect(types.lastIndexOf('strike')).toBeLessThan(types.indexOf('defend')); // 치고 나서 받침
     expect(d.lift).toBeCloseTo((d0.push_power * 116) / 100 * d0.auto_power_ratio, 6);
-    expect(sim.ant.contact).toBe(true);
+    expect(of(ev, 'strike').length).toBeGreaterThan(0); // 매달린 동안 자동 타격 (그대로)
+    expect(sim.ant.phase).toBe('fall');
+  });
+
+  it('손으로 받치면 그 매달림 자동 받치기는 없음 (한 점프에 한 번)', () => {
+    const sim = new BattleSim(defendCfg((c) => { c.battle.defend!.auto_pct = 100; }));
+    const { ev } = hitNext(sim);
+    const later = step(sim, 0.3);
+    expect([...of(ev, 'defend'), ...of(later, 'defend')].map((e) => e.auto)).toEqual([false]);
   });
 });
 

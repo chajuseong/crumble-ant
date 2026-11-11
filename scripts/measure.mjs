@@ -6,7 +6,7 @@
 //       npm run measure -- --touch     M7 터치 개편 — 링 예측 모델 (등급 × 배속) · 과녁 반응 모델 · 60분 진행 · 자동만 배속 · 연타 모델
 //                                      데이터가 꺼져 있으면 (mode tap · count 0) 측정만 C 값 (timing · 2 ~ 3)으로 켜서 잼 — 결과는 C PR 표에
 //       npm run measure -- --defend    M7-E 체력 + 받치기 (I-27 · I-28 · H-69) — 자동 2정책 (가장 싼 것 · 공격 우선) · 손 · 연타 / 후퇴 · 쓰러짐 · 아슬 · 받치기 손 · 자동
-//                                      데이터가 꺼져 있으면 (action strike) 측정만 C 후보 (체력 30 · 강화 3행 · defend · state · 운반 6)로 켜서 잼
+//                                      데이터가 꺼져 있으면 (action strike) 측정만 C 후보 (체력 30 · 강화 3행 · defend · state · 운반 6 · 힘 0.12 · 반동 1.5 — H-73)로 켜서 잼
 //       npm run measure -- --defend --sweep   + 받치는 힘 0.02 ~ 0.08 × 자동 받치기 비용 쓸기 (C 고르는 표 — H-69)
 // core(TypeScript)는 Vite로 불러온다 — 따로 빌드 도구를 늘리지 않음
 import fs from "node:fs";
@@ -265,6 +265,8 @@ try {
         c.battle.ant.max_hp = 30;
         Object.assign(c.battle.targets, { action: "defend", tap_route: "state" });
         Object.assign(c.economy, { carry_ants: 6, carry_interval_s: 0.2 });
+        c.battle.defend.push_power = 0.12; // H-73 ④ C 시작 값
+        if (c.battle.defend.recoil_fall_mult === undefined) c.battle.defend.recoil_fall_mult = 1.5; // I-32 반동 [가정]
         let sort = Math.max(0, ...c.upgrades.rows.map((r) => r.sort));
         for (const st of Object.keys(ROW)) if (!c.upgrades.rows.some((r) => r.stat === st)) c.upgrades.rows.push({ upgrade_id: st, name: NAME[st], stat: st, ...ROW[st], sort: ++sort });
       }
@@ -278,8 +280,8 @@ try {
     const play = (cfg, { policy = "cheap", hand = false, mash = false, minutes = 60 } = {}) => {
       const sim = new BattleSim(structuredClone(cfg), 1);
       const rows = cfg.upgrades.rows, first = {}, plan = [], perDown = [];
-      const r = { earned: 0, retreats: 0, downs: 0, lands: 0, destroyed: 0, low: 0, clears: 0, clearsHit: 0, spawned: 0, dHand: 0, dAuto: 0, lHand: 0, lAuto: 0, seq: 0, pos: [0, 0, 0, 0], posHit: [0, 0, 0, 0], batch: 0, tHit: 0, tAll: 0, strong: 0 };
-      let landsSince = 0, wall = 0;
+      const r = { earned: 0, retreats: 0, downs: 0, lands: 0, destroyed: 0, low: 0, clears: 0, clearsHit: 0, spawned: 0, dHand: 0, dAuto: 0, lHand: 0, lAuto: 0, seq: 0, pos: [0, 0, 0, 0], posHit: [0, 0, 0, 0], batch: 0, tHit: 0, tAll: 0, strong: 0, jumpsB: 0, whiff: 0 };
+      let landsSince = 0, wall = 0, jumpB = false, touched = false;
       const handle = (ev) => { for (const e of ev) {
         if (e.type === "deposit") r.earned += e.amount;
         else if (e.type === "spawn") r.spawned++;
@@ -292,7 +294,11 @@ try {
         else if (e.type === "targetHit") { r.tHit++; r.seq++; }
         else if (e.type === "targetsEnd") r.seq = 0;
         else if (e.type === "perfect") r.batch++;
-        else if (e.type === "jump" && e.kind !== "auto") r.strong++;
+        else if (e.type === "jump") {
+          if (e.kind !== "auto") r.strong++;
+          if (jumpB && !touched) r.whiff++; // 헛점프 = 떨어지는 건물이 있었는데 그 점프에 한 번도 안 닿음 (lift가 너무 커서 등)
+          jumpB = sim.building?.state === "falling"; touched = false; if (jumpB) r.jumpsB++;
+        }
         else if (e.type === "targetsSpawn") {
           r.tAll += e.targets.length; r.pos[Math.min(r.seq, 3)]++;
           if (hand) for (const t of e.targets) plan.push({ at: wall + Math.max(0.15, 0.42 + 0.1 * gauss()), x: t.x, y: t.y, target: t.id, p: Math.min(r.seq, 3) });
@@ -300,7 +306,7 @@ try {
         else if (e.type === "timingChance" && hand) plan.push({ at: wall + Math.max(0.3 + 0.08 * gauss(), cfg.battle.strong_timing.ring_s + 0.06 * gauss()), x: 0.5, y: 0.1, chance: true });
       } };
       for (let i = 0; i < minutes * 60 * 120; i++) {
-        wall += 1 / 120; sim.update(1 / 120); handle(sim.drainEvents());
+        wall += 1 / 120; sim.update(1 / 120); if (sim.ant.contact) touched = true; handle(sim.drainEvents());
         if (mash && i % 12 === 0) sim.tapBattle(0.1 + rnd() * 0.8, rnd());
         plan.sort((a, b) => a.at - b.at);
         while (plan.length && plan[0].at <= wall) {
@@ -326,9 +332,9 @@ try {
     const f = (x) => (x === undefined ? "—" : x.toFixed(1));
     const pc = (a, b) => `${Math.round((a / Math.max(1, b)) * 100)}%`;
     const px = (sum, n) => (n ? `${(sum / n).toFixed(3)} (${Math.round((sum / n) * PX)}px)` : "—");
-    const line = (name, r) => `  ${name} | ${[6, 7, 8].map((s) => f(r.first[s])).join(" / ")} | ${r.earned} | 후퇴 ${r.retreats} · 쓰러짐 ${r.downs} · 착지→쓰러짐 ${r.perDown} | 아슬 (HP ≤ 30% 깸) ${pc(r.low, r.destroyed)} · 맞으며 깬 판 ${pc(r.clearsHit, r.clears)} | 건물당 받치기 손 ${(r.dHand / Math.max(1, r.spawned)).toFixed(2)} · 자동 ${(r.dAuto / Math.max(1, r.spawned)).toFixed(2)} · lift 손 ${px(r.lHand, r.dHand)} · 자동 ${px(r.lAuto, r.dAuto)}`;
+    const line = (name, r) => `  ${name} | ${[6, 7, 8].map((s) => f(r.first[s])).join(" / ")} | ${r.earned} | 후퇴 ${r.retreats} · 쓰러짐 ${r.downs} · 착지→쓰러짐 ${r.perDown} | 아슬 (HP ≤ 30% 깸) ${pc(r.low, r.destroyed)} · 맞으며 깬 판 ${pc(r.clearsHit, r.clears)} | 건물당 받치기 손 ${(r.dHand / Math.max(1, r.spawned)).toFixed(2)} · 자동 ${(r.dAuto / Math.max(1, r.spawned)).toFixed(2)} · lift 손 ${px(r.lHand, r.dHand)} · 자동 ${px(r.lAuto, r.dAuto)} · 헛점프 ${pc(r.whiff, r.jumpsB)}`;
     const c0 = on(config), d = c0.battle.defend;
-    console.log(`\nM7-E 받치기 측정 — ${off ? "데이터 꺼짐 → C 후보로 켜서 잼 (체력 30 · 강화 3행 · defend · state · 운반 6 · 0.2)" : "지금 데이터"} · 힘 ${d.push_power} · 멈춤 ${d.push_s} · 감쇠 ${d.decay_pct}% · 건물당 ${d.max_per_building} · 상한 ${d.lift_max_y} · 자동 힘 × ${d.auto_power_ratio} · 자동 ${d.auto_pct}%`);
+    console.log(`\nM7-E 받치기 측정 — ${off ? "데이터 꺼짐 → C 후보로 켜서 잼 (체력 30 · 강화 3행 · defend · state · 운반 6 · 0.2)" : "지금 데이터"} · 힘 ${d.push_power} · 반동 × ${d.recoil_fall_mult ?? 1} · 멈춤 ${d.push_s} · 감쇠 ${d.decay_pct}% · 건물당 ${d.max_per_building} · 상한 ${d.lift_max_y} · 자동 힘 × ${d.auto_power_ratio} · 자동 ${d.auto_pct}%`);
     console.log(`  강화 (Lv 순서 ${c0.upgrades.rows.map((x) => x.upgrade_id).join("/")}) — ${c0.upgrades.rows.filter((x) => x.stat in ROW).map((x) => `${x.stat} +${x.per_level_add || x.per_level_pct + "%"} × ${x.max_level} (${x.cost_base} · ${x.cost_growth_pct}%)`).join(" · ")}`);
     console.log("① 60분 (게임 분 = 실제 분 · ×1) — 설정 | stage 6 / 7 / 8 | 60분 잔해 | 후퇴 · 쓰러짐 | 아슬 | 받치기");
     console.log(line("키 끔 (지금 데이터 · 자동)", play(config)));
@@ -340,8 +346,8 @@ try {
     const m = play(c0, { mash: true, minutes: 10 });
     console.log(`② 연타 (10분 · 0.1초마다 아무 데나) — 과녁 맞힘 ${m.tHit} / ${m.tAll} · 체인 2번째 이상 ${m.posHit[1] + m.posHit[2]} · PERFECT ${m.batch} · 강점프 ${m.strong} (맞힘 = 우연히 과녁 반지름 안)`);
     if (process.argv.includes("--sweep")) {
-      console.log("③ 쓸기 (60분 · 자동) — 힘 | 자동 받치기 비용 | 가장 싼 것 stage 8 · 잔해 · 후퇴 | 공격 우선 stage 8 · 잔해 · 후퇴 | lift (px)");
-      for (const push of [0.02, 0.04, 0.06, 0.08]) for (const autoBase of [80, 160, 320]) {
+      console.log("③ 쓸기 (60분 · 자동) — 힘 | 자동 받치기 비용 | 가장 싼 것 stage 8 · 잔해 · 후퇴 | 공격 우선 stage 8 · 잔해 · 후퇴 | lift (px) — 힘 0.08 ~ 0.15 (H-73 ④)");
+      for (const push of [0.08, 0.12, 0.15]) for (const autoBase of [80, 160, 320]) {
         const c = on(config, { push, autoBase }), a = play(c), b = play(c, { policy: "attack" });
         console.log(`  ${push} | ${autoBase} | ${f(a.first[8])} · ${a.earned} · ${a.retreats} | ${f(b.first[8])} · ${b.earned} · ${b.retreats} | ${Math.round(push * PX)}`);
       }

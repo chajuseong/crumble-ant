@@ -440,6 +440,9 @@ export class BattleSim {
             this.pendingDefend = 0;
             for (let i = 0; i < n; i++) this.defend(falling, false);
           }
+          // I-32 (H-73 ②) 자동 받치기 = 매달림이 끝날 때 (치고 내려오며 밀어 올림 — 난수는 매달림 시작에 뽑아 둠)
+          if (this.autoDefendDue && falling) this.defend(falling, true);
+          this.autoDefendDue = false;
         }
         break;
       case 'fall':
@@ -466,12 +469,9 @@ export class BattleSim {
             a.riseTimeLeft += this.pendingExtend; // 닿기 전에 맞힌 연장
             this.pendingExtend = 0;
           }
-          // M7-E 받치기: 닿기 전에 맞힌 받치기 → 닿는 순간 · 그다음 자동 받치기 난수 1번 (자동 % 합 > 0일 때만 — 순서 고정)
-          const pend = this.pendingDefend;
-          this.pendingDefend = 0;
-          for (let i = 0; i < pend; i++) this.defend(falling, false);
+          // M7-E 자동 받치기 난수 1번 (자동 % 합 > 0일 때만 — 순서 고정) · 받침은 매달림이 끝날 때 (I-32)
           const autoPct = this.autoDefendPct;
-          if (autoPct > 0 && this.rng.int(100) < autoPct) this.defend(falling, true);
+          if (autoPct > 0 && this.rng.int(100) < autoPct) this.autoDefendDue = true;
         }
         if (a.phase === 'fall' && a.y <= 0) this.toGround();
       } else if (a.contact) {
@@ -485,6 +485,12 @@ export class BattleSim {
           this.strike(falling, 'auto');
           a.strikeTimer += this.stats.strikeIntervalS;
         }
+      }
+      // I-32 닿기 전에 맞힌 받치기 = 닿는 순간 1타 친 뒤 받치기 + 반동
+      if (this.pendingDefend > 0 && a.contact && this.building === falling) {
+        const n = this.pendingDefend;
+        this.pendingDefend = 0;
+        for (let i = 0; i < n; i++) this.defend(falling, false);
       }
 
       // 착지 판정: 건물 밑면이 개미 키까지 내려옴 (= 개미를 지면까지 눌렀음)
@@ -529,6 +535,7 @@ export class BattleSim {
     const speed = strongish ? st.riseSpeed * sj.speed_mult : st.riseSpeed;
     this.leadArmed = true;
     this.pendingDefend = 0;
+    this.autoDefendDue = false;
     a.phase = 'rise';
     a.jumpKind = kind;
     a.jumpSpeed = speed;
@@ -554,6 +561,7 @@ export class BattleSim {
     a.windupLeft = 0;
     a.timingChance = false;
     this.pendingDefend = 0;
+    this.autoDefendDue = false;
     if (this.targets.length > 0) this.endTargets('hangEnd'); // H-61 개미 착지 = 과녁 끝 (묶음 · 체인 공통)
   }
 
@@ -567,8 +575,13 @@ export class BattleSim {
     return this.windupOn ? this.cfg.battle.jump.windup_s! : this.cfg.battle.jump.ground_delay_s;
   }
 
-  /** M7-E 과녁 맞힘 — strike 1타 / defend 받치기 (닿기 전이면 닿는 순간 — 손 · 건물이 같은 순간에 움직이게) */
+  /** M7-E 과녁 맞힘 — strike 1타 / defend 받치기 (닿기 전이면 닿는 순간 1타 뒤 — I-32) */
   private pendingDefend = 0;
+  /** I-32 이번 매달림 자동 받치기 (매달림 시작에 뽑음 → 끝날 때 받침) */
+  private autoDefendDue = false;
+  /** I-32 체인 = 점프를 넘어서 셈 — 다음 점프 과녁 순서 · 그 건물 (건물이 바뀌면 끝) */
+  private chainCarry = 0;
+  private chainBuildingId = -1;
   private targetAction(b: BuildingState): void {
     if (!this.defendOn) {
       this.strike(b, 'target');
@@ -579,8 +592,9 @@ export class BattleSim {
   }
 
   /**
-   * M7-E 받치기 (I-28) — lift = push_power × 받치는 힘 % ÷ 100 ÷ (weight × 치트) × (1 − decay)^n × (자동 ratio) × 치트
-   * 밑면 = min(lift_max_y, 밑면 + lift) (내려가지는 않음) · 낙하 멈춤 push_s · 닿아 있는 개미 같이 올라감 · 건물당 max_per_building
+   * M7-E 받치기 (I-28 · I-32) — lift = push_power × 받치는 힘 % ÷ 100 ÷ (weight × 치트) × (1 − decay)^n × (자동 ratio) × 치트
+   * 밑면 = min(lift_max_y, 밑면 + lift) (내려가지는 않음 · core는 바로 — 화면만 ease-out) · 낙하 멈춤 push_s · 건물당 max_per_building
+   * 개미 = 반동 (H-73): 매달려 있으면 매달림 끝 → 하강 · 하강 속도 × recoil_fall_mult (자동 = 매달림이 끝난 뒤라 하강만 빨라짐)
    */
   private defend(b: BuildingState, auto: boolean): void {
     const d = this.cfg.battle.defend;
@@ -592,12 +606,15 @@ export class BattleSim {
     b.defendN += 1;
     b.y = y;
     b.pauseLeft = d.push_s;
-    const a = this.ant;
-    if (a.contact) {
-      a.y = b.y - this.cfg.battle.ant.height_ratio; // 개미도 같이 올라감 = 매달림 유지 (자동 공격 계속 — H-69)
-      a.apex = Math.max(a.apex, a.y);
-    }
     this.events.push({ type: 'defend', buildingId: b.id, lift, auto, n: b.defendN });
+    const a = this.ant;
+    if (a.phase === 'rise') {
+      a.phase = 'fall';
+      a.contact = false;
+      a.riseTimeLeft = 0;
+      this.autoDefendDue = false; // 손으로 받쳐 매달림이 끝남 → 이번 매달림 자동 받치기 없음
+    }
+    if (a.phase === 'fall') a.fallSpeed = this.stats.fallSpeed * (d.recoil_fall_mult ?? 1);
   }
 
   private strike(b: BuildingState, source: StrikeSource): void {
@@ -744,7 +761,7 @@ export class BattleSim {
     if (this.targets.length > 0) this.endTargets('hangEnd');
     if (!this.targetsAllowed || (this.cfg.battle.targets?.count_max ?? 0) <= 0) return; // count_max 0 = 끔 (묶음과 같음)
     this.targetsChain = true;
-    this.chainIndex = 0;
+    this.chainIndex = this.defendOn && this.chainBuildingId === b.id ? this.chainCarry : 0; // I-32 받치기 체인 = 점프를 넘어 이어짐
     this.chainPrev = null;
     this.pendingExtend = 0;
     this.spawnChainTarget(b);
@@ -795,6 +812,7 @@ export class BattleSim {
     this.targets = [];
     this.events.push({ type: 'targetHit', id: o.id });
     const b = this.building;
+    if (this.defendOn) return this.defendChainHit(b);
     if (b && b.state === 'falling') this.targetAction(b);
     this.chainIndex += 1;
     const nextLife = Math.max(0.15, (t.chain_life_s ?? t.life_s) - (t.chain_life_step ?? 0) * this.chainIndex) * this.timeScale;
@@ -813,6 +831,29 @@ export class BattleSim {
         this.strike(c2, 'bonus');
       }
     } else if (this.ant.phase === 'rise') this.spawnChainTarget(cur);
+    return 'target';
+  }
+
+  /**
+   * I-32 받치기 체인 맞힘 — 한 점프 = 과녁 하나 (버팀 없음) · 다음 점프 과녁 = n + 1 (같은 건물일 때)
+   * count_max번째 = PERFECT: 그 순간 마무리 1타 (perfect_bonus_strikes) → 받치기 + 반동 (H-73 ③)
+   */
+  private defendChainHit(b: BuildingState | null): 'target' {
+    const t = this.cfg.battle.targets!;
+    this.chainIndex += 1;
+    this.chainBuildingId = b?.id ?? -1;
+    if (this.chainIndex >= t.count_max) {
+      this.chainCarry = 0;
+      this.targetBatch = 0;
+      this.events.push({ type: 'targetsEnd', reason: 'perfect' });
+      this.events.push({ type: 'perfect' });
+      for (let i = 0; i < t.perfect_bonus_strikes; i++) {
+        const c = this.building;
+        if (!b || c !== b || c.state !== 'falling') break;
+        this.strike(c, 'bonus');
+      }
+    } else this.chainCarry = this.chainIndex;
+    if (b && this.building === b && b.state === 'falling') this.targetAction(b);
     return 'target';
   }
 
@@ -855,6 +896,7 @@ export class BattleSim {
 
   private endTargets(reason: TargetsEndReason): void {
     if (this.targets.length === 0) return;
+    if (reason !== 'perfect') this.chainCarry = 0; // I-32 받칠 과녁을 놓침 = 체인 끝
     this.targets = [];
     this.targetBatch = 0;
     this.targetLifeLeft = 0;
