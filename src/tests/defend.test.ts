@@ -41,6 +41,19 @@ const defendCfg = (extra?: Patch) =>
     extra?.(c);
   });
 const d0 = makeConfig().battle.defend!;
+/** 시트와 상관없이 꺼진 값 (A · B 시트 — C에서 시트가 켜져도 "꺼진 채" 검사는 그대로) */
+const offKeys: Patch = (c) => {
+  c.battle.targets!.action = 'strike';
+  c.battle.targets!.tap_route = 'zone';
+  c.battle.defend!.auto_pct = 0;
+  c.economy.carry_ants = 1;
+  c.economy.carry_interval_s = 0;
+};
+/** 강화 행 넣기 — 같은 stat 행이 시트에 있으면 바꿔 끼움 (C에서 시트에 3종이 들어옴) */
+const withRow = (c: GameConfig, r: UpgradeRow) => {
+  c.upgrades.rows = c.upgrades.rows.filter((x) => x.stat !== r.stat);
+  c.upgrades.rows.push(r);
+};
 const RECOIL = 1.5;
 
 /** 강화 행 (C에서 시트에 들어갈 모양 — 테스트에서만 넣음) */
@@ -57,7 +70,7 @@ const hitAtContact = (sim: BattleSim) => {
 
 describe('M7-E 꺼진 채 = 지금 그대로 (시트 값: action strike · auto 0 · 운반 1)', () => {
   it('과녁 탭 = 1타 · 받치기 이벤트 없음 · deposit = index 0 · count 1', () => {
-    const sim = new BattleSim(makeConfig((c) => { c.battle.strong_jump.mode = 'tap'; c.battle.ant.max_hp = 1e9; }));
+    const sim = new BattleSim(makeConfig((c) => { offKeys(c); c.battle.strong_jump.mode = 'tap'; c.battle.ant.max_hp = 1e9; }));
     const s = hitAtContact(sim);
     sim.tapBattle(s.targets[0]!.x, s.targets[0]!.y);
     expect(sim.drainEvents().map((e) => e.type).slice(0, 2)).toEqual(['targetHit', 'strike']);
@@ -73,8 +86,8 @@ describe('M7-E 꺼진 채 = 지금 그대로 (시트 값: action strike · auto 
       const sim = new BattleSim(c);
       return JSON.stringify(step(sim, 120)) + sim.time;
     };
-    const withKeys = run(makeConfig());
-    const without = run(makeConfig((c) => { delete c.battle.defend; delete c.battle.targets!.action; delete c.battle.targets!.tap_route; }));
+    const withKeys = run(makeConfig(offKeys));
+    const without = run(makeConfig((c) => { offKeys(c); delete c.battle.defend; delete c.battle.targets!.action; delete c.battle.targets!.tap_route; }));
     expect(withKeys).toBe(without);
   });
 });
@@ -196,7 +209,7 @@ describe('M7-E 받치기 (I-28) · 반동 (I-32 · H-73)', () => {
   });
 
   it('자동 받치기 = 매달림 시작에 뽑고 끝날 때 받침 (그 매달림 타격은 그대로 · 힘 × auto_power_ratio · 받치는 힘 강화 %)', () => {
-    const sim = new BattleSim(defendCfg((c) => { c.battle.defend!.auto_pct = 100; c.battle.targets!.count_max = 0; c.upgrades.rows.push(row('push_power', { per_level_pct: 8 })); }), 1, { stage: 1, autoAdvance: true, debris: 0, levels: { push_power: 2 } });
+    const sim = new BattleSim(defendCfg((c) => { c.battle.defend!.auto_pct = 100; c.battle.targets!.count_max = 0; withRow(c, row('push_power', { per_level_pct: 8 })); }), 1, { stage: 1, autoAdvance: true, debris: 0, levels: { push_power: 2 } });
     const ev = until(sim, (e) => e.some((x) => x.type === 'defend'));
     const d = of(ev, 'defend')[0]!;
     expect(d.auto).toBe(true);
@@ -228,7 +241,7 @@ describe('M7-E 탭 길 (H-69)', () => {
   });
 
   it('zone (지금): 과녁이 있어도 아래 절반 탭 = 링 쪽 (과녁 그대로)', () => {
-    const sim = new BattleSim(makeConfig((c) => { c.battle.ant.max_hp = 1e9; }));
+    const sim = new BattleSim(makeConfig((c) => { offKeys(c); c.battle.ant.max_hp = 1e9; }));
     until(sim, (e) => e.some((x) => x.type === 'targetsSpawn'));
     expect(sim.tapBattle(0.99, 0.02)).toBe('ignored');
     expect(sim.targets).toHaveLength(1);
@@ -236,7 +249,7 @@ describe('M7-E 탭 길 (H-69)', () => {
 });
 
 describe('M7-E 체력 강화 (H-67)', () => {
-  const hpCfg = () => makeConfig((c) => { c.upgrades.rows.push(row('max_hp', { per_level_add: 10, max_level: 7 })); });
+  const hpCfg = () => makeConfig((c) => { withRow(c, row('max_hp', { per_level_add: 10, max_level: 7 })); });
   it('시작 = 시트 + Lv × add · 구매 = 늘어난 만큼 채움', () => {
     const base = makeConfig().battle.ant.max_hp;
     const sim = new BattleSim(hpCfg(), 1, { stage: 1, autoAdvance: true, debris: 10, levels: { max_hp: 2 } });

@@ -11,7 +11,10 @@ const TARGET_BULL = 0xe8452b;
 const RING_IDLE = 0xffffff;
 const RING_HOT = 0xffd23f;
 const RING_OFF = 0x9a9a9a;
-const DEFEND_ARROW = 0xe8452b; // M7-E "↑ 받쳐!" 화살표 · 손바닥 (모양 상수)
+// M7-E 받쳐! 과녁 도형 색 (그림 시안 #96과 같은 쪽 — 노랑 · 주황 + 흰 화살표 · 모양 상수)
+const DEFEND_YELLOW = 0xffc928;
+const DEFEND_ORANGE = 0xf28a1c;
+const ARROW_WHITE = 0xfff8ec;
 
 interface TargetView {
   id: number;
@@ -20,6 +23,9 @@ interface TargetView {
   r: number;
   /** M7-E 받치기 과녁 (깜빡 · 놓침 연출) */
   defend: boolean;
+  /** M7-E 그림 링 (있으면 테두리 대신 줄어듦) */
+  ring?: Phaser.GameObjects.Image;
+  ringBase?: number;
 }
 
 /** M7-E 받치기 과녁 옵션 — 체인 칸 "n / m" (core chainStep) · 수명 (실제 초 — 마지막 깜빡) */
@@ -70,41 +76,76 @@ export class TouchView {
     return list.length;
   }
 
+  /** M7-E 받치기 과녁 그림 (art/game — 있으면 그림 · 없으면 도형 — DD 13:00 · 아트 #96) · 텍스처 키 */
+  defendArt: { button: string | null; ring: string | null; hit: string | null } = { button: null, ring: null, hit: null };
+
   /**
-   * M7-E (H-66) 받치기 과녁 "↑ 받쳐!" — 흰 받침 + 진한 테두리 (L-05) · 위 화살표 + 손바닥 (도형) · 글자 · 체인 칸
-   * 들어올 때 튀어나옴 (pop_scale → 1) · 남은 시간 = 줄어드는 테두리 (update) · 마지막 blink_ms 깜빡
+   * M7-E (H-66 · H-72) 받치기 과녁 — 노랑 · 주황 버튼 + 흰 위 화살표 (그림이 있으면 그림 · 없으면 같은 모양 도형 · 진한 테두리 L-05)
+   * 아래 "받쳐!" · 위 체인 칸 "n / m" · 들어올 때 튀어나옴 · 남은 시간 = 줄어드는 링 · 마지막 blink_ms 깜빡 · hint = 처음 N번 손가락 안내
    */
   private spawnDefend(list: TargetState[], d: DefendSpawn): number {
     const r = this.px(FX.defend.target_px) / 2;
     this.lifeS = d.lifeS;
+    const art = this.defendArt;
     for (const t of list) {
       const p = this.screen(t.x, t.y);
-      const g = this.scene.add.graphics();
-      g.fillStyle(0xffffff, 0.95).fillCircle(0, 0, r);
-      g.lineStyle(this.px(6), TARGET_RIM, 1).strokeCircle(0, 0, r);
-      // 손바닥 (위로 편 손 — 둥근 판 + 손가락 4) · 위 화살표
-      const palmY = -r * 0.05;
-      g.fillStyle(DEFEND_ARROW, 0.25).fillRoundedRect(-r * 0.36, palmY - r * 0.12, r * 0.72, r * 0.34, r * 0.1);
-      for (let i = 0; i < 4; i++) g.fillRoundedRect(-r * 0.34 + i * r * 0.18, palmY - r * 0.3, r * 0.13, r * 0.22, r * 0.06);
-      g.fillStyle(DEFEND_ARROW, 1).fillTriangle(0, -r * 0.82, -r * 0.3, -r * 0.42, r * 0.3, -r * 0.42);
-      g.fillRect(-r * 0.09, -r * 0.45, r * 0.18, r * 0.22);
+      const parts: Phaser.GameObjects.GameObject[] = [];
+      if (art.button) parts.push(this.scene.add.image(0, 0, art.button).setDisplaySize(r * 2, r * 2));
+      else {
+        const g = this.scene.add.graphics();
+        const bR = r * 0.8; // 버튼 (바깥 링 자리 = r)
+        g.fillStyle(TARGET_RIM, 1).fillCircle(0, 0, bR);
+        g.fillStyle(DEFEND_ORANGE, 1).fillCircle(0, 0, bR * 0.9);
+        g.fillStyle(DEFEND_YELLOW, 1).fillCircle(0, 0, bR * 0.74);
+        g.fillStyle(0xffffff, 0.45).fillEllipse(-bR * 0.32, -bR * 0.42, bR * 0.36, bR * 0.2);
+        // 흰 위 화살표 (진한 테두리)
+        const tri = [0, -bR * 0.56, -bR * 0.42, -bR * 0.06, bR * 0.42, -bR * 0.06];
+        g.fillStyle(TARGET_RIM, 1).fillTriangle(tri[0]!, tri[1]! - this.px(6), tri[2]! - this.px(7), tri[3]! + this.px(4), tri[4]! + this.px(7), tri[5]! + this.px(4));
+        g.fillRect(-bR * 0.2 - this.px(5), -bR * 0.1, bR * 0.4 + this.px(10), bR * 0.58 + this.px(5));
+        g.fillStyle(ARROW_WHITE, 1).fillTriangle(tri[0]!, tri[1]!, tri[2]!, tri[3]!, tri[4]!, tri[5]!);
+        g.fillRect(-bR * 0.2, -bR * 0.1, bR * 0.4, bR * 0.58);
+        parts.push(g);
+      }
       const label = this.scene.add
-        .text(0, r * 0.45, text('fx.defend_target'), { fontFamily: FONT, fontSize: `${Math.round(r * 0.42)}px`, color: '#2a1a0c', fontStyle: '900' })
+        .text(0, r * 1.22, text('fx.defend_target'), { fontFamily: FONT, fontSize: `${Math.round(r * 0.4)}px`, color: '#ffffff', fontStyle: '900', stroke: '#2a1a0c', strokeThickness: this.px(8) })
         .setOrigin(0.5);
-      const parts: Phaser.GameObjects.GameObject[] = [g, label];
+      parts.push(label);
       if (d.step && d.step.m > 1) {
         const chip = this.scene.add
-          .text(0, -r * 1.3, text('fx.chain_count', { n: d.step.n, m: d.step.m }), { fontFamily: FONT, fontSize: `${Math.round(r * 0.38)}px`, color: '#ffffff', fontStyle: '900', stroke: '#2a1a0c', strokeThickness: this.px(8) })
+          .text(0, -r * 1.25, text('fx.chain_count', { n: d.step.n, m: d.step.m }), { fontFamily: FONT, fontSize: `${Math.round(r * 0.38)}px`, color: '#ffffff', fontStyle: '900', stroke: '#2a1a0c', strokeThickness: this.px(8) })
           .setOrigin(0.5);
         parts.push(chip);
       }
       const timer = this.scene.add.graphics();
       parts.push(timer);
+      let ring: Phaser.GameObjects.Image | undefined;
+      if (art.ring) {
+        ring = this.scene.add.image(0, 0, art.ring).setDisplaySize(r * 2, r * 2);
+        parts.push(ring);
+      }
       const root = this.scene.add.container(p.x, p.y, parts).setDepth(this.depth).setVisible(this.visible).setScale(FX.defend.pop_scale);
       this.scene.tweens.add({ targets: root, scale: 1, duration: FX.defend.pop_ms, ease: 'Back.easeOut' });
-      this.targets.push({ id: t.id, root, timer, r, defend: true });
+      this.targets.push({ id: t.id, root, timer, r, defend: true, ring, ringBase: ring?.scale });
     }
     return list.length;
+  }
+
+  /** M7-E (H-72) 처음 N번 손가락 안내 — 과녁 오른쪽 아래 손가락이 톡톡 + "눌러!" (과녁과 같이 사라짐) */
+  fingerHint(label: string): void {
+    const t = this.targets[0];
+    if (!t || !t.defend) return;
+    const r = t.r;
+    const g = this.scene.add.graphics();
+    const s = r * 0.55;
+    g.fillStyle(0xffffff, 1).lineStyle(this.px(6), TARGET_RIM, 1);
+    g.fillRoundedRect(-s * 0.18, -s * 0.05, s * 0.36, s * 0.9, s * 0.16).strokeRoundedRect(-s * 0.18, -s * 0.05, s * 0.36, s * 0.9, s * 0.16); // 검지
+    g.fillRoundedRect(-s * 0.42, s * 0.45, s * 0.84, s * 0.7, s * 0.25).strokeRoundedRect(-s * 0.42, s * 0.45, s * 0.84, s * 0.7, s * 0.25); // 손
+    const finger = this.scene.add.container(r * 0.55, r * 0.55, [g]).setAngle(-20);
+    this.scene.tweens.add({ targets: finger, x: r * 0.3, y: r * 0.25, duration: 220, yoyo: true, repeat: -1, ease: 'Quad.easeInOut' });
+    const tx = this.scene.add
+      .text(r * 1.15, -r * 0.2, label, { fontFamily: FONT, fontSize: `${Math.round(r * 0.42)}px`, color: '#ffe08a', fontStyle: '900', stroke: '#2a1a0c', strokeThickness: this.px(9) })
+      .setOrigin(0, 0.5);
+    t.root.add([finger, tx]);
   }
 
   /** M7-E 받치기 과녁이 있는가 (놓침 연출 고를 때) */
@@ -112,13 +153,17 @@ export class TouchView {
     return this.targets.some((t) => t.defend);
   }
 
-  /** 남은 시간 고리 (core 남은 수명 ÷ 전체) */
+  /** 남은 시간 고리 (core 남은 수명 ÷ 전체) · 그림 링이면 링이 줄어듦 (1 → 0.8) */
   update(left: number, total: number): void {
     const k = total > 0 ? Phaser.Math.Clamp(left / total, 0, 1) : 0;
     const leftMs = k * this.lifeS * 1000; // 남은 실제 시간 (M7-E 깜빡)
     for (const t of this.targets) {
       t.root.setVisible(this.visible);
       if (t.defend) t.root.setAlpha(leftMs < FX.defend.blink_ms && Math.floor(this.scene.time.now / 60) % 2 === 1 ? 0.35 : 1);
+      if (t.ring && t.ringBase !== undefined) {
+        t.ring.setScale(t.ringBase * (0.8 + 0.2 * k));
+        continue;
+      }
       t.timer.clear();
       t.timer.lineStyle(this.px(7), TARGET_RIM, 0.9);
       t.timer.beginPath();
@@ -134,7 +179,13 @@ export class TouchView {
     const t = this.targets.splice(i, 1)[0]!;
     const at = { x: t.root.x, y: t.root.y };
     this.scene.tweens.add({ targets: t.root, scale: 1.45, alpha: 0, duration: 120, ease: 'Quad.easeOut', onComplete: () => t.root.destroy(true) });
-    if (this.visible) {
+    if (this.visible && t.defend && this.defendArt.hit) {
+      // M7-E 그림 번쩍 (있으면 충격 별 대신)
+      const im = this.scene.add.image(at.x, at.y, this.defendArt.hit).setDepth(this.depth + 1);
+      const k = (t.r * 2.4) / im.width;
+      im.setScale(k * 0.5);
+      this.scene.tweens.add({ targets: im, scale: k, alpha: 0, duration: 220, ease: 'Quad.easeOut', onComplete: () => im.destroy() });
+    } else if (this.visible) {
       const im = FX.impact;
       const rr = this.px(im.star_px);
       const star = this.scene.add.star(at.x, at.y, im.points, rr * im.inner_ratio, rr, COLOR.impact).setStrokeStyle(this.px(6), COLOR.buildingDark).setDepth(this.depth + 1).setScale(0.5);

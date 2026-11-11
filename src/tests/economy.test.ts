@@ -7,6 +7,13 @@ import { has, makeConfig, runUntil } from './helpers';
 /** M4 강화 · 재화 · 저장 (I-12 · I-13 · H-17) — core */
 const cfg = makeConfig();
 const row = (id: string) => cfg.upgrades.rows.find((r) => r.upgrade_id === id)!;
+/** 시트와 상관없이 M4 강화 4종 · 운반 개미 1마리 (M7-E C에서 시트에 3종 · 6마리가 들어와도 M4 규칙 검사는 그대로) */
+const M4_STATS = ['attack_power', 'attack_speed', 'jump_power', 'move_speed'];
+const cfg4 = makeConfig((c) => {
+  c.upgrades.rows = c.upgrades.rows.filter((r) => M4_STATS.includes(r.stat));
+  c.economy.carry_ants = 1;
+  c.economy.carry_interval_s = 0;
+});
 
 describe('M4 비용 · 효과 (정수)', () => {
   it('비용 = 정수 반복: 60 → 78 → 101 → 131 (floor(이전 × 130 / 100)) · Lv 0 = cost_base', () => {
@@ -61,7 +68,7 @@ describe('M4 구매', () => {
 
 describe('M4 재화 도착 (deposit)', () => {
   it('파괴 뒤 carry_delay_s(게임 시간)가 지나면 debris_reward만큼 들어옴 — 그 전에는 0', () => {
-    const sim = new BattleSim(cfg, 1);
+    const sim = new BattleSim(cfg4, 1);
     let destroyAt = -1;
     const ev: BattleEvent[] = [];
     for (let i = 0; i < 120 * 60; i++) {
@@ -80,11 +87,11 @@ describe('M4 재화 도착 (deposit)', () => {
 
 describe('M4 저장 형식 v1', () => {
   it('왕복: 만들기 → 읽기 → 같은 재화 · Lv · 스테이지 · 자동 진행', () => {
-    const sim = new BattleSim(cfg, 3, { stage: 3, autoAdvance: false, debris: 1234, levels: { attack_power: 2, jump_power: 1 } });
+    const sim = new BattleSim(cfg4, 3, { stage: 3, autoAdvance: false, debris: 1234, levels: { attack_power: 2, jump_power: 1 } });
     const save = makeSave(sim);
     expect(save).toEqual({ v: 1, debris: 1234, upgrades: { attack_power: 2, attack_speed: 0, jump_power: 1, move_speed: 0 }, stage: 3, auto_advance: false });
-    const back = parseSave(JSON.stringify(save), cfg)!;
-    const sim2 = new BattleSim(cfg, 1, back);
+    const back = parseSave(JSON.stringify(save), cfg4)!;
+    const sim2 = new BattleSim(cfg4, 1, back);
     expect([sim2.wallet, sim2.levels, sim2.stage.stage, sim2.stage.autoAdvance]).toEqual([1234, save.upgrades, 3, false]);
   });
   it('도전 중이면 도전 전 스테이지 · 자동 진행 OFF로 저장', () => {
@@ -102,7 +109,7 @@ describe('M4 저장 형식 v1', () => {
     expect(parseSave(null, cfg)).toBeNull();
   });
   it('값 정리: 모르는 id 무시 · 빠진 것 0 · Lv > max = max · 음수 0 · 소수 floor · stage < 1 = 1', () => {
-    const s = parseSave({ v: 1, debris: 12.9, upgrades: { attack_power: 999, attack_speed: -3, ghost: 5 }, stage: 0, auto_advance: true }, cfg)!;
+    const s = parseSave({ v: 1, debris: 12.9, upgrades: { attack_power: 999, attack_speed: -3, ghost: 5 }, stage: 0, auto_advance: true }, cfg4)!;
     expect(s).toEqual({ debris: 12, levels: { attack_power: 20, attack_speed: 0, jump_power: 0, move_speed: 0 }, stage: 1, autoAdvance: true });
   });
   it('H-41: 점프력 최대 Lv가 줄면 (7 → 3) 옛 세이브 Lv 4 ~ 7 = 3으로 자름 · 재화는 그대로 (돌려주지 않음 [프로토만])', () => {

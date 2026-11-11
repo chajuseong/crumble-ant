@@ -3,6 +3,12 @@ import { UI_STRINGS } from './gameData';
 
 type Tree = { [k: string]: string | Tree };
 
+/** 문구 키가 있는가 (새 안내 문구 — 시트에 들어오기 전엔 안 보이게) */
+export function hasText(key: string): boolean {
+  const v = key.split('.').reduce<string | Tree | undefined>((node, k) => (node && typeof node === 'object' ? node[k] : undefined), UI_STRINGS as Tree);
+  return typeof v === 'string';
+}
+
 export function t(key: string, vars: Record<string, string | number> = {}): string {
   const v = key.split('.').reduce<string | Tree | undefined>((node, k) => (node && typeof node === 'object' ? node[k] : undefined), UI_STRINGS as Tree);
   const s = typeof v === 'string' ? v : key; // 없으면 키를 그대로 보여 줘서 바로 눈에 띄게 (검증이 먼저 막음)
