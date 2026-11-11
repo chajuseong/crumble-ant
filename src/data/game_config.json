@@ -10,7 +10,7 @@
   },
   "battle": {
     "ant": {
-      "max_hp": 100,
+      "max_hp": 30,
       "height_ratio": 0.07,
       "width_ratio": 0.16,
       "down_duration_s": 1.2,
@@ -57,20 +57,21 @@
       "chain_hold": true,
       "chain_max_speed": 1,
       "max_speed": 1,
-      "action": "strike",
-      "tap_route": "zone"
+      "action": "defend",
+      "tap_route": "state"
     },
     "defend": {
-      "push_power": 0.04,
+      "push_power": 0.12,
       "push_s": 0.15,
       "decay_pct": 30,
       "max_per_building": 3,
       "lift_max_y": 0.9,
       "auto_power_ratio": 0.5,
       "auto_pct": 0,
-      "target_dx_ratio": 0.2,
+      "target_dx_ratio": 0.3,
       "target_dy_ratio": 0.04,
-      "target_jitter_ratio": 0.04
+      "target_jitter_ratio": 0.04,
+      "recoil_fall_mult": 1.5
     },
     "rng_seed": 20261107,
     "arm_damage": [
@@ -115,8 +116,8 @@
   },
   "economy": {
     "carry_delay_s": 4,
-    "carry_ants": 1,
-    "carry_interval_s": 0,
+    "carry_ants": 6,
+    "carry_interval_s": 0.2,
     "start_debris": 0
   },
   "speed": {

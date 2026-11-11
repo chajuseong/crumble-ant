@@ -84,6 +84,7 @@ const CONFIG_KEYS = [
   ["battle.defend.target_dx_ratio", "num", { min: 0, max: 0.5 }],
   ["battle.defend.target_dy_ratio", "num", { min: 0 }],
   ["battle.defend.target_jitter_ratio", "num", { min: 0 }],
+  ["battle.defend.recoil_fall_mult", "num", { gt: 0 }], // I-32 반동
   ["battle.arm_damage", "int4", { min: 0 }],
   ["battle.strike_interval_s", "num", { gt: 0 }],
   ["battle.strike_interval_min_s", "num", { gt: 0 }],
@@ -171,6 +172,8 @@ const FX_KEYS = [
   ["defend.text_px", "num", { gt: 0 }], ["defend.arm_deg", "num", { min: -90, max: 90 }], ["defend.pose_ms", "int", { min: 0 }], ["defend.dust_count", "int", { min: 0 }],
   ["defend.miss_drop_px", "num", { min: 0 }], ["defend.miss_ms", "int", { min: 0 }], ["defend.auto_scale", "num", { gt: 0, max: 1 }],
   ["ring.plate_alpha", "num", { min: 0, max: 1 }],
+  // M7-E 반동 · 손가락 안내 (I-32 · H-72)
+  ["defend.lift_ms", "int", { min: 0 }], ["defend.recoil_squash", "num", { gt: 0, max: 1 }], ["defend.recoil_ms", "int", { min: 0 }], ["defend.hint_count", "int", { min: 0 }],
 ];
 
 // ui_strings 필수 키 (view가 읽는 것)
@@ -188,6 +191,7 @@ const UI_KEYS = [
   // M7-E (H-66 · I-28)
   "fx.defend_target", "fx.defend_hold", "fx.defend_miss", "fx.chain_count",
   "upgrade.fx.max_hp", "upgrade.fx.push_power", "upgrade.fx.auto_defend", "upgrade.now.max_hp", "upgrade.now.push_power", "upgrade.now.auto_defend",
+  "fx.defend_tap", "hud.targets_x1",
 ];
 
 // 강화 (M4 — I-12 · H-17). stat은 코드가 아는 것만 — 4종 = 각 1행 필수 · M7-E 3종 = 있으면 1행 (H-67 · I-28)
@@ -352,6 +356,9 @@ export function validateAll(data) {
         if (!(k in a)) errors.push(`art_config.${k}: 없음 (비우면 도형)`);
         else if (a[k] !== null && !/^[a-z0-9_]+\.png$/.test(a[k])) errors.push(`art_config.${k}: 비우거나 영문 소문자 · 숫자 · _ .png (${JSON.stringify(a[k])})`);
       }
+      // M7-E 받쳐! 과녁 그림 (H-72 · 아트 #96) — 없거나 비우면 도형 · 파일이 art/game에 없으면 경고만 (게임용 사본은 아트 PR로 따로)
+      for (const k of ["defend_target_file", "defend_ring_file", "defend_hit_file"])
+        if (a[k] !== undefined && a[k] !== null && !/^[a-z0-9_]+\.png$/.test(a[k])) errors.push(`art_config.${k}: 비우거나 영문 소문자 · 숫자 · _ .png (${JSON.stringify(a[k])})`);
       checkValue("art_config.strip_ground_ratio", a.strip_ground_ratio, "num", { min: 0, max: 0.9 }, errors);
       checkValue("art_config.strip_burrow_x", a.strip_burrow_x, "num", { gt: 0, max: 1 }, errors);
       if (a.strip_popup_y !== undefined && a.strip_popup_y !== null) checkValue("art_config.strip_popup_y", a.strip_popup_y, "num", { min: 0, max: 1 }, errors); // H-49 (비우면 일개미 줄 높이)
@@ -518,6 +525,9 @@ export function artFileIssues(data, root = "art/game") {
   walk(root);
   for (const [name, list] of where) if (list.length > 1) out.errors.push(`${root}: 같은 파일 이름 ${name}이 ${list.length}곳 (${list.join(" · ")}) — 게임은 이름으로만 찾음`);
   for (const file of new Set(need)) if (!where.has(file)) out.errors.push(`${root}/**/${file}: 파일 없음 (시트에는 있음)`);
+  // M7-E 받쳐! 과녁 그림 = 아트 PR로 따로 옴 → 없으면 경고만 (게임은 도형으로 그림)
+  for (const k of ["defend_target_file", "defend_ring_file", "defend_hit_file"])
+    if (typeof a[k] === "string" && !where.has(a[k])) out.warnings.push(`${root}/**/${a[k]}: 아직 없음 (art_config.${k}) — 그림 PR 전까지 도형`);
   return out;
 }
 

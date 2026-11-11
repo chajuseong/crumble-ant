@@ -16,5 +16,8 @@
   "strip_popup_y": 0.31,
   "ring_file": "shock_ring.png",
   "dust_file": "dust.png",
-  "debris_file": "debris.png"
+  "debris_file": "debris.png",
+  "defend_target_file": "target_defend.png",
+  "defend_ring_file": "target_defend_ring.png",
+  "defend_hit_file": "target_defend_hit.png"
 }

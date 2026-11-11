@@ -5,7 +5,8 @@
     "auto_on": "자동 진행 ON ▶",
     "auto_off": "자동 진행 OFF ■",
     "debris": "잔해 {n}",
-    "speed": "×{n}"
+    "speed": "×{n}",
+    "targets_x1": "과녁 ×1"
   },
   "challenge": {
     "title": "도전!",
@@ -38,7 +39,8 @@
     "defend_target": "받쳐!",
     "defend_hold": "버텨!",
     "defend_miss": "놓침",
-    "chain_count": "{n} / {m}"
+    "chain_count": "{n} / {m}",
+    "defend_tap": "눌러!"
   },
   "ant": {
     "down": "@ @ 기절!"
