@@ -15,6 +15,7 @@ import { COLOR, FONT } from './theme';
 import { t } from './text';
 import { FX, type FxToggles, loadToggles } from './fx';
 import { createFxPanel } from './fxPanel';
+import { createCheatPanel } from './cheatPanel';
 import { HitstopClock } from './hitstop';
 import { dropsChunks, hitstopMs, impactScale, type StrikeKind, strikeKind } from './hitFeel';
 import { hitSoundTurn, lightFx, loadSpeed, nextSpeed, saveSpeed } from './speed';
@@ -31,6 +32,8 @@ export interface BattleSceneData {
   start?: BattleStart | null;
   /** M4 저장 켜기 (?stage 디버그 시작이면 끔 — 저장을 덮어쓰지 않게) */
   save?: boolean;
+  /** M7-E ?cheat — 치트 패널 ([프로토만]) */
+  cheat?: boolean;
 }
 
 interface Debris {
@@ -74,6 +77,7 @@ export class BattleScene extends Phaser.Scene {
   private sim!: BattleSim;
   private L!: Layout;
   private debug = false;
+  private cheatOn = false;
 
   private ant!: AntView;
   private buildingView: BuildingView | null = null;
@@ -147,6 +151,7 @@ export class BattleScene extends Phaser.Scene {
   init(data: BattleSceneData): void {
     this.cfg = data.config;
     this.debug = data.debug;
+    this.cheatOn = data.cheat ?? false;
     this.sim = new BattleSim(this.cfg, data.startStage, data.start ?? null);
     this.saver = new SaveWriter(this.sim, data.save ?? false);
     this.L = computeLayout(this.cfg.layout, this.scale.width, this.scale.height);
@@ -297,6 +302,8 @@ export class BattleScene extends Phaser.Scene {
         .text(this.px(16), L.battle.top + this.px(12), '', { fontFamily: 'monospace', fontSize: `${Math.round(this.px(26))}px`, color: '#1b1a17', backgroundColor: '#ffffffaa' })
         .setDepth(DEPTH.debug);
     }
+
+    if (this.cheatOn) createCheatPanel(this.sim, () => this.popDebris()); // M7-E ?cheat ([프로토만])
 
     this.handleEvents(this.sim.drainEvents());
     this.refreshHud();
@@ -533,10 +540,13 @@ export class BattleScene extends Phaser.Scene {
   private handleEvents(events: BattleEvent[]): void {
     for (const e of events) {
       switch (e.type) {
-        case 'deposit': // M4 실제 재화 도착 — 굴 입구 "+N" · HUD 잔해 튐
+        case 'deposit': // M4 실제 재화 도착 — 굴 입구 "+N" · HUD 잔해 튐 · M7-E 운반 개미마다 (I-30)
           this.strip.popup(e.amount);
           this.popDebris();
-          this.saver.request(this.time.now);
+          if (e.index === e.count - 1) this.saver.request(this.time.now); // 저장 = 마지막 개미 (I-30)
+          break;
+        case 'defend':
+          this.defendFx(e);
           break;
         case 'upgrade':
           this.saver.request(this.time.now);
@@ -587,7 +597,7 @@ export class BattleScene extends Phaser.Scene {
           break;
         }
         case 'targetsSpawn':
-          this.touch.spawn(e.targets);
+          this.touch.spawn(e.targets, this.sim.defendOn ? { step: this.sim.chainStep, lifeS: e.lifeS } : null);
           break;
         case 'targetHit':
           this.touch.hit(e.id);
@@ -595,6 +605,7 @@ export class BattleScene extends Phaser.Scene {
         case 'targetMiss':
           break;
         case 'targetsEnd':
+          if (e.reason !== 'perfect' && this.touch.defendShown) this.defendMiss(); // M7-E 놓침 = 받칠 과녁을 못 누르고 끝 (시간 · 빗나감 · 매달림 끝 — 파괴면 건물 없어서 안 그림 · 벌 없음)
           if (e.reason !== 'perfect') this.touch.clearTargets(true);
           break;
         case 'perfect':
@@ -695,7 +706,9 @@ export class BattleScene extends Phaser.Scene {
   private burstDebris(reward: number): void {
     const v = this.buildingView;
     if (!v) return;
-    const n = this.cfg.strip.debris_pieces;
+    // M7-E (I-30 · H-69) 운반 개미가 여럿이면 조각 수 = core 운반 개미 수 (view가 안 셈 · "+N"은 deposit 때) · 1이면 지금 그대로
+    const ants = Math.max(1, Math.floor(this.cfg.economy.carry_ants ?? 1));
+    const n = ants > 1 ? ants : this.cfg.strip.debris_pieces;
     const each = n > 0 ? Math.floor(reward / n) : 0;
     const bw = this.cfg.battle.building.width_ratio * this.L.width;
     const bh = this.cfg.battle.building.height_ratio * this.L.battle.height;
@@ -806,7 +819,7 @@ export class BattleScene extends Phaser.Scene {
     const h = this.cfg.battle.ant.height_ratio * L.battle.height;
     const f = this.footAt();
     this.alert = this.add
-      .text(f.x, f.y - h * 1.7, t('fx.timing_alert'), { fontFamily: FONT, fontSize: `${Math.round(this.px(120))}px`, color: '#ffe08a', fontStyle: '900', stroke: COLOR.damageStroke, strokeThickness: this.px(12) })
+      .text(f.x + h * 0.95, f.y - h * 1.25, t('fx.timing_alert'), { fontFamily: FONT, fontSize: `${Math.round(this.px(120))}px`, color: '#ffe08a', fontStyle: '900', stroke: COLOR.damageStroke, strokeThickness: this.px(12) })
       .setOrigin(0.5)
       .setDepth(DEPTH.fx);
     this.tweens.add({ targets: this.alert, scale: { from: 1.6, to: 1 }, duration: 160, ease: 'Back.easeOut' });
@@ -873,6 +886,52 @@ export class BattleScene extends Phaser.Scene {
   private dustRing(): void {
     const ring = this.add.ellipse(this.L.width / 2, this.L.groundY, this.px(120), this.px(36)).setStrokeStyle(this.px(8), 0xffffff, 0.9).setDepth(DEPTH.ant - 1);
     this.tweens.add({ targets: ring, scaleX: 3, scaleY: 2, alpha: 0, duration: 320, onComplete: () => ring.destroy() });
+  }
+
+  /**
+   * M7-E 받치기 (H-66 · 콘티 PR #92) — 건물 높이 = core lift 그대로 (syncViews). 손 = 짧은 멈칫 · 흔들림 · 위 팔 밀기 · 위 팔 손끝 번쩍 · 먼지 · "버텨!"
+   * 체인 순서마다 글자 · 흔들림 + chain_grow (그림만) · 자동 = 먼지만 × auto_scale
+   */
+  private defendFx(e: Extract<BattleEvent, { type: 'defend' }>): void {
+    const v = this.buildingView;
+    if (!v || !this.touch.visible) return;
+    const D = FX.defend;
+    const y = v.bottomY;
+    const s = e.auto ? D.auto_scale : 1;
+    this.defendDust(y, Math.max(1, Math.round(D.dust_count * s)), s);
+    if (e.auto) return;
+    const grow = 1 + D.chain_grow * (e.n - 1);
+    this.hitstop.add(D.hitstop_ms, FX.hitstop.max_ms);
+    this.shake(D.shake_ms, (this.px(D.shake_px) * grow) / this.L.width);
+    this.ant.pushUp(D.arm_deg, D.pose_ms);
+    for (const slot of [1, 2]) {
+      const c = this.add.circle(this.ant.strikeX(slot), y, this.px(34), 0xffffff, 0.9).setDepth(DEPTH.fx - 1);
+      this.tweens.add({ targets: c, scale: 1.8, alpha: 0, duration: D.pose_ms, ease: 'Quad.easeOut', onComplete: () => c.destroy() });
+      this.fxCount += 1;
+    }
+    this.floatText(this.L.width / 2, y - this.px(70), t('fx.defend_hold'), '#ffffff', this.px(D.text_px * grow), 900, 650);
+    this.fxCount += 3;
+  }
+
+  /** M7-E 받치기 먼지 — 건물 밑면 양옆으로 퍼짐 (도형 · 연출 전용 난수) */
+  private defendDust(y: number, count: number, scale: number): void {
+    for (let i = 0; i < count; i++) {
+      const side = i % 2 === 0 ? -1 : 1;
+      const x = this.L.width / 2 + side * this.px(Phaser.Math.Between(60, 200));
+      const c = this.add.circle(x, y, this.px(Phaser.Math.Between(14, 26)) * scale, 0xf3ead8, 0.85).setStrokeStyle(this.px(3), COLOR.buildingDark, 0.5).setDepth(DEPTH.fx - 1);
+      this.tweens.add({ targets: c, x: x + side * this.px(120) * scale, y: y + this.px(Phaser.Math.Between(-30, 30)), alpha: 0, scale: 1.6, duration: 420, ease: 'Quad.easeOut', onComplete: () => c.destroy() });
+      this.fxCount += 1;
+    }
+  }
+
+  /** M7-E 받치기 놓침 — "놓침" + 건물이 툭 내려앉는 흔들림 (그림만 · 벌 없음) */
+  private defendMiss(): void {
+    const v = this.buildingView;
+    if (!v || !this.touch.visible) return;
+    const D = FX.defend;
+    v.push(-this.px(D.miss_drop_px), D.miss_ms);
+    this.floatText(this.L.width / 2, v.bottomY - this.px(70), t('fx.defend_miss'), '#ffc9b8', this.px(D.text_px * 0.8), 900, 650);
+    this.fxCount += 2;
   }
 
   private floatText(x: number, y: number, text: string, color: string, size: number, weight = 900, ms = 750, popScale = 1.25): Phaser.GameObjects.Text {

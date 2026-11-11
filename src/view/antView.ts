@@ -51,6 +51,8 @@ export class AntView {
   windupS = 0;
   /** CA-002 지금 내린 양 (개미 키 단위 · 확인용) */
   drop = 0;
+  /** M7-E 받치기 자세 (위 두 팔 = 위로 · 아래 두 팔 = 벌림 · 무기 공격은 그대로 겹침 — 콘티 PR #92) */
+  private pushPose: { at: number; dur: number; deg: number } | null = null;
   /** 팔 기본 각도 크기 (슬롯 1 ~ 4) — 도형 팔과 같은 값 */
   private readonly restAbs: number[];
 
@@ -225,6 +227,11 @@ export class AntView {
     fist.setPosition(arm.x + Math.sin(a) * len, arm.y - Math.cos(a) * len);
   }
 
+  /** M7-E 받치기 — 위 두 팔을 deg만큼 위로 · 아래 두 팔 벌림 (ms 동안 · 모션 켬일 때만 — 끔이면 M3 모습) */
+  pushUp(deg: number, ms: number): void {
+    if (this.motionOn) this.pushPose = { at: this.motionT, dur: ms / 1000, deg };
+  }
+
   /** 점프 시작 — 늘어나기 (모션 켬 = 도약 단계로) */
   jump(strong: boolean): void {
     if (this.motionOn) {
@@ -248,6 +255,18 @@ export class AntView {
     if (touchdown) this.mi.landAt = this.motionT;
     if (!frozen) this.base = blendPose(this.base, phasePose(MOTION, st, this.restAbs), dtMs, MOTION.blend_ms);
     const pose = composePose(MOTION, this.base, this.motionInput({ ...st, jumpPending }), this.restAbs, this.punch);
+    const pp = this.pushPose;
+    if (pp) {
+      const e = pp.dur > 0 ? (this.motionT - pp.at) / pp.dur : 1;
+      if (e >= 1) this.pushPose = null;
+      else {
+        const k = e < 0.6 ? 1 : 1 - (e - 0.6) / 0.4; // 60%까지 유지 → 풀림
+        pose.arms[0]!.out -= pp.deg * k;
+        pose.arms[1]!.out -= pp.deg * k;
+        pose.arms[2]!.out += pp.deg * 0.5 * k;
+        pose.arms[3]!.out += pp.deg * 0.5 * k;
+      }
+    }
     // CA-002 (I-15): 그림 모드만 — 그림 머리끝 = 건물 밑면 (도형은 판정 키와 크기가 같아서 그대로)
     this.drop = this.rig ? hangDrop(this.rig.topRatio, gap, feetRoom) : 0;
     pose.dy -= this.drop;

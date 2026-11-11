@@ -40,6 +40,8 @@ export function fromData(raw: RawGameData): GameConfig {
       ...(typeof battle.strong_timing === 'object' && battle.strong_timing !== null ? { strong_timing: o(battle.strong_timing) as unknown as NonNullable<GameConfig['battle']['strong_timing']> } : {}),
       ...(typeof battle.targets === 'object' && battle.targets !== null ? { targets: o(battle.targets) as unknown as NonNullable<GameConfig['battle']['targets']> } : {}),
       ...(typeof battle.rng_seed === 'number' ? { rng_seed: battle.rng_seed } : {}),
+      // M7-E 받치기 (I-28) — 없으면 받치기 없음
+      ...(typeof battle.defend === 'object' && battle.defend !== null ? { defend: o(battle.defend) as unknown as NonNullable<GameConfig['battle']['defend']> } : {}),
     },
     buildings: { rows: Array.isArray(raw.buildings) ? raw.buildings : [] },
     stages: {
@@ -53,6 +55,9 @@ export function fromData(raw: RawGameData): GameConfig {
     economy: {
       carry_delay_s: typeof o(g.economy).carry_delay_s === 'number' ? (o(g.economy).carry_delay_s as number) : 0,
       start_debris: typeof o(g.economy).start_debris === 'number' ? (o(g.economy).start_debris as number) : 0,
+      // M7-E (I-30) 운반 개미 — 없으면 1마리 · 0초 (지금 그대로)
+      carry_ants: typeof o(g.economy).carry_ants === 'number' ? (o(g.economy).carry_ants as number) : 1,
+      carry_interval_s: typeof o(g.economy).carry_interval_s === 'number' ? (o(g.economy).carry_interval_s as number) : 0,
     },
   };
 }

@@ -5,6 +5,9 @@
 //       npm run measure -- --hitstop   히트스톱으로 늘어나는 벽시계 시간 (스테이지 1 · 5 · 7) — M2 (일반 · 마지막) vs M3-D (+ 4연타 마무리 · 일반 ≤ 간격 × hit_ratio_max)
 //       npm run measure -- --touch     M7 터치 개편 — 링 예측 모델 (등급 × 배속) · 과녁 반응 모델 · 60분 진행 · 자동만 배속 · 연타 모델
 //                                      데이터가 꺼져 있으면 (mode tap · count 0) 측정만 C 값 (timing · 2 ~ 3)으로 켜서 잼 — 결과는 C PR 표에
+//       npm run measure -- --defend    M7-E 체력 + 받치기 (I-27 · I-28 · H-69) — 자동 2정책 (가장 싼 것 · 공격 우선) · 손 · 연타 / 후퇴 · 쓰러짐 · 아슬 · 받치기 손 · 자동
+//                                      데이터가 꺼져 있으면 (action strike) 측정만 C 후보 (체력 30 · 강화 3행 · defend · state · 운반 6)로 켜서 잼
+//       npm run measure -- --defend --sweep   + 받치는 힘 0.02 ~ 0.08 × 자동 받치기 비용 쓸기 (C 고르는 표 — H-69)
 // core(TypeScript)는 Vite로 불러온다 — 따로 빌드 도구를 늘리지 않음
 import fs from "node:fs";
 import path from "node:path";
@@ -232,7 +235,7 @@ try {
     // M7-D (I-26 · H-61) — C 값: ring 0.6 (계산 슬로) · 체인 (×1 · ×1.5) · ×2 이상 묶음 수명 후보
     const d = (o = {}) => { const c = structuredClone(cfgOn); Object.assign(c.battle.strong_timing, { ring_s: 0.6 }); Object.assign(c.battle.targets, { mode: "chain", ...o }); return c; };
     const ph = (r) => [0, 1, 2].map((k) => pct(r.posHit[k], r.pos[k])).join(" / ");
-    console.log("⑥ M7-D (ring 0.6 · 슬로 계산 · 체인 lead 0.3 · 버팀 · 첫 수명 0.6 · step 0.1)");
+    console.log(`⑥ M7-D (ring 0.6 · 슬로 계산 · 체인 lead ${d().battle.targets.lead_s} · 버팀 · 첫 수명 ${d().battle.targets.chain_life_s} · step ${d().battle.targets.chain_life_step} — 지금 데이터)`);
     console.log(`  링 예측 (반응 하한 0.30 ± 0.08 + σ) GOOD 이상 ×1 / ×2 / ×3 — σ 0.06: ${[1, 2, 3].map((speed) => { const r = play(d(), { sigma: 0.06, speed, minutes: 10, buy: false }); return pct(r.perfect + r.good, r.chances); }).join(" / ")} · σ 0.08: ${[1, 2, 3].map((speed) => { const r = play(d(), { sigma: 0.08, speed, minutes: 10, buy: false }); return pct(r.perfect + r.good, r.chances); }).join(" / ")}`);
     for (const speed of [1, 1.5]) { const r = play(d(), { tgt: true, speed, minutes: 10 }); console.log(`  체인 ×${speed} — 1 / 2 / 3번째 맞힘 ${ph(r)} · PERFECT 묶음 ${r.batch}`); }
     for (const life of [1.2, 0.9, 0.7]) console.log(`  묶음 (×2 이상) 수명 ${life} — 맞힘 ×2 / ×3 ${[2, 3].map((speed) => { const r = play(d({ life_s: life }), { tgt: true, speed, minutes: 10 }); return pct(r.tHit, r.tAll); }).join(" / ")}`);
@@ -246,6 +249,103 @@ try {
     const mLd = play(d(), { mash: "low", minutes: 10 }), mHd = play(d(), { mash: "high", minutes: 10 });
     console.log(`  연타 — 아래: 강점프 ${mLd.perfect + mLd.good} | 위: 과녁 ${mHd.tHit} / ${mHd.tAll} · PERFECT ${mHd.batch}`);
     console.log(`⑤ 연타 (10분 · 0.1초마다) — 아래 절반: 강점프 ${mL.perfect + mL.good} · 헛발 ${mL.early} / 기회 ${mL.chances} | 위 절반: 과녁 ${mH.tHit} / ${mH.tAll} · PERFECT 묶음 ${mH.batch} · 강점프 ${mH.perfect + mH.good}`);
+  }
+
+  if (process.argv.includes("--defend")) {
+    // M7-E (I-27 · I-28 · H-67 · H-69) — 사람 손 = 측정용 난수 (core와 따로 · 결정적)
+    let seed = 4242;
+    const rnd = () => ((seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296);
+    const gauss = () => { const u = Math.max(1e-9, rnd()); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * rnd()); };
+    const ROW = { max_hp: { per_level_pct: 0, per_level_add: 10, max_level: 7, cost_base: 60, cost_growth_pct: 135 }, push_power: { per_level_pct: 8, per_level_add: 0, max_level: 10, cost_base: 70, cost_growth_pct: 135 }, auto_defend: { per_level_pct: 0, per_level_add: 3, max_level: 10, cost_base: 80, cost_growth_pct: 140 } };
+    const NAME = { max_hp: "체력", push_power: "받치는 힘", auto_defend: "자동 받치기" };
+    const off = config.battle.targets?.action !== "defend";
+    const on = (base, o = {}) => {
+      const c = structuredClone(base);
+      if (off) {
+        c.battle.ant.max_hp = 30;
+        Object.assign(c.battle.targets, { action: "defend", tap_route: "state" });
+        Object.assign(c.economy, { carry_ants: 6, carry_interval_s: 0.2 });
+        let sort = Math.max(0, ...c.upgrades.rows.map((r) => r.sort));
+        for (const st of Object.keys(ROW)) if (!c.upgrades.rows.some((r) => r.stat === st)) c.upgrades.rows.push({ upgrade_id: st, name: NAME[st], stat: st, ...ROW[st], sort: ++sort });
+      }
+      if (o.push !== undefined) c.battle.defend.push_power = o.push;
+      if (o.autoBase !== undefined) Object.assign(c.upgrades.rows.find((r) => r.stat === "auto_defend"), { cost_base: o.autoBase });
+      return c;
+    };
+    const ATTACK = new Set(["attack_power", "attack_speed"]);
+    const PX = config.layout.frame_height * config.layout.battle_ratio; // 전투 구역 높이 (720폭 프레임 px)
+    // policy: cheap = 살 수 있는 가장 싼 것 · attack = 살 수 있는 것 중 공격 (공격력 · 공격속도) 먼저 → 없으면 가장 싼 것. 사면 [도전]
+    const play = (cfg, { policy = "cheap", hand = false, mash = false, minutes = 60 } = {}) => {
+      const sim = new BattleSim(structuredClone(cfg), 1);
+      const rows = cfg.upgrades.rows, first = {}, plan = [], perDown = [];
+      const r = { earned: 0, retreats: 0, downs: 0, lands: 0, destroyed: 0, low: 0, clears: 0, clearsHit: 0, spawned: 0, dHand: 0, dAuto: 0, lHand: 0, lAuto: 0, seq: 0, pos: [0, 0, 0, 0], posHit: [0, 0, 0, 0], batch: 0, tHit: 0, tAll: 0, strong: 0 };
+      let landsSince = 0, wall = 0;
+      const handle = (ev) => { for (const e of ev) {
+        if (e.type === "deposit") r.earned += e.amount;
+        else if (e.type === "spawn") r.spawned++;
+        else if (e.type === "land") { r.lands++; landsSince++; }
+        else if (e.type === "destroy") { r.destroyed++; if (sim.ant.hp <= sim.ant.maxHp * 0.3) r.low++; }
+        else if (e.type === "antDown") { r.downs++; perDown.push(landsSince); }
+        else if (e.type === "stageClear") { r.clears++; if (landsSince > 0) r.clearsHit++; if (!(e.stage in first)) first[e.stage] = wall / 60; }
+        else if (e.type === "stageStart") { landsSince = 0; if (e.reason === "retreat") r.retreats++; }
+        else if (e.type === "defend") { if (e.auto) { r.dAuto++; r.lAuto += e.lift; } else { r.dHand++; r.lHand += e.lift; } }
+        else if (e.type === "targetHit") { r.tHit++; r.seq++; }
+        else if (e.type === "targetsEnd") r.seq = 0;
+        else if (e.type === "perfect") r.batch++;
+        else if (e.type === "jump" && e.kind !== "auto") r.strong++;
+        else if (e.type === "targetsSpawn") {
+          r.tAll += e.targets.length; r.pos[Math.min(r.seq, 3)]++;
+          if (hand) for (const t of e.targets) plan.push({ at: wall + Math.max(0.15, 0.42 + 0.1 * gauss()), x: t.x, y: t.y, target: t.id, p: Math.min(r.seq, 3) });
+        }
+        else if (e.type === "timingChance" && hand) plan.push({ at: wall + Math.max(0.3 + 0.08 * gauss(), cfg.battle.strong_timing.ring_s + 0.06 * gauss()), x: 0.5, y: 0.1, chance: true });
+      } };
+      for (let i = 0; i < minutes * 60 * 120; i++) {
+        wall += 1 / 120; sim.update(1 / 120); handle(sim.drainEvents());
+        if (mash && i % 12 === 0) sim.tapBattle(0.1 + rnd() * 0.8, rnd());
+        plan.sort((a, b) => a.at - b.at);
+        while (plan.length && plan[0].at <= wall) {
+          const p = plan.shift();
+          if (p.chance && !sim.ant.winding) continue;
+          if (p.target !== undefined && !sim.targets.some((t) => t.id === p.target)) continue;
+          const res = sim.tapBattle(p.x, p.y);
+          if (p.target !== undefined && res === "target") r.posHit[p.p]++;
+        }
+        handle(sim.drainEvents());
+        let bought = false;
+        for (;;) {
+          const can = rows.filter((x) => sim.levels[x.upgrade_id] < x.max_level).map((x) => ({ id: x.upgrade_id, stat: x.stat, cost: upgradeCost(x, sim.levels[x.upgrade_id]) })).filter((x) => x.cost <= sim.wallet);
+          can.sort((a, b) => (policy === "attack" ? Number(!ATTACK.has(a.stat)) - Number(!ATTACK.has(b.stat)) : 0) || a.cost - b.cost || (a.id < b.id ? -1 : 1));
+          if (!can.length || sim.buyUpgrade(can[0].id) !== "ok") break;
+          bought = true;
+        }
+        if (bought && sim.challengeAvailable) sim.challenge();
+      }
+      const avg = (a) => (a.length ? (a.reduce((x, y) => x + y, 0) / a.length).toFixed(1) : "—");
+      return { ...r, first, perDown: avg(perDown), lv: rows.map((x) => sim.levels[x.upgrade_id]).join("/") };
+    };
+    const f = (x) => (x === undefined ? "—" : x.toFixed(1));
+    const pc = (a, b) => `${Math.round((a / Math.max(1, b)) * 100)}%`;
+    const px = (sum, n) => (n ? `${(sum / n).toFixed(3)} (${Math.round((sum / n) * PX)}px)` : "—");
+    const line = (name, r) => `  ${name} | ${[6, 7, 8].map((s) => f(r.first[s])).join(" / ")} | ${r.earned} | 후퇴 ${r.retreats} · 쓰러짐 ${r.downs} · 착지→쓰러짐 ${r.perDown} | 아슬 (HP ≤ 30% 깸) ${pc(r.low, r.destroyed)} · 맞으며 깬 판 ${pc(r.clearsHit, r.clears)} | 건물당 받치기 손 ${(r.dHand / Math.max(1, r.spawned)).toFixed(2)} · 자동 ${(r.dAuto / Math.max(1, r.spawned)).toFixed(2)} · lift 손 ${px(r.lHand, r.dHand)} · 자동 ${px(r.lAuto, r.dAuto)}`;
+    const c0 = on(config), d = c0.battle.defend;
+    console.log(`\nM7-E 받치기 측정 — ${off ? "데이터 꺼짐 → C 후보로 켜서 잼 (체력 30 · 강화 3행 · defend · state · 운반 6 · 0.2)" : "지금 데이터"} · 힘 ${d.push_power} · 멈춤 ${d.push_s} · 감쇠 ${d.decay_pct}% · 건물당 ${d.max_per_building} · 상한 ${d.lift_max_y} · 자동 힘 × ${d.auto_power_ratio} · 자동 ${d.auto_pct}%`);
+    console.log(`  강화 (Lv 순서 ${c0.upgrades.rows.map((x) => x.upgrade_id).join("/")}) — ${c0.upgrades.rows.filter((x) => x.stat in ROW).map((x) => `${x.stat} +${x.per_level_add || x.per_level_pct + "%"} × ${x.max_level} (${x.cost_base} · ${x.cost_growth_pct}%)`).join(" · ")}`);
+    console.log("① 60분 (게임 분 = 실제 분 · ×1) — 설정 | stage 6 / 7 / 8 | 60분 잔해 | 후퇴 · 쓰러짐 | 아슬 | 받치기");
+    console.log(line("키 끔 (지금 데이터 · 자동)", play(config)));
+    const aC = play(c0), aA = play(c0, { policy: "attack" }), hC = play(c0, { hand: true });
+    console.log(line("켬 · 자동 · 가장 싼 것", aC));
+    console.log(line("켬 · 자동 · 공격 우선", aA));
+    console.log(line("켬 · 손 (σ 0.06 · 과녁 다 노림) · 가장 싼 것", hC));
+    console.log(`  손 ÷ 자동 (stage 8) ${aC.first[8] && hC.first[8] ? (aC.first[8] / hC.first[8]).toFixed(1) + "배" : "—"} · 손 체인 1 / 2 / 3번째 ${[0, 1, 2].map((k) => pc(hC.posHit[k], hC.pos[k])).join(" / ")} · PERFECT ${hC.batch} · 끝 Lv 자동 ${aC.lv} · 손 ${hC.lv}`);
+    const m = play(c0, { mash: true, minutes: 10 });
+    console.log(`② 연타 (10분 · 0.1초마다 아무 데나) — 과녁 맞힘 ${m.tHit} / ${m.tAll} · 체인 2번째 이상 ${m.posHit[1] + m.posHit[2]} · PERFECT ${m.batch} · 강점프 ${m.strong} (맞힘 = 우연히 과녁 반지름 안)`);
+    if (process.argv.includes("--sweep")) {
+      console.log("③ 쓸기 (60분 · 자동) — 힘 | 자동 받치기 비용 | 가장 싼 것 stage 8 · 잔해 · 후퇴 | 공격 우선 stage 8 · 잔해 · 후퇴 | lift (px)");
+      for (const push of [0.02, 0.04, 0.06, 0.08]) for (const autoBase of [80, 160, 320]) {
+        const c = on(config, { push, autoBase }), a = play(c), b = play(c, { policy: "attack" });
+        console.log(`  ${push} | ${autoBase} | ${f(a.first[8])} · ${a.earned} · ${a.retreats} | ${f(b.first[8])} · ${b.earned} · ${b.retreats} | ${Math.round(push * PX)}`);
+      }
+    }
   }
 } finally {
   await server.close();

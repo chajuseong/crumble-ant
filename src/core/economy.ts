@@ -15,6 +15,8 @@ export function upgradeCost(row: UpgradeRow, lv: number): number {
 }
 
 export const levelPct = (row: UpgradeRow, lv: number): number => 100 + row.per_level_pct * lv;
+/** M7-E 고정값 강화 (max_hp · auto_defend) — Lv당 +per_level_add (정수 합산) */
+export const levelAdd = (row: UpgradeRow, lv: number): number => (row.per_level_add ?? 0) * lv;
 
 export function initialLevels(cfg: GameConfig): Levels {
   const out: Levels = {};
@@ -32,12 +34,26 @@ export interface BattleStats {
   riseSpeed: number;
   /** 하강 속도 — 이동속도 강화 (I-13) */
   fallSpeed: number;
+  /** M7-E 체력 강화 — battle.ant.max_hp + 이 값 (H-67) */
+  hpAdd: number;
+  /** M7-E 받치는 힘 % (100 = 강화 없음) */
+  pushPct: number;
+  /** M7-E 자동 받치기 %p — battle.defend.auto_pct + 이 값 */
+  autoDefendAdd: number;
 }
 
 export function deriveStats(cfg: GameConfig, levels: Levels): BattleStats {
-  const pct = (stat: UpgradeStat): number => {
+  const lvOf = (stat: UpgradeStat): { row: UpgradeRow; lv: number } | null => {
     const row = cfg.upgrades.rows.find((r) => r.stat === stat);
-    return row ? levelPct(row, Math.max(0, Math.floor(levels[row.upgrade_id] ?? 0))) : 100;
+    return row ? { row, lv: Math.max(0, Math.floor(levels[row.upgrade_id] ?? 0)) } : null;
+  };
+  const pct = (stat: UpgradeStat): number => {
+    const o = lvOf(stat);
+    return o ? levelPct(o.row, o.lv) : 100;
+  };
+  const add = (stat: UpgradeStat): number => {
+    const o = lvOf(stat);
+    return o ? levelAdd(o.row, o.lv) : 0;
   };
   const b = cfg.battle;
   const mul = (base: number, p: number) => (p === 100 ? base : (base * p) / 100);
@@ -49,6 +65,9 @@ export function deriveStats(cfg: GameConfig, levels: Levels): BattleStats {
     jumpHeight: mul(b.jump.height_ratio, pct('jump_power')),
     riseSpeed: b.jump.speed_ratio_per_s,
     fallSpeed: mul(b.jump.speed_ratio_per_s, pct('move_speed')),
+    hpAdd: add('max_hp'),
+    pushPct: pct('push_power'),
+    autoDefendAdd: add('auto_defend'),
   };
 }
 

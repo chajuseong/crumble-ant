@@ -22,6 +22,7 @@ if (errors.length) {
     // M4 저장: ?stage로 시작하면 저장을 읽지도 쓰지도 않음 (검수용 — 저장을 덮어쓰지 않게)
     start: params.has('stage') ? null : loadStart(config),
     save: !params.has('stage'),
+    cheat: params.has('cheat'), // ?cheat — M7-E 치트 패널 ([프로토만] · 세이브 안 함)
   };
   const game = new Phaser.Game({
     type: Phaser.AUTO,
