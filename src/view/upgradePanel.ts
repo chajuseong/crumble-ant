@@ -13,6 +13,8 @@ import { t } from './text';
  * 흐름: [강화] → 열림 → 카드 [비용] → ok = 구매 · 카드 튐 / short = 버튼 흔들림 + 안내 / max = 반응 없음 → [✕] · 바깥 탭 → 닫힘
  */
 const PANEL_H_RATIO = 0.55; // 전투 구역 높이 대비 (모양 상수 — 계획 ④-1)
+const VISIBLE_ROWS = 5; // M7-E 한 번에 보이는 카드 수 — 넘으면 목록 스크롤 (H-69 · 4줄이면 지금 그대로)
+const DRAG_SLOP_PX = 12; // 이만큼 움직이면 스크롤 (그 손가락으로는 구매 안 함)
 
 interface Card {
   row: UpgradeRow;
@@ -33,6 +35,13 @@ export class UpgradePanel {
   private resetArmedUntil = 0;
   private openFlag = false;
   private readonly top: number;
+  // ── M7-E 목록 스크롤 (카드가 VISIBLE_ROWS보다 많을 때만) ──
+  private readonly list: Phaser.GameObjects.Container;
+  private readonly rects: { y0: number; rect: { y: number } }[] = [];
+  private scroll = 0;
+  private maxScroll = 0;
+  private drag: { y: number; scroll: number } | null = null;
+  private dragged = false;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -65,7 +74,30 @@ export class UpgradePanel {
     const rows = sim.cfg.upgrades.rows;
     const gap = px(14);
     const cardsH = h - headH - footH;
-    const cardH = (cardsH - gap * (rows.length + 1)) / Math.max(1, rows.length);
+    const shown = Math.max(1, Math.min(rows.length, VISIBLE_ROWS));
+    const cardH = (cardsH - gap * (shown + 1)) / shown;
+    const listTop = this.top + headH;
+    this.list = scene.add.container(0, 0);
+    this.root.add(this.list);
+    this.maxScroll = Math.max(0, rows.length * (cardH + gap) + gap - cardsH);
+    if (this.maxScroll > 0) {
+      // 목록 = 머리 · 발 사이만 보이게 (마스크) · 끌기 · 휠로 스크롤
+      const maskG = scene.make.graphics({}, false).fillRect(x, listTop, w, cardsH);
+      this.list.setMask(maskG.createGeometryMask());
+      const inList = (p: Phaser.Input.Pointer) => this.openFlag && p.x >= x && p.x <= x + w && p.y >= listTop && p.y <= listTop + cardsH;
+      scene.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
+        this.dragged = false;
+        this.drag = inList(p) ? { y: p.y, scroll: this.scroll } : null;
+      });
+      scene.input.on('pointermove', (p: Phaser.Input.Pointer) => {
+        if (!this.drag || !p.isDown) return;
+        if (Math.abs(p.y - this.drag.y) > px(DRAG_SLOP_PX)) this.dragged = true;
+        if (this.dragged) this.setScroll(this.drag.scroll - (p.y - this.drag.y));
+      });
+      scene.input.on('wheel', (p: Phaser.Input.Pointer, _o: unknown, _dx: number, dy: number) => {
+        if (inList(p)) this.setScroll(this.scroll + dy);
+      });
+    }
     rows.forEach((row, i) => {
       const cy = this.top + headH + gap + i * (cardH + gap);
       const root = scene.add.container(0, 0);
@@ -79,14 +111,25 @@ export class UpgradePanel {
       const btn = scene.add.rectangle(btnX, cy + cardH / 2, bw, bh, COLOR.challenge).setStrokeStyle(px(3), 0xffffff, 0.6);
       const cost = scene.add.text(btnX, cy + cardH / 2, '', font(bh * 0.42, COLOR.challengeText)).setOrigin(0.5);
       root.add([name, level, effect, btn, cost]);
-      this.root.add(root);
+      this.list.add(root);
       this.cards.push({ row, root, name, level, effect, btn, cost, btnX });
-      router.addButton({ id: `upgrade:${row.upgrade_id}`, rect: { x: btnX - bw / 2, y: cy + (cardH - bh) / 2, w: bw, h: bh }, mode: 'upgrade', action: { type: 'buyUpgrade', id: row.upgrade_id }, enabled: () => this.openFlag, priority: 30 });
+      const rect = { x: btnX - bw / 2, y: cy + (cardH - bh) / 2, w: bw, h: bh };
+      this.rects.push({ y0: rect.y, rect });
+      // 스크롤로 가려진 버튼 · 끌던 손가락 = 구매 안 함
+      const visible = () => rect.y >= listTop - 1 && rect.y + bh <= listTop + cardsH + 1;
+      router.addButton({ id: `upgrade:${row.upgrade_id}`, rect, mode: 'upgrade', action: { type: 'buyUpgrade', id: row.upgrade_id }, enabled: () => this.openFlag && !this.dragged && visible(), priority: 30 });
     });
     const footY = this.top + h - footH / 2;
     this.resetText = scene.add.text(x + w / 2, footY, '', font(footH * 0.34, '#9a8f80')).setOrigin(0.5);
     this.root.add(this.resetText);
     router.addButton({ id: 'upgrade:reset', rect: { x: x + w * 0.3, y: footY - footH / 2, w: w * 0.4, h: footH }, mode: 'upgrade', action: { type: 'resetSave' }, enabled: () => this.openFlag, priority: 30 });
+  }
+
+  /** M7-E 목록 스크롤 — 카드 · 버튼 자리를 같이 옮김 */
+  private setScroll(v: number): void {
+    this.scroll = Phaser.Math.Clamp(v, 0, this.maxScroll);
+    this.list.y = -this.scroll;
+    for (const r of this.rects) r.rect.y = r.y0 - this.scroll;
   }
 
   get isOpen(): boolean {
@@ -154,7 +197,7 @@ export class UpgradePanel {
     return false;
   }
 
-  /** 카드에 보일 효과 값 (공격력 = 데미지 · 공격속도 = 초당 타수 · 점프 · 하강 = +%) */
+  /** 카드에 보일 효과 값 (공격력 = 데미지 · 공격속도 = 초당 타수 · 점프 · 하강 · 받치는 힘 = +% · 체력 = 최대 HP · 자동 받치기 = %) */
   private effectValue(row: UpgradeRow, lv: number): string {
     const levels = { ...this.sim.levels, [row.upgrade_id]: lv };
     const st = deriveStats(this.sim.cfg, levels);
@@ -163,6 +206,10 @@ export class UpgradePanel {
         return String(st.armDamage[0] ?? 0);
       case 'attack_speed':
         return (1 / st.strikeIntervalS).toFixed(1);
+      case 'max_hp':
+        return String(this.sim.cfg.battle.ant.max_hp + st.hpAdd);
+      case 'auto_defend':
+        return String((this.sim.cfg.battle.defend?.auto_pct ?? 0) + st.autoDefendAdd);
       default:
         return String(levelPct(row, lv) - 100);
     }

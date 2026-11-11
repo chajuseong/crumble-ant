@@ -92,7 +92,13 @@ export interface BattleConfig {
     chain_max_speed?: number;
     /** 이 배속보다 높으면 과녁 없음 (없으면 제한 없음 — ×2 · ×3은 개미가 실제 0.3초 안에 착지해서 과녁을 못 누름) */
     max_speed?: number;
+    /** M7-E (I-28) 과녁 탭 = strike 1타 (없으면) / defend 받치기 */
+    action?: 'strike' | 'defend';
+    /** M7-E (H-69) 탭 길 — zone = H-54 ③ (없으면) / state = 과녁 있으면 어디든 과녁 · 없으면 링 */
+    tap_route?: 'zone' | 'state';
   };
+  /** M7-E 받치기 (I-28 — docs/dev.md §3-3). lift = push_power × 받치는 힘 % ÷ 100 ÷ weight × (1 − decay)^n × (자동 ratio) */
+  defend?: DefendConfig;
   /** M7 core 시드 난수 시작값 */
   rng_seed?: number;
   arms: ArmConfig[];
@@ -163,13 +169,33 @@ export interface StripConfig {
   popup_duration_s: number;
 }
 
-/** M4 강화 (upgrades 시트 — docs/dev.md §3-6). stat = 코드가 아는 4종 */
-export type UpgradeStat = 'attack_power' | 'attack_speed' | 'jump_power' | 'move_speed';
+/** M7-E 받치기 (battle.defend.*) */
+export interface DefendConfig {
+  push_power: number;
+  /** 받친 뒤 낙하 멈춤 (게임 초) */
+  push_s: number;
+  decay_pct: number;
+  max_per_building: number;
+  /** 건물 밑면 상한 — 자르는 곳은 이 키 하나 (M9 월드 좌표 — I-29) */
+  lift_max_y: number;
+  auto_power_ratio: number;
+  /** 강화 0일 때 자동 받치기 % (매달림 시작마다 난수 1번 · 합 0이면 안 뽑음) */
+  auto_pct: number;
+  /** 받치기 과녁 자리 — 개미 가운데 ± dx · 밑면 − dy · ± jitter */
+  target_dx_ratio: number;
+  target_dy_ratio: number;
+  target_jitter_ratio: number;
+}
+
+/** M4 강화 (upgrades 시트 — docs/dev.md §3-6). stat = 코드가 아는 것 (M7-E 3종 추가 — 고정값 = per_level_add) */
+export type UpgradeStat = 'attack_power' | 'attack_speed' | 'jump_power' | 'move_speed' | 'max_hp' | 'push_power' | 'auto_defend';
 export interface UpgradeRow {
   upgrade_id: string;
   name: string;
   stat: UpgradeStat;
   per_level_pct: number;
+  /** M7-E Lv당 +고정값 (max_hp · auto_defend) — 없으면 0 */
+  per_level_add?: number;
   max_level: number;
   cost_base: number;
   cost_growth_pct: number;
@@ -180,6 +206,9 @@ export interface UpgradeRow {
 export interface EconomyConfig {
   /** 파괴 → 재화 도착까지 (게임 시간 초) */
   carry_delay_s: number;
+  /** M7-E (I-30) 운반 개미 수 · 간격 (게임 초) — 없으면 1 · 0 (지금 그대로) */
+  carry_ants?: number;
+  carry_interval_s?: number;
   start_debris: number;
 }
 
@@ -282,8 +311,26 @@ export function validateConfig(raw: unknown): string[] {
           num('battle.targets.perfect_bonus_strikes', t.perfect_bonus_strikes, { min: 0, int: true }),
           (e: string[]) => {
             if (typeof t.count_min === 'number' && typeof t.count_max === 'number' && t.count_min > t.count_max) e.push('battle.targets: count_min ≤ count_max');
+            if (t.action !== undefined && t.action !== 'strike' && t.action !== 'defend') e.push(`battle.targets.action: strike / defend 중 하나 (${String(t.action)})`);
+            if (t.tap_route !== undefined && t.tap_route !== 'zone' && t.tap_route !== 'state') e.push(`battle.targets.tap_route: zone / state 중 하나 (${String(t.tap_route)})`);
+            if (t.action === 'defend' && battle.defend === undefined) e.push('battle.targets.action defend: battle.defend 필요');
           },
         ])(obj(battle.targets))
+      : []),
+    // M7-E 받치기 — 키가 있을 때만
+    ...(battle.defend !== undefined
+      ? ((d) => [
+          num('battle.defend.push_power', d.push_power, { gt: 0 }),
+          num('battle.defend.push_s', d.push_s, { min: 0 }),
+          num('battle.defend.decay_pct', d.decay_pct, { min: 0, max: 99, int: true }),
+          num('battle.defend.max_per_building', d.max_per_building, { min: 1, int: true }),
+          num('battle.defend.lift_max_y', d.lift_max_y, { gt: 0 }),
+          num('battle.defend.auto_power_ratio', d.auto_power_ratio, { min: 0, max: 1 }),
+          num('battle.defend.auto_pct', d.auto_pct, { min: 0, max: 100, int: true }),
+          num('battle.defend.target_dx_ratio', d.target_dx_ratio, { min: 0, max: 0.5 }),
+          num('battle.defend.target_dy_ratio', d.target_dy_ratio, { min: 0 }),
+          num('battle.defend.target_jitter_ratio', d.target_jitter_ratio, { min: 0 }),
+        ])(obj(battle.defend))
       : []),
     num('battle.strike_interval_s', battle.strike_interval_s, { gt: 0 }),
     num('battle.combo_window_s', battle.combo_window_s, { gt: 0 }),

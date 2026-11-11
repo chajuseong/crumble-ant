@@ -87,6 +87,18 @@ export interface BuildingState {
   fallSpeed: number;
   state: 'falling' | 'landed';
   lingerTimer: number;
+  /** M7-E 이 건물을 받친 수 (손 + 자동) · 받친 뒤 낙하 멈춤 남은 시간 (게임 초) */
+  defendN: number;
+  pauseLeft: number;
+}
+
+/** M7-E 치트 (`?cheat` · [프로토만]) — 시트 값을 덮기만 · 세이브 안 함 (docs/dev.md §6) */
+export interface CheatState {
+  /** 자동 받치기 % 합 (강화 포함)을 이 값으로 — null = 시트 + 강화 */
+  autoDefendPct: number | null;
+  pushMult: number;
+  weightMult: number;
+  infiniteHp: boolean;
 }
 
 export interface StageState {
@@ -123,7 +135,9 @@ export type BattleEvent =
   | { type: 'targetsEnd'; reason: TargetsEndReason }
   | { type: 'perfect' }
   /** M4: 파괴 뒤 economy.carry_delay_s가 지나 잔해가 굴에 도착 — wallet += amount (docs/dev.md §4) */
-  | { type: 'deposit'; amount: number; wallet: number }
+  | { type: 'deposit'; amount: number; wallet: number; index: number; count: number }
+  /** M7-E: 받치기 — 건물 밑면 += lift · n = 이 건물 받친 순번 (1부터) · auto = 자동 받치기 (docs/dev.md §4) */
+  | { type: 'defend'; buildingId: number; lift: number; auto: boolean; n: number }
   /** M4: 강화 구매 — 데미지 · 간격은 다음 타격부터, 점프력 · 이동속도는 다음 점프부터 */
   | { type: 'upgrade'; id: string; level: number; cost: number; wallet: number };
 
@@ -162,7 +176,7 @@ export class BattleSim {
   /** M4 강화가 반영된 전투 값 (시트 값은 cfg 그대로) */
   stats: BattleStats;
   /** M4 운반 중인 잔해 (도착 시각 순 — 지연이 일정해서 넣은 순서 = 도착 순서) */
-  readonly carrying: { at: number; amount: number }[] = [];
+  readonly carrying: { at: number; amount: number; index: number; count: number }[] = [];
   private comboBuildingId = -1;
   private lastStrikeTime = -Infinity;
   private accumulator = 0;
@@ -195,8 +209,8 @@ export class BattleSim {
     this.ant = {
       phase: 'ground',
       y: 0,
-      hp: b.ant.max_hp,
-      maxHp: b.ant.max_hp,
+      hp: b.ant.max_hp + this.stats.hpAdd,
+      maxHp: b.ant.max_hp + this.stats.hpAdd,
       groundTimer: (b.jump.windup_s ?? 0) > 0 ? b.jump.windup_s! : b.jump.ground_delay_s,
       winding: false,
       windupLeft: 0,
@@ -280,12 +294,45 @@ export class BattleSim {
     this.timeScale = Math.max(0.01, scale);
   }
 
+  /** M7-E 치트 (`?cheat` · [프로토만]) — 시트 값을 덮기만 (setTimeScale처럼) · 세이브 안 함 */
+  readonly cheat: CheatState = { autoDefendPct: null, pushMult: 1, weightMult: 1, infiniteHp: false };
+  setCheat(c: Partial<CheatState>): void {
+    Object.assign(this.cheat, c);
+    if (this.cheat.infiniteHp && this.ant.phase !== 'down') this.ant.hp = this.ant.maxHp;
+  }
+  /** M7-E 치트 잔해 + n (운반 없이 바로 · 이벤트 없음 — view가 HUD를 다시 그림) */
+  addDebrisCheat(n: number): void {
+    this.wallet += Math.max(0, Math.floor(n));
+  }
+
+  /** M7-E 자동 받치기 % 합 (시트 + 강화 · 치트면 그 값) — battle.defend 없으면 0 */
+  get autoDefendPct(): number {
+    const d = this.cfg.battle.defend;
+    if (!d) return 0;
+    return this.cheat.autoDefendPct ?? d.auto_pct + this.stats.autoDefendAdd;
+  }
+
+  /** M7-E 체인 칸 "n / m" (view 표시용 — 지금 과녁 순서 · 체인 최대) · 체인이 아니면 null */
+  get chainStep(): { n: number; m: number } | null {
+    return this.targetsChain && this.targets.length > 0 ? { n: this.chainIndex + 1, m: this.cfg.battle.targets?.count_max ?? 0 } : null;
+  }
+
+  /** M7-E 과녁 탭 = 받치기 (targets.action defend) */
+  get defendOn(): boolean {
+    return this.cfg.battle.targets?.action === 'defend' && this.cfg.battle.defend !== undefined;
+  }
+
   /**
    * M7 전투 구역 탭 (x · y = 전투 구역 비율 좌표). 판정 순서: 과녁 → 강점프 (tap / timing) → 무시
    * 반환 = 무엇을 했나 (테스트 · 측정용)
    */
   tapBattle(x: number, y: number): 'target' | 'miss' | 'strong' | 'timingMiss' | 'ignored' {
     const zone = this.cfg.battle.strong_timing?.tap_max_y;
+    if (this.strongMode === 'timing' && zone !== undefined && this.cfg.battle.targets?.tap_route === 'state') {
+      // M7-E (H-69) 탭 길 = 상태: 과녁 있으면 어디든 과녁 · 없으면 아래 = 링 기회 · 위 = 무시
+      if (this.targets.length > 0) return this.tapTargets(x, y);
+      return y <= zone ? this.tapTiming() : this.ignore('noChance') || 'ignored';
+    }
     if (this.strongMode === 'timing' && zone !== undefined) {
       // H-54 ③ 아래 = 타이밍만 · 위 = 과녁만 (엉뚱한 탭이 기회를 날리지 않게)
       if (y <= zone) return this.tapTiming();
@@ -311,6 +358,12 @@ export class BattleSim {
     this.wallet -= c.cost;
     this.levels[id] = c.level + 1;
     this.stats = deriveStats(this.cfg, this.levels);
+    // M7-E 체력 강화 (H-67): 늘어난 만큼 바로 채움 · 기절 중이면 최대만 (회복 = 스테이지 시작 때 최대)
+    const maxHp = this.cfg.battle.ant.max_hp + this.stats.hpAdd;
+    if (maxHp !== this.ant.maxHp) {
+      if (this.ant.phase !== 'down') this.ant.hp = Math.max(0, this.ant.hp + maxHp - this.ant.maxHp);
+      this.ant.maxHp = maxHp;
+    }
     this.events.push({ type: 'upgrade', id, level: c.level + 1, cost: c.cost, wallet: this.wallet });
     return 'ok';
   }
@@ -331,7 +384,7 @@ export class BattleSim {
     while (this.carrying.length > 0 && this.carrying[0]!.at <= this.time + EPS) {
       const c = this.carrying.shift()!;
       this.wallet += c.amount;
-      this.events.push({ type: 'deposit', amount: c.amount, wallet: this.wallet });
+      this.events.push({ type: 'deposit', amount: c.amount, wallet: this.wallet, index: c.index, count: c.count });
     }
 
     if (a.strongCooldownLeft > 0) a.strongCooldownLeft = Math.max(0, a.strongCooldownLeft - dt);
@@ -349,7 +402,8 @@ export class BattleSim {
       this.spawnTimer -= dt;
       if (this.spawnTimer <= EPS) this.spawnBuilding();
     } else if (bld.state === 'falling') {
-      bld.y -= bld.fallSpeed * dt;
+      if (bld.pauseLeft > EPS) bld.pauseLeft = Math.max(0, bld.pauseLeft - dt); // M7-E 받친 뒤 낙하 멈춤
+      else bld.y -= bld.fallSpeed * dt;
     } else {
       bld.lingerTimer -= dt;
       if (bld.lingerTimer <= EPS) {
@@ -380,6 +434,12 @@ export class BattleSim {
         if (a.riseTimeLeft <= EPS) {
           a.phase = 'fall';
           a.contact = false;
+          // M7-E 닿기 전에 맞힌 받치기인데 끝내 못 닿고 정점 (닿기 직전 과녁은 아슬아슬한 점프에도 나옴) → 그 자리에서 받침 (탭을 버리지 않음)
+          if (this.pendingDefend > 0 && falling) {
+            const n = this.pendingDefend;
+            this.pendingDefend = 0;
+            for (let i = 0; i < n; i++) this.defend(falling, false);
+          }
         }
         break;
       case 'fall':
@@ -406,6 +466,12 @@ export class BattleSim {
             a.riseTimeLeft += this.pendingExtend; // 닿기 전에 맞힌 연장
             this.pendingExtend = 0;
           }
+          // M7-E 받치기: 닿기 전에 맞힌 받치기 → 닿는 순간 · 그다음 자동 받치기 난수 1번 (자동 % 합 > 0일 때만 — 순서 고정)
+          const pend = this.pendingDefend;
+          this.pendingDefend = 0;
+          for (let i = 0; i < pend; i++) this.defend(falling, false);
+          const autoPct = this.autoDefendPct;
+          if (autoPct > 0 && this.rng.int(100) < autoPct) this.defend(falling, true);
         }
         if (a.phase === 'fall' && a.y <= 0) this.toGround();
       } else if (a.contact) {
@@ -462,6 +528,7 @@ export class BattleSim {
     const height = kind === 'auto' ? st.jumpHeight : kind === 'perfect' ? Math.min(st.jumpHeight * mult, ceiling) : st.jumpHeight * mult;
     const speed = strongish ? st.riseSpeed * sj.speed_mult : st.riseSpeed;
     this.leadArmed = true;
+    this.pendingDefend = 0;
     a.phase = 'rise';
     a.jumpKind = kind;
     a.jumpSpeed = speed;
@@ -486,6 +553,7 @@ export class BattleSim {
     a.winding = false; // 깔리면 · 다시 시작하면 도움닫기 취소 → 다음 건물이 떨어질 때 처음부터
     a.windupLeft = 0;
     a.timingChance = false;
+    this.pendingDefend = 0;
     if (this.targets.length > 0) this.endTargets('hangEnd'); // H-61 개미 착지 = 과녁 끝 (묶음 · 체인 공통)
   }
 
@@ -497,6 +565,39 @@ export class BattleSim {
   /** 자동 점프 전 지면 대기 — 도움닫기가 켜지면 windup_s (방식 A: ground_delay_s 대신) */
   private get groundDelay(): number {
     return this.windupOn ? this.cfg.battle.jump.windup_s! : this.cfg.battle.jump.ground_delay_s;
+  }
+
+  /** M7-E 과녁 맞힘 — strike 1타 / defend 받치기 (닿기 전이면 닿는 순간 — 손 · 건물이 같은 순간에 움직이게) */
+  private pendingDefend = 0;
+  private targetAction(b: BuildingState): void {
+    if (!this.defendOn) {
+      this.strike(b, 'target');
+      return;
+    }
+    if (this.ant.phase === 'rise' && !this.ant.contact) this.pendingDefend += 1;
+    else this.defend(b, false);
+  }
+
+  /**
+   * M7-E 받치기 (I-28) — lift = push_power × 받치는 힘 % ÷ 100 ÷ (weight × 치트) × (1 − decay)^n × (자동 ratio) × 치트
+   * 밑면 = min(lift_max_y, 밑면 + lift) (내려가지는 않음) · 낙하 멈춤 push_s · 닿아 있는 개미 같이 올라감 · 건물당 max_per_building
+   */
+  private defend(b: BuildingState, auto: boolean): void {
+    const d = this.cfg.battle.defend;
+    if (!d || b.state !== 'falling' || b.defendN >= d.max_per_building) return;
+    const weight = b.weight * this.cheat.weightMult;
+    const raw = ((d.push_power * this.stats.pushPct) / 100 / weight) * Math.pow(1 - d.decay_pct / 100, b.defendN) * (auto ? d.auto_power_ratio : 1) * this.cheat.pushMult;
+    const y = Math.max(b.y, Math.min(d.lift_max_y, b.y + raw));
+    const lift = Math.round((y - b.y) * 1e6) / 1e6;
+    b.defendN += 1;
+    b.y = y;
+    b.pauseLeft = d.push_s;
+    const a = this.ant;
+    if (a.contact) {
+      a.y = b.y - this.cfg.battle.ant.height_ratio; // 개미도 같이 올라감 = 매달림 유지 (자동 공격 계속 — H-69)
+      a.apex = Math.max(a.apex, a.y);
+    }
+    this.events.push({ type: 'defend', buildingId: b.id, lift, auto, n: b.defendN });
   }
 
   private strike(b: BuildingState, source: StrikeSource): void {
@@ -656,7 +757,17 @@ export class BattleSim {
     const lo = Math.max(b.y + 0.04, zone, TARGET_Y[0]);
     const hi = Math.max(lo + 0.05, Math.min(b.y + 0.22, TARGET_Y[1]));
     let pos = { x: 0.5, y: lo };
-    for (let tries = 0; tries < TARGET_TRIES; tries++) {
+    const d = this.cfg.battle.defend;
+    if (this.defendOn && d) {
+      // M7-E (H-66) 받칠 곳 = 건물 밑면 바로 아래 · 개미 옆 (체인마다 좌우 번갈아 · 흔들기 = 난수 2번)
+      const side = this.chainIndex % 2 === 0 ? -1 : 1;
+      const jx = (this.rng.float() * 2 - 1) * d.target_jitter_ratio;
+      const jy = (this.rng.float() * 2 - 1) * d.target_jitter_ratio;
+      pos = {
+        x: Math.min(TARGET_X[1], Math.max(TARGET_X[0], 0.5 + side * d.target_dx_ratio + jx)),
+        y: Math.max(TARGET_Y[0], b.y - d.target_dy_ratio + jy), // 위는 자르지 않음 (M9 월드 좌표)
+      };
+    } else for (let tries = 0; tries < TARGET_TRIES; tries++) {
       const x = 0.3 + this.rng.float() * 0.4;
       const y = lo + this.rng.float() * (hi - lo);
       pos = { x, y };
@@ -684,7 +795,7 @@ export class BattleSim {
     this.targets = [];
     this.events.push({ type: 'targetHit', id: o.id });
     const b = this.building;
-    if (b && b.state === 'falling') this.strike(b, 'target');
+    if (b && b.state === 'falling') this.targetAction(b);
     this.chainIndex += 1;
     const nextLife = Math.max(0.15, (t.chain_life_s ?? t.life_s) - (t.chain_life_step ?? 0) * this.chainIndex) * this.timeScale;
     const ext = t.chain_hold && this.chainIndex < t.count_max ? nextLife : 0;
@@ -728,7 +839,7 @@ export class BattleSim {
     this.targets = this.targets.filter((o) => o !== hit);
     this.events.push({ type: 'targetHit', id: hit.id });
     const b = this.building;
-    if (b && b.state === 'falling') this.strike(b, 'target');
+    if (b && b.state === 'falling') this.targetAction(b);
     if (this.targets.length === 0 && this.targetBatch > 0) {
       this.targetBatch = 0;
       this.events.push({ type: 'targetsEnd', reason: 'perfect' });
@@ -772,6 +883,8 @@ export class BattleSim {
       fallSpeed: row.fall_speed,
       state: 'falling',
       lingerTimer: 0,
+      defendN: 0,
+      pauseLeft: 0,
     };
     this.building = b;
     this.events.push({ type: 'spawn', buildingId: b.id, hp: b.hp });
@@ -781,7 +894,16 @@ export class BattleSim {
     this.resetCombo();
     this.events.push({ type: 'destroy', buildingId: b.id, y: b.y, debrisReward: b.debrisReward });
     // M4: 잔해는 운반 예약 → carry_delay_s 뒤 deposit (H-17 질문 2 — core가 도착 시각을 정함)
-    if (b.debrisReward > 0) this.carrying.push({ at: this.time + this.cfg.economy.carry_delay_s, amount: b.debrisReward });
+    // M7-E (I-30) 운반 개미 K마리로 나눔 — floor(R ÷ K) · 나머지 = 마지막 개미 (합 = R) · 개미 i 도착 = + i × 간격
+    if (b.debrisReward > 0) {
+      const e = this.cfg.economy;
+      const k = Math.max(1, Math.floor(e.carry_ants ?? 1));
+      const each = Math.floor(b.debrisReward / k);
+      for (let i = 0; i < k; i++) {
+        const amount = i === k - 1 ? b.debrisReward - each * (k - 1) : each;
+        this.carrying.push({ at: this.time + e.carry_delay_s + i * (e.carry_interval_s ?? 0), amount, index: i, count: k });
+      }
+    }
     this.building = null;
     this.ant.contact = false;
     // 파괴 후에도 남은 상승은 계속 (잔해를 뚫고 올라감) → 하강
@@ -802,7 +924,7 @@ export class BattleSim {
     b.y = bc.ant.height_ratio;
     b.lingerTimer = bc.building.landed_linger_s;
     const damage = Math.ceil(b.hp * bc.landing_damage_coeff);
-    a.hp = Math.max(0, a.hp - damage);
+    if (!this.cheat.infiniteHp) a.hp = Math.max(0, a.hp - damage); // M7-E 치트 체력 무한
     this.toGround();
     this.events.push({ type: 'land', buildingId: b.id, damage, antHp: a.hp });
     if (a.hp <= 0) {
