@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="ko">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>받쳐 과녁 시안 · 0.7초 비교</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#262432;color:#fff7eb;font:16px/1.5 system-ui,sans-serif}main{max-width:1040px;padding:20px;margin:auto}h1{font-size:1.4rem}p{color:#e7d8ca}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,270px),1fr));gap:12px}.card{border-radius:12px;background:#3a3338;padding:12px}.card h2{font-size:1rem;margin:0 0 8px}.stage{height:300px;display:grid;place-items:center;border-radius:10px;overflow:hidden}.sky{background:#79cff4 url('../../game/env/sky.png') center/cover}.house{background:#79cff4 url('../../game/buildings/building_house.png') center/contain no-repeat}.dark{background:#343747}.target{width:180px;height:180px;position:relative;display:block;border:0;padding:0;background:transparent;cursor:pointer;touch-action:manipulation}.target img{position:absolute;inset:0;width:180px;height:180px;pointer-events:none}.ring{animation:countdown 700ms linear forwards}.hit{opacity:0}.target.hit-active .hit{opacity:1}.target.hit-active .icon,.target.hit-active .ring{opacity:0}@keyframes countdown{from{transform:scale(1)}to{transform:scale(.81)}}.target:focus-visible{outline:3px solid white;outline-offset:5px}.restart{border:0;border-radius:8px;padding:10px 16px;background:#ffce57;color:#39231a;font-weight:700;cursor:pointer}small{color:#e7d8ca}@media(prefers-reduced-motion:reduce){.ring{animation:none}}
+</style>
+<main>
+<h1>‘받쳐!’ 과녁 · 0.7초 시안</h1>
+<p>180×180px 캔버스에 배치했습니다. 링은 0.7초 동안 크기를 줄이는 예시이며, 과녁을 누르면 명중 번쩍이 잠깐 표시됩니다.</p>
+<p><button class="restart" type="button">다시 시작</button></p>
+<div class="grid">
+<section class="card"><h2>밝은 하늘</h2><div class="stage sky"></div></section>
+<section class="card"><h2>건물 위</h2><div class="stage sky house"></div></section>
+<section class="card"><h2>어두운 배경</h2><div class="stage dark"></div></section>
+</div>
+<p><small>각 화면은 시안 비교용입니다. 실제 게임의 과녁 배치·판정·링 동작과 휴대폰 환경을 재현하지 않으며, 아이콘의 실제 그림 폭은 약 143px입니다. 모션 줄이기 설정에서는 링을 고정합니다.</small></p>
+</main>
+<script>
+const stages=document.querySelectorAll('.stage');
+for(const stage of stages){const target=document.createElement('button');target.className='target';target.type='button';target.setAttribute('aria-label','받치기 과녁 누르기');for(const [cls,src] of [['icon','target_defend.png'],['ring','target_defend_ring.png'],['hit','target_defend_hit.png']]){const img=document.createElement('img');img.className=cls;img.src=src;img.alt='';target.append(img)}let timer;target.addEventListener('click',()=>{clearTimeout(timer);target.classList.add('hit-active');timer=setTimeout(()=>target.classList.remove('hit-active'),180)});stage.append(target)}
+document.querySelector('.restart').addEventListener('click',()=>{for(const ring of document.querySelectorAll('.ring')){ring.style.animation='none';void ring.offsetWidth;ring.style.animation=''}});
+</script>
+</html>
