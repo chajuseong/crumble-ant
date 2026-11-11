@@ -21,6 +21,10 @@ export interface ArtConfig {
   head_scale?: number;
   /** M3-D 충격 별 그림 (art/game/fx/) — null이면 도형 별 */
   impact_file?: string | null;
+  /** M7-E 받쳐! 과녁 그림 (art/game — 버튼 · 링 · 번쩍) — 없거나 파일이 없으면 도형 (아트 #96) */
+  defend_target_file?: string | null;
+  defend_ring_file?: string | null;
+  defend_hit_file?: string | null;
   /** M6 건물 · 배경 · 파괴 그림 기본값 (H-42 — [ART]에서 바꿈) */
   env_enabled?: boolean;
 }
@@ -222,4 +226,10 @@ export function clearArtSettings(): void {
   } catch {
     /* 무시 */
   }
+}
+
+/** M7-E 받쳐! 과녁 그림 파일 (art_config에 적힌 것만 — 파일이 art/game에 없으면 읽지 않음 → 도형) */
+export function defendArtFiles(): string[] {
+  const c = ART_DATA.config;
+  return [c.defend_target_file, c.defend_ring_file, c.defend_hit_file].filter((f): f is string => typeof f === 'string' && f.length > 0);
 }

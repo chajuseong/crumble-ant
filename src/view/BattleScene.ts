@@ -6,13 +6,13 @@ import { battleToScreenY, computeLayout, type Layout, nestBackButtonRect } from 
 import { AntView } from './antView';
 import { ART_FILE_URLS, artTextureKey } from './artFiles';
 import { createArtPanel } from './artPanel';
-import { ART_DATA, type ArtPlan, type ArtSettings, loadArtSettings, neededFiles, resolveArtPlan } from './artPlan';
+import { ART_DATA, type ArtPlan, type ArtSettings, defendArtFiles, loadArtSettings, neededFiles, resolveArtPlan } from './artPlan';
 import { type BuildingArt, BuildingView } from './buildingView';
 import { ENV_DATA, type EnvPlan, envStatusText, neededEnvFiles, resolveEnvPlan } from './envPlan';
 import { StripView } from './stripView';
 import { TouchView } from './touchView';
 import { COLOR, FONT } from './theme';
-import { t } from './text';
+import { hasText, t } from './text';
 import { FX, type FxToggles, loadToggles } from './fx';
 import { createFxPanel } from './fxPanel';
 import { createCheatPanel } from './cheatPanel';
@@ -115,6 +115,8 @@ export class BattleScene extends Phaser.Scene {
   speed = 1;
   private speedText!: Phaser.GameObjects.Text;
   private speedBg!: Phaser.GameObjects.Rectangle;
+  /** M7-E 배속 > targets.max_speed 안내 "과녁 ×1" */
+  private speedHint: Phaser.GameObjects.Text | null = null;
   /** 실제 배속 (게임 시간 ÷ 벽시계 — 느린 기기에서 상한에 걸리는지 · ?debug) */
   private realSpeed = 1;
   // ── M4 강화 · 재화 · 저장 (I-12 · H-17) ──
@@ -171,6 +173,8 @@ export class BattleScene extends Phaser.Scene {
     // M3-D 충격 별 그림 (있으면 — 없으면 도형 별)
     const impact = ART_DATA.config.impact_file;
     if (impact && ART_FILE_URLS[impact] && !this.textures.exists(artTextureKey(impact))) this.load.image(artTextureKey(impact), ART_FILE_URLS[impact]);
+    // M7-E 받쳐! 과녁 그림 (있으면 — 없으면 도형)
+    for (const file of defendArtFiles()) if (ART_FILE_URLS[file] && !this.textures.exists(artTextureKey(file))) this.load.image(artTextureKey(file), ART_FILE_URLS[file]);
     // M6: 켬일 때만 시작에 읽음 (약 6MB — [프로토만] H-42 Q6). 끔이면 지금처럼 안 읽음 · [ART]에서 켜면 그때 읽음
     if (this.artSettings.env) this.queueEnvFiles();
   }
@@ -264,6 +268,9 @@ export class BattleScene extends Phaser.Scene {
     this.strip = new StripView(this, cfg.strip, L.strip, L.width);
     this.strip.layer.setDepth(DEPTH.strip);
     this.touch = new TouchView(this, L, (n) => this.px(n), DEPTH.fx - 2);
+    const ac = ART_DATA.config;
+    const tex = (f: string | null | undefined) => (f && this.textures.exists(artTextureKey(f)) ? artTextureKey(f) : null);
+    this.touch.defendArt = { button: tex(ac.defend_target_file), ring: tex(ac.defend_ring_file), hit: tex(ac.defend_hit_file) };
     this.createMenu();
 
     this.createHud();
@@ -598,6 +605,7 @@ export class BattleScene extends Phaser.Scene {
         }
         case 'targetsSpawn':
           this.touch.spawn(e.targets, this.sim.defendOn ? { step: this.sim.chainStep, lifeS: e.lifeS } : null);
+          if (this.sim.defendOn && this.touch.visible) this.defendHint();
           break;
         case 'targetHit':
           this.touch.hit(e.id);
@@ -776,6 +784,9 @@ export class BattleScene extends Phaser.Scene {
     this.ant.speed = v;
     this.sim.setTimeScale(v); // M7: 과녁 · 타이밍 창 = 실제 시간 (core 입력 — H-51 Q2)
     this.speedText?.setText(t('hud.speed', { n: v }));
+    // M7-E (H-72) 과녁이 안 나오는 배속이면 "과녁 ×1" 안내 (문구가 시트에 있을 때만)
+    const tg = this.cfg.battle.targets;
+    this.speedHint?.setVisible(hasText('hud.targets_x1') && (tg?.count_max ?? 0) > 0 && tg?.max_speed !== undefined && v > tg.max_speed + 1e-9);
     this.speedBg?.setFillStyle(v > 1 ? COLOR.challenge : COLOR.menuBg, v > 1 ? 0.9 : 0.35);
     saveSpeed(v);
   }
@@ -795,6 +806,11 @@ export class BattleScene extends Phaser.Scene {
     const cy = h * 0.78;
     this.speedBg = this.add.rectangle(cx, cy, bw, bh, COLOR.menuBg, 0.35).setStrokeStyle(this.px(3), 0xffffff, 0.6).setDepth(DEPTH.hud);
     this.speedText = this.add.text(cx, cy, '', { fontFamily: FONT, fontSize: `${Math.round(bh * 0.7)}px`, fontStyle: '900', color: COLOR.hudText }).setOrigin(0.5).setDepth(DEPTH.hud);
+    this.speedHint = this.add
+      .text(cx, h + this.px(12), hasText('hud.targets_x1') ? t('hud.targets_x1') : '', { fontFamily: FONT, fontSize: `${Math.round(h * 0.26)}px`, fontStyle: '900', color: '#ffe08a', stroke: COLOR.damageStroke, strokeThickness: this.px(10), backgroundColor: '#1b1a17aa', padding: { x: this.px(14), y: this.px(6) } })
+      .setOrigin(0.5, 0)
+      .setDepth(DEPTH.hud)
+      .setVisible(false);
     this.router.addButton({ id: 'speed', rect: { x: cx - bw / 2, y: cy - bh / 2 - this.px(10), w: bw, h: bh + this.px(20) }, mode: 'battle', action: { type: 'cycleSpeed' }, priority: 20 });
   }
 
@@ -834,6 +850,26 @@ export class BattleScene extends Phaser.Scene {
     this.alert = null;
     this.zoneGlow?.destroy();
     this.zoneGlow = null;
+  }
+
+  /** M7-E (H-72) 받쳐! 과녁 손가락 안내 — 이 브라우저에서 처음 defend.hint_count번만 (키 · 문구가 없으면 안 함) */
+  private defendHint(): void {
+    const n = (FX.defend as typeof FX.defend & { hint_count?: number }).hint_count ?? 0;
+    if (n <= 0 || !hasText('fx.defend_tap')) return;
+    const KEY = 'crumble-ant.defend-hints';
+    let shown = 0;
+    try {
+      shown = Number(localStorage.getItem(KEY)) || 0;
+    } catch {
+      /* 저장소 못 씀 — 매번 처음 */
+    }
+    if (shown >= n) return;
+    this.touch.fingerHint(t('fx.defend_tap'));
+    try {
+      localStorage.setItem(KEY, String(shown + 1));
+    } catch {
+      /* 무시 */
+    }
   }
 
   /** H-61 겹침 때 "탭!" — 이 브라우저에서 처음 ring.hint_count번만 */
