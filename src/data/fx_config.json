@@ -175,6 +175,10 @@
     "dust_count": 6,
     "miss_drop_px": 10,
     "miss_ms": 160,
-    "auto_scale": 0.5
+    "auto_scale": 0.5,
+    "lift_ms": 250,
+    "recoil_squash": 0.7,
+    "recoil_ms": 180,
+    "hint_count": 3
   }
 }

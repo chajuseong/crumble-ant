@@ -42,5 +42,38 @@
     "cost_base": 65,
     "cost_growth_pct": 138,
     "sort": 4
+  },
+  {
+    "upgrade_id": "max_hp",
+    "name": "체력",
+    "stat": "max_hp",
+    "per_level_pct": 0,
+    "per_level_add": 10,
+    "max_level": 7,
+    "cost_base": 60,
+    "cost_growth_pct": 135,
+    "sort": 5
+  },
+  {
+    "upgrade_id": "push_power",
+    "name": "받치는 힘",
+    "stat": "push_power",
+    "per_level_pct": 8,
+    "per_level_add": 0,
+    "max_level": 10,
+    "cost_base": 70,
+    "cost_growth_pct": 135,
+    "sort": 6
+  },
+  {
+    "upgrade_id": "auto_defend",
+    "name": "자동 받치기",
+    "stat": "auto_defend",
+    "per_level_pct": 0,
+    "per_level_add": 3,
+    "max_level": 10,
+    "cost_base": 80,
+    "cost_growth_pct": 140,
+    "sort": 7
   }
 ]

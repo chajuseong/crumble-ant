@@ -1,6 +1,7 @@
 # 와르르 개미 — 개발 기준 문서 (단일 기준)
 
-> 문서 버전: v0.25 (2026-11-10) — M7-E 체력 + 받치기 데이터 (꺼진 채): targets.action · tap_route · battle.defend.* · economy.carry_ants · carry_interval_s · upgrades.per_level_add 칸 (강화 3행 = C) · fx defend.* · ring.plate_alpha · 문구 10 · 이벤트 defend · deposit index · count · 치트 `?cheat` · 완료 조건 (I-27 · I-28 · H-66 · H-67 · H-69 · I-30) · M7-D C 머지 기록
+> 문서 버전: v0.26 (2026-11-11) — **M7-E C 켬** (H-73): 체력 30 · 강화 7종 · action defend · tap_route state · 힘 0.12 · 반동 1.5 (새 키) · 과녁 자리 dx 0.3 · 운반 6 · 0.2 · fx lift_ms · recoil_* · hint_count · art_config 받쳐! 그림 3 · 문구 2 · **받치기 반동 규칙 (I-32 — "같이 올라감" 대체)** · B · B2 다르게 한 점 · 측정 표 · M7-E A · B · B2 머지 기록
+> v0.25 (2026-11-10) — M7-E 체력 + 받치기 데이터 (꺼진 채): targets.action · tap_route · battle.defend.* · economy.carry_ants · carry_interval_s · upgrades.per_level_add 칸 (강화 3행 = C) · fx defend.* · ring.plate_alpha · 문구 10 · 이벤트 defend · deposit index · count · 치트 `?cheat` · 완료 조건 (I-27 · I-28 · H-66 · H-67 · H-69 · I-30) · M7-D C 머지 기록
 > v0.24 (2026-11-09) — M7-D C 켬 (H-64): targets.mode chain · chain_life 0.7 · 0 · chain_max_speed 1.0 · **targets.max_speed 1.0 (새 키 — ×1.5 이상 과녁 없음 = 링만)** · ring_s 0.6 · 문구 "완벽 점프!" · "점프!" · 완료 조건 고침 · 측정 표
 > v0.23 (2026-11-09) — M7-D 터치 다듬기 데이터 (지금 그대로): targets.mode · chain_* · ring.body_px · hint_count · 문구 2 · 개미 착지 = 과녁 끝 · 계산 슬로 · 연출 · 완료 조건 (I-26 · H-61)
 > v0.22 (2026-11-09) — M7 C 켬: strong_jump.mode timing · targets.count 2 · 3 · 측정 표 · M7 머지 기록
@@ -82,7 +83,7 @@ art/production/ (원본) · art/game/ (게임용) — 아트가 들어올 때 �
 | layout.hud_ratio · battle_ratio · strip_ratio | float | HUD / 전투 / 띠+메뉴 높이 (프레임 높이 기준, 합 = 1 — 기획서 §6) | 0.06 · 0.84 · 0.1 |
 | layout.strip_menu_height_ratio | float | 메뉴 버튼 높이 (띠 높이 기준) | 0.62 |
 | layout.challenge_button_y_ratio | float | [도전] 버튼 위쪽 여백 (전투 구역 높이 기준) | 0.06 |
-| battle.ant.max_hp | int | 개미 HP (다리 스탯 "체력" 자리) | 100 |
+| battle.ant.max_hp | int | 개미 HP (다리 스탯 "체력" 자리) — **M7-E C 30** (I-27 · 체력 강화 +10 × 7 = 최대 100) | 30 |
 | battle.ant.height_ratio | float | 개미 키 — 건물 밑면이 여기까지 내려오면 착지 | 0.07 |
 | battle.ant.width_ratio | float | 개미 그림 폭 (프레임 폭 기준) | 0.16 |
 | battle.ant.down_duration_s | float | 기절 시간 (전투 정지) | 1.2 |
@@ -112,15 +113,17 @@ art/production/ (원본) · art/game/ (게임용) — 아트가 들어올 때 �
 | battle.targets.chain_hold | bool | **I-26** 맞히면 다음 과녁 수명 동안 매달려 버팀 (닿기 전에 맞히면 닿을 때 붙임) | TRUE |
 | battle.targets.chain_max_speed | float | **H-61** 이 배속보다 높으면 체인 대신 building 묶음 (×2 · ×3 매달림이 실제 0.1초 아래 — 측정). **H-64 1.0** (×1.5 첫 과녁 15% — 측정) | 1.0 |
 | battle.targets.max_speed | float (> 0 · 비우면 제한 없음) | **H-64** 이 배속보다 높으면 **과녁 없음 = 링만** (×2 · ×3은 닿은 뒤 실제 0.3초 안에 착지 → 착지 = 끝이면 묶음 19 / 0% — 측정 · 과녁 없어도 ×3 손 수입 그대로). 1.0 = **과녁은 ×1만** · 묶음 방식은 키로 남김 | 1.0 |
-| battle.targets.action | enum (strike · defend) | **M7-E (I-28 · H-69)** 과녁 탭 = `strike` 1타 (지금) / `defend` **받치기** — 맞힘 = 그 건물 받치기 (닿기 전이면 닿는 순간 · 손 · 건물이 같은 순간에 움직임) · 과녁 자리 = `battle.defend.target_*` · 체인 · 수명 · 놓침 규칙 그대로 · PERFECT 보너스 = 1타 그대로 (H-69). `defend`면 `tap_route` state 필요 (검증). A · B = strike → **C = defend** | defend |
+| battle.targets.action | enum (strike · defend) | **M7-E (I-28 · I-32 · H-73)** 과녁 탭 = `strike` 1타 / `defend` **받치기** — 맞힘 = 그 건물 받치기 + **개미 반동** (아래 "받치기 반동") · 과녁 자리 = `battle.defend.target_*` · **체인 = 점프를 넘어서 셈** (한 점프 = 과녁 하나 · 버팀 없음) · `defend`면 `tap_route` state 필요 (검증). A · B · B2 = strike → **C = defend** | defend |
 | battle.targets.tap_route | enum (zone · state) | **H-69** 탭 길 — `zone` = H-54 ③ (아래 = 링 · 위 = 과녁) / `state` = **과녁이 살아 있으면 화면 어디든 과녁** (빗나가면 체인 끝 = 연타 막음 그대로) · 없으면 링 기회. H-61 "착지 = 과녁 끝"이라 과녁과 링 기회 (땅에서 도움닫기)가 같은 시간에 없음. A · B = zone → **C = state** | state |
-| battle.defend.push_power | float (> 0) | **I-28** 무게 1 · 받치는 힘 강화 0일 때 lift (전투 구역 높이 비율). **lift = push_power × 받치는 힘 % ÷ 100 ÷ weight × (1 − decay_pct ÷ 100)^n × (자동이면 auto_power_ratio)** · n = 이 건물을 이미 받친 수 · 건물 밑면 = min(`lift_max_y`, 밑면 + lift) · 닿아 있는 개미 같이 올라감 (매달림 유지 · 자동 공격 계속 — H-69) | 0.04 [가정 → C 쓸기 0.02 ~ 0.08] |
+| battle.defend.push_power | float (> 0) | **I-28** 무게 1 · 받치는 힘 강화 0일 때 lift (전투 구역 높이 비율). **lift = push_power × 받치는 힘 % ÷ 100 ÷ weight × (1 − decay_pct ÷ 100)^n × (자동이면 auto_power_ratio)** · n = 이 건물을 이미 받친 수 · 건물 밑면 = min(`lift_max_y`, 밑면 + lift) (내려가지 않음 · **core는 바로 · 그림만 ease-out** `defend.lift_ms`). **H-73 C 0.12** — 쓸기 0.08 · 0.12 · 0.15 × 자동 비용 80 · 160 · 320 (§7 측정) · 0.15는 건물이 점프 높이 위로 떠 헛점프가 늘어 느려짐 | 0.12 |
 | battle.defend.push_s | float (≥ 0) | 받친 뒤 건물 낙하 멈춤 (게임 초) | 0.15 [가정] |
 | battle.defend.decay_pct · max_per_building | int | 같은 건물 다음 받치기마다 줄어듦 % (0 ~ 99) · 건물당 최대 (손 + 자동 합 — 넘으면 안 받침) | 30 · 3 [가정] |
 | battle.defend.lift_max_y | float (> 0) | 건물 밑면이 이보다 높아지지 않음 — **자르는 곳은 이 키 하나** (M9 월드 좌표 때 이 키만 바꿈 — I-29 · 그래서 위 상한 검증 없음) | 0.9 [가정] |
 | battle.defend.auto_power_ratio | float (0 ~ 1) | 자동 받치기 힘 = 손 × 이 값 (수동 > 자동) | 0.5 [가정] |
 | battle.defend.auto_pct | int (0 ~ 100) | 강화 0일 때 자동 받치기 % — **매달림 시작마다 시드 난수 1번** (손 · 자동 공통 · 자동 % 합 = 0이면 **안 뽑음 → 난수 순서 그대로**). 0 = 끔 | 0 |
-| battle.defend.target_dx_ratio · target_dy_ratio · target_jitter_ratio | float | **H-66** 받치기 과녁 자리 (core가 정함) — x = 개미 가운데 ± dx (폭 비율 · 체인마다 좌우 번갈아) · y = 건물 밑면 (등장 순간) − dy (높이 비율 · 밑면 바로 아래) · x · y ± jitter (시드 난수) | 0.2 · 0.04 · 0.04 [가정] |
+| battle.defend.target_dx_ratio · target_dy_ratio · target_jitter_ratio | float | **H-66 · H-72** 받치기 과녁 자리 (core가 정함) — x = 개미 가운데 ± dx (폭 비율 · 체인 순서마다 좌우 번갈아) · y = 건물 밑면 (등장 순간) − dy (높이 비율) · x · y ± jitter (시드 난수). **C dx 0.3** — 개미 · 링과 안 겹침 (화면 컷 · 손 모델은 자리와 상관없이 시간으로만 맞힘을 셈) | 0.3 · 0.04 · 0.04 |
+| battle.defend.recoil_fall_mult | float (> 0) | **I-32 (H-73)** 반동 — 받친 뒤 개미 하강 속도 배수. 없으면 1 | 1.5 [가정 — 폰 확인] |
+| (규칙) 받치기 반동 | — | **I-32 · H-73** (H-69 "개미 같이 올라감 · 매달림 연장" 대체): **손** = 매달려 있으면 바로 받치기 + 반동 (매달림 끝 · 하강 × `recoil_fall_mult` — 그 점프 타격 끝) · **닿기 전에 맞힘** = 닿는 순간 1타 친 뒤 받치기 + 반동 · **끝내 못 닿고 정점** = 그 자리에서 받침 (B) · **자동** = 난수는 매달림 시작 (순서 그대로) · 받침은 **매달림이 끝날 때** (치고 내려오며 — 손으로 받친 매달림은 자동 없음) · **체인** = 같은 건물에서 다음 점프 과녁 = n + 1 · 놓침 · 빗나감 · 건물 바뀜 = 끝 · **3 / 3 = 그 순간 마무리 1타 (`perfect_bonus_strikes`) → 받치기 + 반동** | — |
 | (규칙) 개미 착지 = 과녁 끝 | — | **H-61** 묶음 · 체인 공통 — 개미가 땅에 닿으면 남은 과녁 즉시 끝 ("착지했는데 때림" 고침 · 키 아님) | — |
 | battle.rng_seed | int (1 ~ 2³²−1) | **M7** core 시드 난수 (xorshift32) 시작값. 뽑는 순서 고정: 도움닫기 시작마다 1번 (기회) · 과녁 묶음마다 개수 1번 + 위치 시도 · **M7-E** 매달림 시작마다 자동 받치기 1번 (자동 % > 0일 때만) · 받치기 과녁 흔들기 x · y. 세이브에 난수 상태 안 넣음 [프로토만] | 20261107 |
 | battle.arm_damage | int[] (4개) | 팔 1 ~ 4 슬롯 1타 데미지 (장비 회차에 표로) | 10,10,10,10 |
@@ -143,8 +146,8 @@ art/production/ (원본) · art/game/ (게임용) — 아트가 들어올 때 �
 | strip.burrow_x_ratio | float | 굴 입구 위치 (띠 우측 끝 — H-01 #8) | 0.93 |
 | strip.popup_rise_ratio · popup_duration_s | float | 운반 팝업 높이 · 시간 | 0.5 · 0.8 |
 | economy.carry_delay_s | float | 파괴 → 재화 도착까지 (core 예약 — 평균 운반 시간: 날아감 1.0 + 집기 0.3 + 걷기 2.7초, M4 B에서 실제로 재서 맞춤) | 4.0 |
-| economy.carry_ants | int (≥ 1) | **I-30** 건물 하나 잔해 R을 나르는 개미 수 K — 양 = `floor(R ÷ K)` · 나머지 = 마지막 개미 (합 = R) · **개미 한 마리 = `deposit` 한 번** (M10에서 그대로 넓힘 — I-31). 1 = 지금 → **C 6** | 6 |
-| economy.carry_interval_s | float (≥ 0) | **I-30** 개미 i (0 ~ K−1) 도착 = 파괴 + `carry_delay_s` + i × 이 값 (게임 초). 0 = 지금 → **C 0.2** (측정: 0.1 · 0.2 · 0.4 = 8스테이지 25.8 · 25.8 · 25.9분 — 총액 · 경제 그대로) | 0.2 |
+| economy.carry_ants | int (≥ 1) | **I-30** 건물 하나 잔해 R을 나르는 개미 수 K — 양 = `floor(R ÷ K)` · 나머지 = 마지막 개미 (합 = R) · **개미 한 마리 = `deposit` 한 번** (M10에서 그대로 넓힘 — I-31). **C 6** | 6 |
+| economy.carry_interval_s | float (≥ 0) | **I-30** 개미 i (0 ~ K−1) 도착 = 파괴 + `carry_delay_s` + i × 이 값 (게임 초). **C 0.2** (측정: 0.1 · 0.2 · 0.4 = 8스테이지 25.8 · 25.8 · 25.9분 — 총액 · 경제 그대로) | 0.2 |
 | economy.start_debris | int | 새로 시작할 때 잔해 | 0 |
 | speed.levels | float[] | **M3-E** 배속 단계 — HUD 버튼을 누를 때마다 다음 (끝 → 처음). 첫 값 = 1 · 오름차순. **게임 시간만 빨라짐** (core는 dt만 받음 · 고정 스텝 그대로) · 고른 값은 브라우저 키 `crumble-ant.speed` (저장 형식 v1에 안 넣음 — H-28) | 1,1.5,2,3 |
 
@@ -200,6 +203,7 @@ px = 1080폭 기준 (view가 프레임 폭에 비례해 줄임) · ms = 밀리�
 | defend.text_px · arm_deg · pose_ms · dust_count | float · float · int · int | **M7-E** "버텨!" 크기 · 팔 위로 미는 자세 (파츠 회전 °) · 유지 · 먼지 조각 수 | 72 · 30 · 180 · 6 [가정] |
 | defend.miss_drop_px · miss_ms · auto_scale | float · int · float | **M7-E** 놓침 = 건물이 툭 내려앉는 흔들림 (그림만) · 시간 · 자동 받치기 연출 배율 (글자 없음 · 먼지만) | 10 · 160 · 0.5 [가정] |
 | ring.plate_alpha | float (0 ~ 1) | **M7-E (H-66 메모)** 링 뒤 진한 받침 — 밝은 하늘 위 노랑 링 대비 (L-05) | 0.45 [가정] |
+| defend.lift_ms · recoil_squash · recoil_ms · hint_count | int · float · int · int | **M7-E C (I-32 · H-72)** 받친 건물이 올라가는 그림 시간 (ease-out — core는 바로) · 개미 반동 찌그러짐 세로 배율 (가로 = 2 − 값) · 돌아오는 시간 · 받쳐! 손가락 안내 + "눌러!" 횟수 (이 브라우저에서 처음 N번). 키가 없으면 바로 · 찌그러짐 없음 · 안내 없음 | 250 · 0.7 · 180 · 3 [가정] |
 | impact.push_px · push_ms | float · int | 건물 **그림만** 위로 밀렸다 돌아옴 (core 건물 y 그대로 · 히트스톱 중에도 진행 — H-27 Q5). 마무리 = × star_scale | 8 · 90 |
 
 ### 3-5. `art.xlsx` → 아트 배치 (M3 — view만 읽음 · 규격과 맞추는 법 = `docs/art.md`)
@@ -211,6 +215,7 @@ pivot · socket · grip = `art/game` 납품본 측정값 · draw_h · anchor · 
 | | draw_scale · draw_scale_max · weapon_scale · weapon_scale_max | float | 그림 배율 · [ART] 슬라이더 상한 (판정 크기는 그대로 — H-12 Q1). 기본값 = 대표 폰 확인 (H-22) | 1.5 · 2.5 · 1.3 · 2.0 |
 | | head_scale | float | 머리만 따로 배율 (목 기준) — 표정 가독성 (H-22). 390pt 폰에서 머리 높이 45 → 58pt | 1.3 |
 | | impact_file? | string (빈칸 = 도형 별) | **M3-D** 충격 별 그림 (`art/game/` 안 파일 이름 — `env/impact.png`) — **M6 C부터 impact.png** | impact.png |
+| | defend_target_file? · defend_ring_file? · defend_hit_file? | string (빈칸 = 도형) | **M7-E (H-72 · 아트 #96)** 받쳐! 과녁 버튼 · 남은 시간 링 (1 → 0.8로 줄어듦) · 맞힘 번쩍 — `art/game/ui/` 게임용 사본은 **아트 PR로 따로** · 파일이 없으면 노랑 도형 (검증 = 경고만) | target_defend.png · target_defend_ring.png · target_defend_hit.png |
 | | env_enabled | bool | **M6** 건물 · 하늘 · 띠 · 파괴 이펙트를 그림으로 (A · B = FALSE 꺼진 채 → **C = TRUE**). [ART]에서 끄거나 파일 없음 = 도형. 켬이면 그림 약 6.9MB를 시작할 때 읽음 [프로토만] — 첫 화면 0.9 → 3.5초 (20Mbps · 60ms 측정) | TRUE |
 | | sky_file? · strip_file? | string | 하늘 (전체 화면 9:19.5) · 지면/굴 띠 (1440×312) — `art/game/env/` · 빈칸 = 도형 | sky.png · ground_strip.png |
 | | strip_ground_ratio | float | 띠 그림 풀 윗선 높이 ÷ 그림 높이 — 이 선 = 지면(groundY). 위 = 덤불 (건물 · 개미 뒤) · 아래 = 땅 (일개미 층) | 0.24 |
@@ -259,7 +264,7 @@ pivot · socket · grip = `art/game` 납품본 측정값 · draw_h · anchor · 
 | **push_power** (M7-E) | 받치는 힘 (`battle.defend.push_power`) | `push_power × % / 100` (lift 식 — §3-3) | — |
 | **auto_defend** (M7-E) | 자동 받치기 % (`battle.defend.auto_pct`) | 기본 + `per_level_add` × Lv (정수 %) | 최대 Lv ≤ 100% (검증) |
 
-- **M7-E 3종 행은 C에서 추가** (A에 넣으면 B 코드 전에 세이브 · 강화 패널이 바뀜 → 꺼진 채가 아님). 후보: 체력 +10 × 7 (60 · 135% — H-67) · 받치는 힘 +8% × 10 (70 · 135%) · 자동 받치기 +3%p × 10 (80 · 140%) — **값은 C에서 쓸어 고름 (H-69)** · 패널 = 7줄 한 목록 · 스크롤 (묶음 탭 = 제안만). 세이브에 없는 키 = Lv 0 → 형식 v1 그대로
+- **M7-E 3종 행 = C에서 넣음** (A에 넣으면 B 코드 전에 세이브 · 강화 패널이 바뀜 — H-70): 체력 +10 × 7 (60 · 135% — H-67) · 받치는 힘 +8% × 10 (70 · 135%) · 자동 받치기 +3%p × 10 (80 · 140% — 쓸기: 160 · 320이면 자동 stage 8 24.6 ~ 38.2분으로 느려짐) · 패널 = 7줄 한 목록 · 5줄 넘으면 스크롤. 세이브에 없는 키 = Lv 0 → 형식 v1 그대로 · **단일 강화 퇴보 0건** (`--upgrades`)
 
 | upgrade_id | per_level_pct · max_level | cost_base · cost_growth_pct (M5-D — 괄호 = M4) | 근거 (지시함 #3 M4 계획 ⑤ 측정) |
 |---|---|---|---|
@@ -287,6 +292,7 @@ pivot · socket · grip = `art/game` 납품본 측정값 · draw_h · anchor · 
 | fx.timing_perfect · timing_good · timing_early | string | **I-24** 링 등급 — **H-64 C "완벽 점프!" · "점프!"** (H-61 · 과녁 묶음 "PERFECT!"와 안 겹치게) | `완벽 점프!` · `점프!` · `헛발!` |
 | fx.timing_hint · timing_alert | string | **I-26** 겹침 안내 · 기회 예고 (개미 머리 위) | `탭!` · `!` |
 | fx.defend_target · defend_hold · defend_miss · chain_count | string | **M7-E (H-66)** 받치기 과녁 글자 (↑ 화살표 + 손바닥은 도형) · 맞힘 · 놓침 · 체인 칸 (`{n}` 순서 · `{m}` 최대) | `받쳐!` · `버텨!` · `놓침` · `{n} / {m}` |
+| fx.defend_tap · hud.targets_x1 | string | **M7-E C (H-72)** 받쳐! 손가락 안내 · 배속 > `targets.max_speed`일 때 배속 버튼 아래 안내 (H-64 "안내 안 만듦" 바뀜 — 대표 폰: 저장된 배속 때문에 과녁을 못 봄) | `눌러!` · `과녁 ×1` |
 | upgrade.title · level · max · short · close | string | 강화 패널 | 강화 · `Lv {n} / {max}` · MAX · 잔해가 부족해요 · ✕ |
 | upgrade.reset · reset_confirm | string | 테스트 빌드 기록 지우기 (두 번 눌러 확정 — H-17 질문 7) | 기록 지우기 · 한 번 더 누르면 지워져요 |
 | upgrade.fx.{stat} (4) | string | 지금 → 다음 효과 | `데미지 {a} → {b}` · `초당 {a} → {b}회` · `점프 +{a}% → +{b}%` · `하강 +{a}% → +{b}%` |
@@ -312,8 +318,8 @@ pivot · socket · grip = `art/game` 납품본 측정값 · draw_h · anchor · 
 | **timingChance** (M7) | fromS · toS (circle = 창의 남은 도움닫기 시간 · ring = GOOD 시작까지 남은 시간 · 0) | 이번 도움닫기에 강점프 기회 (`mode` timing · 확률 · 최소 간격). windupStart 바로 뒤 · ring이면 이 도움닫기는 실제 시간 (`ring_s` + `good_s`) |
 | **timingResult** (M7) | ok · **grade** (perfect · good · early — I-24) | 기회 중 첫 탭 — ring: 겹침 ± perfect_s = perfect (jump perfect) · ± good_s = good (jump strong) · 더 빠름 = early (헛발 · 기회 끝 · 끝에 보통 점프). circle: 창 안 = good · 밖 = early |
 | **targetsSpawn** (M7) | targets [{id, x, y}] (전투 구역 비율 좌표) · lifeS (실제 시간) | 매달림 시작 (contact) · 확률 · 개수 = 시드 난수 |
-| **targetHit** (M7) | id | 과녁 탭 → 뒤이어 strike (source target · nextArm · combo · 마무리 · 마지막 일격 규칙 그대로). **M7-E `action` defend면 strike 대신 defend** (닿기 전이면 닿는 순간) |
-| **defend** (M7-E) | seq · lift · auto · n | 받치기 — 건물 밑면 += lift (≤ `lift_max_y`) · 낙하 멈춤 `push_s` · 닿아 있는 개미 같이 올라감 · n = 이 건물 받친 순번 (1부터 · ≤ `max_per_building`). 손 = 과녁 맞힘 · 자동 (auto true) = 매달림 시작 난수 (I-28 · H-69) |
+| **targetHit** (M7) | id | 과녁 탭 → 뒤이어 strike (source target · nextArm · combo · 마무리 · 마지막 일격 규칙 그대로). **M7-E `action` defend면 strike 대신 defend + 반동** (닿기 전이면 닿는 순간 1타 뒤 · 3 / 3이면 `targetsEnd perfect` · `perfect` · strike bonus 뒤 defend) |
+| **defend** (M7-E) | seq · lift · auto · n | 받치기 — 건물 밑면 += lift (≤ `lift_max_y` · core는 바로) · 낙하 멈춤 `push_s` · n = 이 건물 받친 순번 (1부터 · ≤ `max_per_building`). **손 = 과녁 맞힘 → 개미 반동 (매달림 끝)** · 자동 (auto true) = 매달림 시작에 뽑고 **매달림이 끝날 때** (I-28 · I-32 · H-73) |
 | **targetMiss** (M7) | missesLeft | 과녁이 있는 동안 빈 곳 탭 |
 | **targetsEnd** (M7) | reason (expire · missLimit · hangEnd · perfect) | 남은 과녁 사라짐 (벌칙 없음) — expire = 수명 · missLimit = 위쪽 빈 곳 탭 miss_limit번 · hangEnd = 매달림 끝 (`end_on_hang` TRUE · 체인) / 건물 파괴 · 착지 (FALSE = 건물 단위) / **개미 착지 (공통 — H-61)** · perfect = 다 맞힘 |
 | **perfect** (M7) | — | 묶음을 다 맞힘 → 뒤이어 strike (source bonus) × `perfect_bonus_strikes` |
@@ -366,11 +372,12 @@ pivot · socket · grip = `art/game` 납품본 측정값 · draw_h · anchor · 
 | **I-24** 줄어드는 링 | timingChance → timingResult · jump | 기회 도움닫기 (실제 0.5초) | 기회 = 개미 반짝 + 큰 링 (지름 340px → 발밑 원) · 웅크림이 같이 깊어짐 · 겹침 = 발밑 원 노랑. PERFECT = "PERFECT!" + 흔들림 · 초강점프 · GOOD = "GOOD!" · 헛발 = "헛발!" + 링 회색으로 꺼짐 · 판정 시각은 core 값으로만 그림 | `fx_config` ring.* · `fx.timing_*` · `strong_timing.*` |
 | **I-26** 링 다듬기 · 체인 과녁 | timingChance · targetsSpawn · targetHit | 기회 도움닫기 (실제 0.7초 · ring 0.6) · 체인 과녁 수명 | 링 = **개미 몸 중심** (받침 + 굵은 테두리 · 몸 원 220px로 줄어듦) · 기회 = 머리 위 "!" + 화면 아래 절반 살짝 밝힘 · 겹침 = 안쪽 원 번쩍 + 처음 3번 "탭!" · 기회 동안 슬로 (계산). 체인 과녁 = 1개씩 건물 그림 안 · 맞히면 그 자리 별 + 팔 한 번 더 · 다음 과녁 | `fx_config` ring.* · `targets.chain_*` · `fx.timing_*` |
 | **M7** PERFECT | perfect | 0.75초 | "PERFECT!" (받침 판 — "와르르!"와 같은 대비) + 보너스 1타는 마무리 크기 연출 | `fx_config` perfect.text_px · `fx.perfect` |
-| **M7-E** 받치기 과녁 | targetsSpawn (`action` defend) · targetsEnd | 체인 과녁 수명 · 튀어나옴 0.12초 · 마지막 0.2초 깜빡 | "↑ 받쳐!" (위 화살표 + 손바닥 도형 · 흰 받침 + 진한 테두리 L-05) · 지름 180px · 자리 = core (건물 밑면 아래 · 개미 옆) · 남은 시간 = 줄어드는 테두리 · 체인 칸 "1 / 3" | `fx_config` defend.target_px · pop_* · blink_ms · `fx.defend_target` · `fx.chain_count` |
-| **M7-E** 받치기 | defend (auto false) | 히트스톱 30ms · 흔들림 0.12초 · 자세 0.18초 | 짧은 멈칫 · **건물이 쑥 올라감 (core lift 그대로)** · 개미 팔 위로 미는 자세 · 먼지 · "버텨!" · 체인 순서마다 글자 · 흔들림 +25% (그림만) · 3 / 3 = "PERFECT!" (M7 그대로) | `fx_config` defend.* · `fx.defend_hold` |
-| **M7-E** 받치기 놓침 | targetsEnd (expire · missLimit — defend 체인) | 0.16초 | "놓침" + 건물이 툭 내려앉는 흔들림 (그림만 · 벌 없음) | `fx_config` defend.miss_* · `fx.defend_miss` |
+| **M7-E** 받치기 과녁 | targetsSpawn (`action` defend) · targetsEnd | 체인 과녁 수명 · 튀어나옴 0.12초 · 마지막 0.2초 깜빡 | **노랑 · 주황 버튼 + 흰 위 화살표** (그림 `art_config.defend_*_file`이 있으면 그림 · 없으면 같은 모양 도형 · 진한 테두리 L-05 — H-72 · 아트 #96) · 지름 180px · 자리 = core (개미 옆 dx 0.3) · 아래 "받쳐!" · 위 체인 칸 "n / m" (점프를 넘어 이어짐) · 남은 시간 = 줄어드는 링 (그림) / 테두리 호 (도형) · **처음 3번 손가락 톡톡 + "눌러!"** | `fx_config` defend.target_px · pop_* · blink_ms · hint_count · `art_config` defend_*_file · `fx.defend_target` · `fx.defend_tap` · `fx.chain_count` |
+| **M7-E** 받치기 | defend (auto false) | 히트스톱 30ms · 흔들림 0.12초 · 자세 0.18초 · 건물 0.25초 · 반동 0.18초 | 짧은 멈칫 · **건물이 크게 올라감 (core 바로 · 그림 ease-out)** · **개미 튕겨 내려옴 + 찌그러짐 (I-32)** · 위 두 팔 위로 · 아래 팔 벌림 (콘티 F-10) · 위 팔 손끝 번쩍 · 먼지 · "버텨!" · 체인 순서마다 글자 · 흔들림 +25% (그림만) · 3 / 3 = "PERFECT!" | `fx_config` defend.* · `fx.defend_hold` |
+| **M7-E** 받치기 놓침 | targetsEnd (perfect 아닌 끝 전부 — H-71: 체인 과녁은 거의 다 매달림 끝으로 끝남 · 파괴면 건물이 없어 안 그림) | 0.16초 | "놓침" + 건물이 툭 내려앉는 흔들림 (그림만 · 벌 없음 · 체인 끝) | `fx_config` defend.miss_* · `fx.defend_miss` |
 | **M7-E** 자동 받치기 | defend (auto true) | 받치기 × 0.5 | 같은 연출을 작게 · 글자 없음 · 먼지만 | `fx_config` defend.auto_scale |
 | **M7-E** 링 대비 (H-66 메모) | timingChance | — | 흰 링 → **진한 받침 위 노랑 링** · "!" = 머리 옆 (더듬이 피함) · depth = HP 바 위 (×2 겹침) | `fx_config` ring.plate_alpha |
+| **M7-E** "과녁 ×1" 안내 | (배속 > `targets.max_speed`) | — | 배속 버튼 아래 노랑 글자 + 진한 받침 (H-72) | `hud.targets_x1` |
 | **M7-E** 운반 개미마다 +N | deposit (index · count) | 운반 팝업 0.8초 | 개미마다 "+N" · HUD 잔해 톡 (I-30) · 조각 수 = core count · 배경 행렬 = 빈손 그대로 · 소리 = 이번엔 안 함 (제안만) | `economy.carry_*` · `strip.popup_*` |
 | **M7** [FX] 토글 | ([FX] 패널) | — | "M7 과녁 · 타이밍 원" — 끄면 그림만 안 보임 (판정은 그대로 — 테스트용) | — |
 | **M3-E** 배속 버튼 · 가벼운 연출 | (HUD 오른쪽 아래 [×1]) · 배속 ≥ 2 | — | 누를 때마다 ×1 → ×1.5 → ×2 → ×3 → ×1. ×2 이상: 일반 타격 멈춤 · 흔들림 끔 · 일반 타격음 3타에 1번 · 공격 모션 최소 33ms | `speed.levels` · `fx_config` speed_fx.* · motion.strike.min_wall_ms · `hud.speed` |
@@ -411,4 +418,4 @@ pivot · socket · grip = `art/game` 납품본 측정값 · draw_h · anchor · 
 | M6 | 건물 · 배경 아트 적용 (I-22 · H-42) | ① `npm run measure` · `--upgrades` = M5-D 표 그대로 (diff 0) ② **[ART] 건물 · 배경 끔 = 지금 화면** (같은 장면 픽셀 비교) · [FX] 파괴 그림 끔 = 지금 ③ 그림 켬 화면 컷 (390 · 360 · 430): 8스테이지 건물마다 매달려 치는 순간 · 착지 · 마지막 일격 (별 + 링) · 파괴 (파편 · 먼지) · 일개미 굴 입구 도착 + "+N" · 덤불 뒤 개미 ④ 폴백 테스트 (순수 함수): 건물 그림 하나 없음 · `art_id` 빈칸 · 하늘 / 띠 없음 · 끔 ⑤ 데이터 검증: `art_id` FK · building_art PK · 파일 이름 · 파일 있는지 (이름으로 · 겹침 오류) · tint 형식 · `strip_*` 범위 ⑥ smoke ×1 · ×3 콘솔 오류 0 · 첫 화면까지 시간 (전 → 후 — 그림 약 6MB 시작 때 읽기 [프로토만]) ⑦ 이 문서 §3 · §5 · §7 · `docs/art.md` §7 | A `b0176fa` (PR #57) · B `147e8ea` (PR #59) · C `183f214` (PR #60) |
 | M7 | 터치 개편 — 강점프 = 줄어드는 링 · 터치 과녁 건물 단위 (I-23 · H-51 · H-56 · I-24) | ① 키 끔 (`mode` tap · `count_max` 0) = M6 measure · `--upgrades` **그대로** (diff 0) ② 테스트 (core): 같은 시드 + 같은 입력 = 같은 이벤트 · 링 등급 (perfect · good · early) · 첫 탭만 · 기회 도움닫기 실제 시간 (×1 · ×3 같음) · 아래 / 위 구역 · 과녁 닿기 직전 등장 · 건물 단위 끝 (수명 · 파괴 · 착지) · 추가 타 · miss_limit · perfect · PERFECT 높이 자름 ③ **×1 자동만 = 키 켜도 그대로** (ring_s + good_s = windup_s) ④ view: 링 · 과녁 화면 컷 (390 · ×1 · ×3) · [FX] 끔 = 그림 없음 · 실제 탭 ⑤ smoke ✅ (C 켬) ⑥ C `measure --touch`: **예측 모델 σ 0.08 GOOD 이상 ×1 · ×2 · ×3 모두 50 ~ 80%** · **반응 모델 과녁 ≥ 40%** · **연타 강점프 0 · PERFECT 0** · ×2 · ×3 자동 진행 변화 (기록) ⑦ 이 문서 §3 · §4 · §5 · §7 | A `1140975` (PR #65) · B `9ecc01a` (PR #66) · 링 키 `7c7c274` (PR #68) · 링 `de81232` (PR #69) |
 | M7-D | 터치 다듬기 — 체인 과녁 · 링 보이게 (I-26 · H-61) | ① A · B = 지금 그대로 (measure · `--upgrades` diff 0 · `mode` building · ring 0.4 → 슬로 1.0) ② 테스트: 체인 (닿기 직전 · 1개씩 · 버팀 · 빗나감 / 시간 끝 = 끝 · 다 맞힘 = PERFECT) · `chain_max_speed` 넘으면 묶음 · **`max_speed` 넘으면 과녁 없음** · **땅에서 과녁 0개** · 계산 슬로 = 게임 결과 그대로 · ×1 · ×3 실제 시간 ③ C `--touch` (H-64): **링 GOOD 이상 ×1 · ×2 · ×3 50 ~ 80%** (σ 0.08) · **체인 ×1 1번째 ≥ 45%** · **PERFECT 묶음 > 0** · 연타 0 · ×2 · ×3 = 과녁 없음 (링만) · 손 ÷ 자동 기록 (~ 7.6배) ④ 화면 컷 (×1 링 몸 · "!" · 체인 · ×2 링만) · smoke ⑤ 이 문서 §3 · §4 · §5 · §7 | A `a65fb71` (PR #78) · B `78d98bb` (PR #79) · 테스트 `5abdcea` (PR #83) · C `dda3848` (PR #84) |
-| M7-E | 체력 + 받치기 · 과녁 "받쳐!" · 운반 개미마다 돈 (I-27 · I-28 · H-66 · H-67 · H-69 · I-30) | ① A · B = 지금 그대로 (`action` strike · `tap_route` zone · `auto_pct` 0 · `carry_ants` 1 · 강화 3행 없음 → measure · `--upgrades` · `--touch` diff 0) ② 테스트 (core): 받치기 (lift 식 · 감쇠 · 건물당 상한 · `lift_max_y` · 낙하 멈춤 · 개미 같이 올라감 · 닿기 전 맞힘 = 닿는 순간) · 자동 % (0이면 난수 안 뽑음) · 탭 길 state · 체력 강화 (구매 = 늘어난 만큼 채움 · 기절 중 = 최대만) · 운반 (합 = R · 도착 시각 · 마지막 개미 저장) · 치트 (덮기 · 끄면 시트 값) · 세이브 왕복 (없는 키 = Lv 0) ③ C 측정표 (H-69 — ✅ 표시): 자동 stage 8 **20 ~ 27분** (가장 싼 것 · 공격 우선 두 정책 · 힘 0.02 ~ 0.08 × 자동 비용) · **lift 보임** (≥ 0.06 우선 · 화면 px) · 손 ÷ 자동 ≤ 10배 · **수동 > 자동** (건물당 lift 손 · 자동 따로) · 체인 ×1 첫 과녁 ≥ 45% · 연타 강점프 0 · 과녁 연타 맞힘 낮게 · 후퇴 · 착지 횟수 · HP ≤ 30% · 맞으며 깬 판 % (4 ~ 8%면 기록만 → M8) · 순서가 뒤집히면 이유 한 줄 ④ 화면 컷 ("받쳐!" 과녁 · 1 / 2 / 3 · "버텨!" · 놓침 · 밝은 하늘 · 링 대비 · 강화 7줄 · `?cheat`) · smoke ⑤ 이 문서 §3 · §4 · §5 · §6 · §7 | — |
+| M7-E | 체력 + 받치기 (반동) · 과녁 "받쳐!" · 운반 개미마다 돈 (I-27 · I-28 · H-66 · H-67 · H-69 · I-30 · I-32 · H-72 · H-73) | ① A · B · B2 · B3 = 지금 그대로 (measure · `--upgrades` · `--touch` diff 0) ② 테스트 (core): 받치기 (lift 식 · 감쇠 · 건물당 상한 · `lift_max_y` · 낙하 멈춤) · **반동** (하강 × `recoil_fall_mult` · 그 점프 과녁 하나) · **체인 점프 넘김** (1 → 2 → 3 / 3 · 놓침 = 1부터 · PERFECT = 마무리 1타 → 받치기) · 닿기 전 = 1타 뒤 · 못 닿고 정점 · 자동 = 매달림 끝 (타격 뒤 · 손으로 받친 매달림은 없음) · 탭 길 state · 체력 강화 · 운반 (합 = R · 시각) · 치트 · 세이브 왕복 · **테스트 = 시트 값과 상관없게** (C 켜도 그대로) ③ **C 측정 (H-73 — ✅)**: 자동 stage 8 **22.4 / 24.0분** ✅ (가장 싼 것 / 공격 우선 · 20 ~ 27) · lift 손 192px · 자동 124px ✅ · 손 stage 8 7.2분 = **손 ÷ 자동 3.1배** ✅ · **수동 > 자동 = 진행 · 후퇴로** (후퇴 손 1 · 자동 13) ✅ — **손 60분 잔해 95,650 = 자동 +9%** (B 176,640에서 줄어듦 — 받치면 그 점프 타격 끝 · H-73 ①) · 체인 ×1 1 / 2 / 3번째 **56 / 56 / 53%** ✅ (≥ 45 · ≥ 40) · 연타 강점프 0 · 과녁 연타 0 / 270 ✅ · 헛점프 29% (받치기 없을 때 34%) · 아슬 2% · 맞으며 깬 판 9 ~ 11% (기록만 → M8) · 단일 강화 퇴보 0건 · 받치기 1번 = 건물 공중 약 +1.4초 ④ 화면 컷 (실제 플레이 순서 — L-04): 새로 시작 → 첫 과녁 (약 6초 · 손가락 "눌러!" · 1 / 3) · 받친 순간 (건물 올라감 · 개미 반동) · ×2 "과녁 ×1" · 그림 사본을 넣으면 그림 과녁 · smoke ⑤ 이 문서 §3 · §4 · §5 · §7 | A `aa70930` (PR #91) · B `49f0967` (PR #93) · B2 `6f296a3` (PR #98) |
