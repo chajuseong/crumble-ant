@@ -180,5 +180,8 @@
     "recoil_squash": 0.7,
     "recoil_ms": 180,
     "hint_count": 3
+  },
+  "targets_x1": {
+    "toast_ms": 1500
   }
 }
