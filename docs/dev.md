@@ -1,6 +1,7 @@
 # 와르르 개미 — 개발 기준 문서 (단일 기준)
 
-> 문서 버전: v0.26 (2026-11-11) — **M7-E C 켬** (H-73): 체력 30 · 강화 7종 · action defend · tap_route state · 힘 0.12 · 반동 1.5 (새 키) · 과녁 자리 dx 0.3 · 운반 6 · 0.2 · fx lift_ms · recoil_* · hint_count · art_config 받쳐! 그림 3 · 문구 2 · **받치기 반동 규칙 (I-32 — "같이 올라감" 대체)** · B · B2 다르게 한 점 · 측정 표 · M7-E A · B · B2 머지 기록
+> 문서 버전: v0.27 (2026-11-11) — H-76 "과녁은 ×1에서만" 토스트: toast.targets_x1 · fx targets_x1.toast_ms (배속이 max_speed를 넘는 순간 · 처음 켤 때)
+> v0.26 (2026-11-11) — **M7-E C 켬** (H-73): 체력 30 · 강화 7종 · action defend · tap_route state · 힘 0.12 · 반동 1.5 (새 키) · 과녁 자리 dx 0.3 · 운반 6 · 0.2 · fx lift_ms · recoil_* · hint_count · art_config 받쳐! 그림 3 · 문구 2 · **받치기 반동 규칙 (I-32 — "같이 올라감" 대체)** · B · B2 다르게 한 점 · 측정 표 · M7-E A · B · B2 머지 기록
 > v0.25 (2026-11-10) — M7-E 체력 + 받치기 데이터 (꺼진 채): targets.action · tap_route · battle.defend.* · economy.carry_ants · carry_interval_s · upgrades.per_level_add 칸 (강화 3행 = C) · fx defend.* · ring.plate_alpha · 문구 10 · 이벤트 defend · deposit index · count · 치트 `?cheat` · 완료 조건 (I-27 · I-28 · H-66 · H-67 · H-69 · I-30) · M7-D C 머지 기록
 > v0.24 (2026-11-09) — M7-D C 켬 (H-64): targets.mode chain · chain_life 0.7 · 0 · chain_max_speed 1.0 · **targets.max_speed 1.0 (새 키 — ×1.5 이상 과녁 없음 = 링만)** · ring_s 0.6 · 문구 "완벽 점프!" · "점프!" · 완료 조건 고침 · 측정 표
 > v0.23 (2026-11-09) — M7-D 터치 다듬기 데이터 (지금 그대로): targets.mode · chain_* · ring.body_px · hint_count · 문구 2 · 개미 착지 = 과녁 끝 · 계산 슬로 · 연출 · 완료 조건 (I-26 · H-61)
@@ -204,6 +205,7 @@ px = 1080폭 기준 (view가 프레임 폭에 비례해 줄임) · ms = 밀리�
 | defend.miss_drop_px · miss_ms · auto_scale | float · int · float | **M7-E** 놓침 = 건물이 툭 내려앉는 흔들림 (그림만) · 시간 · 자동 받치기 연출 배율 (글자 없음 · 먼지만) | 10 · 160 · 0.5 [가정] |
 | ring.plate_alpha | float (0 ~ 1) | **M7-E (H-66 메모)** 링 뒤 진한 받침 — 밝은 하늘 위 노랑 링 대비 (L-05) | 0.45 [가정] |
 | defend.lift_ms · recoil_squash · recoil_ms · hint_count | int · float · int · int | **M7-E C (I-32 · H-72)** 받친 건물이 올라가는 그림 시간 (ease-out — core는 바로) · 개미 반동 찌그러짐 세로 배율 (가로 = 2 − 값) · 돌아오는 시간 · 받쳐! 손가락 안내 + "눌러!" 횟수 (이 브라우저에서 처음 N번). 키가 없으면 바로 · 찌그러짐 없음 · 안내 없음 | 250 · 0.7 · 180 · 3 [가정] |
+| targets_x1.toast_ms | int (> 0) | **H-76** "과녁은 ×1에서만" 토스트 머무는 시간 (나타남 0.12 · 사라짐 0.3초는 토스트 그대로) | 1500 |
 | impact.push_px · push_ms | float · int | 건물 **그림만** 위로 밀렸다 돌아옴 (core 건물 y 그대로 · 히트스톱 중에도 진행 — H-27 Q5). 마무리 = × star_scale | 8 · 90 |
 
 ### 3-5. `art.xlsx` → 아트 배치 (M3 — view만 읽음 · 규격과 맞추는 법 = `docs/art.md`)
@@ -293,6 +295,7 @@ pivot · socket · grip = `art/game` 납품본 측정값 · draw_h · anchor · 
 | fx.timing_hint · timing_alert | string | **I-26** 겹침 안내 · 기회 예고 (개미 머리 위) | `탭!` · `!` |
 | fx.defend_target · defend_hold · defend_miss · chain_count | string | **M7-E (H-66)** 받치기 과녁 글자 (↑ 화살표 + 손바닥은 도형) · 맞힘 · 놓침 · 체인 칸 (`{n}` 순서 · `{m}` 최대) | `받쳐!` · `버텨!` · `놓침` · `{n} / {m}` |
 | fx.defend_tap · hud.targets_x1 | string | **M7-E C (H-72)** 받쳐! 손가락 안내 · 배속 > `targets.max_speed`일 때 배속 버튼 아래 안내 (H-64 "안내 안 만듦" 바뀜 — 대표 폰: 저장된 배속 때문에 과녁을 못 봄) | `눌러!` · `과녁 ×1` |
+| toast.targets_x1 | string | **H-76** 배속이 `targets.max_speed`를 넘는 순간 · 처음 켤 때 (저장된 배속) 전투 구역 위쪽 토스트 (작은 "과녁 ×1"은 그대로) | `과녁은 ×1에서만` |
 | upgrade.title · level · max · short · close | string | 강화 패널 | 강화 · `Lv {n} / {max}` · MAX · 잔해가 부족해요 · ✕ |
 | upgrade.reset · reset_confirm | string | 테스트 빌드 기록 지우기 (두 번 눌러 확정 — H-17 질문 7) | 기록 지우기 · 한 번 더 누르면 지워져요 |
 | upgrade.fx.{stat} (4) | string | 지금 → 다음 효과 | `데미지 {a} → {b}` · `초당 {a} → {b}회` · `점프 +{a}% → +{b}%` · `하강 +{a}% → +{b}%` |
@@ -377,7 +380,7 @@ pivot · socket · grip = `art/game` 납품본 측정값 · draw_h · anchor · 
 | **M7-E** 받치기 놓침 | targetsEnd (perfect 아닌 끝 전부 — H-71: 체인 과녁은 거의 다 매달림 끝으로 끝남 · 파괴면 건물이 없어 안 그림) | 0.16초 | "놓침" + 건물이 툭 내려앉는 흔들림 (그림만 · 벌 없음 · 체인 끝) | `fx_config` defend.miss_* · `fx.defend_miss` |
 | **M7-E** 자동 받치기 | defend (auto true) | 받치기 × 0.5 | 같은 연출을 작게 · 글자 없음 · 먼지만 | `fx_config` defend.auto_scale |
 | **M7-E** 링 대비 (H-66 메모) | timingChance | — | 흰 링 → **진한 받침 위 노랑 링** · "!" = 머리 옆 (더듬이 피함) · depth = HP 바 위 (×2 겹침) | `fx_config` ring.plate_alpha |
-| **M7-E** "과녁 ×1" 안내 | (배속 > `targets.max_speed`) | — | 배속 버튼 아래 노랑 글자 + 진한 받침 (H-72) | `hud.targets_x1` |
+| **M7-E** "과녁 ×1" 안내 | (배속 > `targets.max_speed`) · 넘는 순간 · 처음 켤 때 | 토스트 0.12 + 1.5 + 0.3초 | 배속 버튼 아래 노랑 글자 + 진한 받침 (H-72) · **넘는 순간 · 저장된 배속으로 켤 때 전투 구역 위쪽 토스트 "과녁은 ×1에서만" (H-76 — 작은 글자는 HUD 오른쪽 위라 못 봄)** | `hud.targets_x1` · `toast.targets_x1` · `fx_config` targets_x1.toast_ms |
 | **M7-E** 운반 개미마다 +N | deposit (index · count) | 운반 팝업 0.8초 | 개미마다 "+N" · HUD 잔해 톡 (I-30) · 조각 수 = core count · 배경 행렬 = 빈손 그대로 · 소리 = 이번엔 안 함 (제안만) | `economy.carry_*` · `strip.popup_*` |
 | **M7** [FX] 토글 | ([FX] 패널) | — | "M7 과녁 · 타이밍 원" — 끄면 그림만 안 보임 (판정은 그대로 — 테스트용) | — |
 | **M3-E** 배속 버튼 · 가벼운 연출 | (HUD 오른쪽 아래 [×1]) · 배속 ≥ 2 | — | 누를 때마다 ×1 → ×1.5 → ×2 → ×3 → ×1. ×2 이상: 일반 타격 멈춤 · 흔들림 끔 · 일반 타격음 3타에 1번 · 공격 모션 최소 33ms | `speed.levels` · `fx_config` speed_fx.* · motion.strike.min_wall_ms · `hud.speed` |

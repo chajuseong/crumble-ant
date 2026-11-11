@@ -18,7 +18,8 @@
     "restart": "다시 시작! 스테이지 1",
     "challenge": "도전! 스테이지 {n}",
     "breakthrough": "돌파! 자동 진행 ON",
-    "menu_wip": "[{label}] 준비 중 — 이번 프로토 범위 밖"
+    "menu_wip": "[{label}] 준비 중 — 이번 프로토 범위 밖",
+    "targets_x1": "과녁은 ×1에서만"
   },
   "menu": {
     "upgrade": "강화",

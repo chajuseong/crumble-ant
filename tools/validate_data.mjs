@@ -174,6 +174,7 @@ const FX_KEYS = [
   ["ring.plate_alpha", "num", { min: 0, max: 1 }],
   // M7-E 반동 · 손가락 안내 (I-32 · H-72)
   ["defend.lift_ms", "int", { min: 0 }], ["defend.recoil_squash", "num", { gt: 0, max: 1 }], ["defend.recoil_ms", "int", { min: 0 }], ["defend.hint_count", "int", { min: 0 }],
+  ["targets_x1.toast_ms", "int", { gt: 0 }], // H-76
 ];
 
 // ui_strings 필수 키 (view가 읽는 것)
@@ -191,7 +192,7 @@ const UI_KEYS = [
   // M7-E (H-66 · I-28)
   "fx.defend_target", "fx.defend_hold", "fx.defend_miss", "fx.chain_count",
   "upgrade.fx.max_hp", "upgrade.fx.push_power", "upgrade.fx.auto_defend", "upgrade.now.max_hp", "upgrade.now.push_power", "upgrade.now.auto_defend",
-  "fx.defend_tap", "hud.targets_x1",
+  "fx.defend_tap", "hud.targets_x1", "toast.targets_x1",
 ];
 
 // 강화 (M4 — I-12 · H-17). stat은 코드가 아는 것만 — 4종 = 각 1행 필수 · M7-E 3종 = 있으면 1행 (H-67 · I-28)
