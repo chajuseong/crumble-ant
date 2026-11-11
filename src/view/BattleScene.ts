@@ -117,6 +117,15 @@ export class BattleScene extends Phaser.Scene {
   private speedBg!: Phaser.GameObjects.Rectangle;
   /** M7-E 배속 > targets.max_speed 안내 "과녁 ×1" */
   private speedHint: Phaser.GameObjects.Text | null = null;
+  /** setSpeed를 한 번 이상 불렀는가 (처음 켤 때 토스트) · 처음 토스트 기다리는 안정 프레임 수 (null = 안 기다림) */
+  private speedShown = false;
+  private speedToastWait: number | null = null;
+
+  /** H-76 "과녁은 ×1에서만" 토스트 */
+  private showSpeedToast(): void {
+    const ms = (FX as typeof FX & { targets_x1?: { toast_ms?: number } }).targets_x1?.toast_ms;
+    this.showToast(t('toast.targets_x1'), '#ffe08a', ms, true);
+  }
   /** 실제 배속 (게임 시간 ÷ 벽시계 — 느린 기기에서 상한에 걸리는지 · ?debug) */
   private realSpeed = 1;
   // ── M4 강화 · 재화 · 저장 (I-12 · H-17) ──
@@ -317,6 +326,14 @@ export class BattleScene extends Phaser.Scene {
   }
 
   update(_time: number, wallMs: number): void {
+    // H-76 처음 켤 때 토스트 = 큰 끊김 (0.25초 넘는 프레임) 없이 프레임 10개 뒤 (모양 상수 — 느린 기기도 뜨게)
+    if (this.speedToastWait !== null) {
+      this.speedToastWait = wallMs < 250 ? this.speedToastWait + 1 : 0;
+      if (this.speedToastWait >= 10) {
+        this.speedToastWait = null;
+        this.showSpeedToast();
+      }
+    }
     // M3-E 배속: 게임 시간만 빨라짐 — core는 고정 스텝 그대로 dt만 더 받음 · 연출(잔해 · 일개미 · 모션 · 히트스톱)도 같은 배속
     const deltaMs = wallMs * this.speed;
     const dt = deltaMs / 1000;
@@ -778,6 +795,9 @@ export class BattleScene extends Phaser.Scene {
 
   /** M3-E 배속 바꾸기 — 트윈 · 타이머 · 모션 최소 길이도 같은 배속 · 이 브라우저에 기억 */
   setSpeed(v: number): void {
+    const first = !this.speedShown;
+    const prev = first ? 1 : this.speed; // 처음 켤 때 (저장된 배속) = ×1에서 바뀐 것으로 봄
+    this.speedShown = true;
     this.speed = v;
     this.tweens.timeScale = v;
     this.time.timeScale = v;
@@ -786,7 +806,14 @@ export class BattleScene extends Phaser.Scene {
     this.speedText?.setText(t('hud.speed', { n: v }));
     // M7-E (H-72) 과녁이 안 나오는 배속이면 "과녁 ×1" 안내 (문구가 시트에 있을 때만)
     const tg = this.cfg.battle.targets;
-    this.speedHint?.setVisible(hasText('hud.targets_x1') && (tg?.count_max ?? 0) > 0 && tg?.max_speed !== undefined && v > tg.max_speed + 1e-9);
+    const over = (s: number) => (tg?.count_max ?? 0) > 0 && tg?.max_speed !== undefined && s > tg.max_speed + 1e-9;
+    this.speedHint?.setVisible(hasText('hud.targets_x1') && over(v));
+    // H-76 넘는 순간 (· 처음 켤 때) 화면 위쪽 토스트 — 작은 글자는 HUD 오른쪽 위라 못 봄 (문구가 없으면 안 함)
+    if (over(v) && !over(prev) && hasText('toast.targets_x1')) {
+      // 처음 켤 때는 화면이 안정된 뒤 (읽기 · 첫 그리기로 프레임이 끊기면 토스트 트윈이 한 번에 지나감)
+      if (first) this.speedToastWait = 0;
+      else this.showSpeedToast();
+    }
     this.speedBg?.setFillStyle(v > 1 ? COLOR.challenge : COLOR.menuBg, v > 1 ? 0.9 : 0.35);
     saveSpeed(v);
   }
@@ -1132,12 +1159,14 @@ export class BattleScene extends Phaser.Scene {
     }
   }
 
-  private showToast(text: string, color = '#ffffff'): void {
+  /** strong = 밝은 하늘 위에서도 읽히게 진한 받침 + 테두리 (L-05 — H-76 "과녁은 ×1에서만") */
+  private showToast(text: string, color = '#ffffff', holdMs = 1500, strong = false): void {
     this.toast?.destroy(true);
     const { L } = this;
-    const tx = this.add.text(0, 0, text, { fontFamily: FONT, fontSize: `${Math.round(this.px(46))}px`, color, fontStyle: '900' }).setOrigin(0.5);
+    const tx = this.add.text(0, 0, text, { fontFamily: FONT, fontSize: `${Math.round(this.px(strong ? 52 : 46))}px`, color, fontStyle: '900', ...(strong ? { stroke: COLOR.damageStroke, strokeThickness: this.px(10) } : {}) }).setOrigin(0.5);
     const pad = this.px(28);
-    const bg = this.add.rectangle(0, 0, tx.width + pad * 2, tx.height + pad, COLOR.toastBg, 0.55);
+    const bg = this.add.rectangle(0, 0, tx.width + pad * 2, tx.height + pad, COLOR.toastBg, strong ? 0.85 : 0.55);
+    if (strong) bg.setStrokeStyle(this.px(4), 0xffe08a, 0.9);
     const c = this.add.container(L.width / 2, L.battle.top + L.battle.height * 0.2, [bg, tx]).setDepth(DEPTH.fx);
     this.toast = c;
     c.setAlpha(0);
@@ -1145,7 +1174,7 @@ export class BattleScene extends Phaser.Scene {
     this.tweens.add({
       targets: c,
       alpha: 0,
-      delay: 1500,
+      delay: holdMs,
       duration: 300,
       onComplete: () => {
         if (this.toast === c) this.toast = null;
