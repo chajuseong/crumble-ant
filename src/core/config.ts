@@ -115,6 +115,10 @@ export interface BattleConfig {
     spawn_bottom_ratio: number;
     spawn_delay_s: number;
     landed_linger_s: number;
+    /** M8 (I-25 · H-62) 다음 건물까지 × (1 ± 이 값) · 연달아 확률 % · 연달아 간격 — 없거나 0 = 끔 */
+    spawn_jitter_ratio?: number;
+    double_pct?: number;
+    double_delay_s?: number;
   };
 }
 
@@ -144,9 +148,19 @@ export interface StageRow {
   buildings_to_clear: number;
 }
 
+/** M8 stage_pool 한 행 (스테이지마다 나올 건물 · 비중 · 층수 — docs/dev.md §3-2b) */
+export interface StagePoolRow {
+  stage: number;
+  building_id: string;
+  weight: number;
+  floors_min: number;
+  floors_max: number;
+}
 export interface StagesConfig {
   rows: StageRow[];
   beyond_last_row: 'repeat_last';
+  /** M8 — building_id 순 정렬 (없으면 지금처럼 stages.building_id · 1층) */
+  pool?: StagePoolRow[];
 }
 
 export interface InputConfig {
@@ -344,6 +358,9 @@ export function validateConfig(raw: unknown): string[] {
     num('battle.building.spawn_bottom_ratio', building.spawn_bottom_ratio, { gt: 0 }),
     num('battle.building.spawn_delay_s', building.spawn_delay_s, { min: 0 }),
     num('battle.building.landed_linger_s', building.landed_linger_s, { min: 0 }),
+    ...(building.spawn_jitter_ratio !== undefined ? [num('battle.building.spawn_jitter_ratio', building.spawn_jitter_ratio, { min: 0, max: 0.9 })] : []),
+    ...(building.double_pct !== undefined ? [num('battle.building.double_pct', building.double_pct, { min: 0, max: 100, int: true })] : []),
+    ...(building.double_delay_s !== undefined ? [num('battle.building.double_delay_s', building.double_delay_s, { min: 0 })] : []),
 
     num('input.strip_tap_slop_ratio', input.strip_tap_slop_ratio, { gt: 0, max: 1 }),
     num('input.strip_tap_max_ms', input.strip_tap_max_ms, { gt: 0 }),

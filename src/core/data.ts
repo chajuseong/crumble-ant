@@ -3,7 +3,7 @@
  * 파일 경로 · JSON 읽기는 하지 않는다 (view · 테스트가 JSON을 넘김 — Unity에서는 ScriptableObject 등에서 같은 모양으로).
  * 검사는 두 번: 시트 변환 때 tools/validate_data.mjs, 시작할 때 validateConfig (화면에 오류 표시).
  */
-import type { ArmConfig, BuildingRow, GameConfig, StageRow, UpgradeRow } from './config';
+import type { ArmConfig, BuildingRow, GameConfig, StagePoolRow, StageRow, UpgradeRow } from './config';
 
 /** src/data/*.json 묶음 (파일 이름 = 키) */
 export interface RawGameData {
@@ -13,6 +13,8 @@ export interface RawGameData {
   ui_strings: Record<string, unknown>;
   /** M4 — 없으면 강화 없음 */
   upgrades?: UpgradeRow[];
+  /** M8 — 없으면 스테이지마다 stages.building_id · 1층 */
+  stage_pool?: StagePoolRow[];
 }
 
 type Obj = Record<string, unknown>;
@@ -47,6 +49,10 @@ export function fromData(raw: RawGameData): GameConfig {
     stages: {
       rows: Array.isArray(raw.stages) ? raw.stages : [],
       beyond_last_row: o(g.stage).beyond_last_row as 'repeat_last',
+      // M8 — 정렬 = stage → building_id (시트 순서 · 객체 순서에 안 기댐)
+      ...(Array.isArray(raw.stage_pool)
+        ? { pool: [...raw.stage_pool].sort((a, b) => a.stage - b.stage || (a.building_id < b.building_id ? -1 : a.building_id > b.building_id ? 1 : 0)) }
+        : {}),
     },
     input: o(g.input) as unknown as GameConfig['input'],
     strip: o(g.strip) as unknown as GameConfig['strip'],

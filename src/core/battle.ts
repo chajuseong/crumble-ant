@@ -13,7 +13,7 @@
  *       └ 개미 HP 0 → 기절 → 스테이지 1이면 재시작, 아니면 후퇴 + auto_advance OFF
  */
 
-import { type GameConfig, buildingForStage, stageRow } from './config';
+import { type BuildingRow, type GameConfig, buildingForStage, stageRow } from './config';
 import { type BattleStats, type BuyResult, buyCheck, deriveStats, initialLevels, type Levels } from './economy';
 import { Rng } from './rng';
 
@@ -90,6 +90,11 @@ export interface BuildingState {
   /** M7-E 이 건물을 받친 수 (손 + 자동) · 받친 뒤 낙하 멈춤 남은 시간 (게임 초) */
   defendN: number;
   pauseLeft: number;
+  /** M8 처음 층수 · 남은 층 HP (아래층부터 — [0] = 지금 맞는 층 · 합 = hp) */
+  floors: number;
+  floorHp: number[];
+  /** M8 층마다 처음 HP (아래층부터 · 그리기용 — HP 바 = 지금 층 HP ÷ 이 값) */
+  floorMax: number[];
 }
 
 /** M7-E 치트 (`?cheat` · [프로토만]) — 시트 값을 덮기만 · 세이브 안 함 (docs/dev.md §6) */
@@ -114,10 +119,13 @@ export type BattleEvent =
   | { type: 'stageStart'; stage: number; reason: StageStartReason }
   | { type: 'stageClear'; stage: number; wasChallenge: boolean }
   | { type: 'autoAdvance'; on: boolean }
-  | { type: 'spawn'; buildingId: number; hp: number }
+  /** M8: floors = 층수 · floorHp = 층마다 HP (아래층부터 · 합 = hp) */
+  | { type: 'spawn'; buildingId: number; hp: number; floors: number; floorHp: number[] }
   | { type: 'jump'; kind: JumpKind; apex: number }
   /** combo = 같은 건물에서 이어진 연타 수 (1부터) — 표시용, 판정에는 쓰지 않음 (docs/dev.md §4) */
-  | { type: 'strike'; arm: number; damage: number; buildingId: number; hpLeft: number; combo: number; source: StrikeSource }
+  | { type: 'strike'; arm: number; damage: number; buildingId: number; hpLeft: number; combo: number; source: StrikeSource; floorHpLeft: number }
+  /** M8: 맨 아래층 HP 0 (지붕 아님) — floor = 깨진 층 (1부터 · 아래층부터) · 넘친 데미지는 버림 */
+  | { type: 'floorBreak'; buildingId: number; floor: number; floorsLeft: number; hpLeft: number }
   | { type: 'destroy'; buildingId: number; y: number; debrisReward: number }
   | { type: 'land'; buildingId: number; damage: number; antHp: number }
   | { type: 'antDown'; stage: number }
@@ -408,7 +416,7 @@ export class BattleSim {
       bld.lingerTimer -= dt;
       if (bld.lingerTimer <= EPS) {
         this.building = null;
-        this.spawnTimer = bc.building.spawn_delay_s;
+        this.spawnTimer = this.nextSpawnDelay(); // M8 흔들기 · 연달아
       }
     }
 
@@ -620,15 +628,59 @@ export class BattleSim {
   private strike(b: BuildingState, source: StrikeSource): void {
     const a = this.ant;
     const damage = this.stats.armDamage[a.nextArm]!;
-    b.hp = Math.max(0, b.hp - damage);
+    // M8 층: 맨 아래층만 깎음 · 넘친 데미지 = 버림 (H-62 ①) — 1층 건물이면 지금 그대로
+    const dealt = Math.min(damage, b.floorHp[0] ?? 0);
+    b.floorHp[0] = (b.floorHp[0] ?? 0) - dealt;
+    b.hp = Math.max(0, b.hp - dealt);
     // 연타: 같은 건물에서 마지막 타격 뒤 combo_window_s 안이면 이어짐 (비교 전 반올림 — 결정성)
     const gap = Math.round((this.time - this.lastStrikeTime) * 1e6) / 1e6;
     this.combo = this.comboBuildingId === b.id && gap <= this.cfg.battle.combo_window_s ? this.combo + 1 : 1;
     this.comboBuildingId = b.id;
     this.lastStrikeTime = this.time;
-    this.events.push({ type: 'strike', arm: a.nextArm + 1, damage, buildingId: b.id, hpLeft: b.hp, combo: this.combo, source });
+    this.events.push({ type: 'strike', arm: a.nextArm + 1, damage, buildingId: b.id, hpLeft: b.hp, combo: this.combo, source, floorHpLeft: b.floorHp[0] ?? 0 });
     a.nextArm = (a.nextArm + 1) % this.cfg.battle.arms.length;
     if (b.hp <= 0) this.destroyBuilding(b);
+    else if ((b.floorHp[0] ?? 0) <= 0) {
+      b.floorHp.shift(); // 그 층만 와르르 → 위층이 내려앉음 (그림만 — core는 밑면 y 그대로)
+      this.events.push({ type: 'floorBreak', buildingId: b.id, floor: b.floors - b.floorHp.length, floorsLeft: b.floorHp.length, hpLeft: b.hp });
+    }
+  }
+
+  /**
+   * M8 건물 고르기 (stage_pool · 시드 난수 — 고를 게 없으면 안 뽑음 · H-80)
+   * 행 = building_id 순 · 누적 비중 rng.int(합) → 건물 · min < max면 층수 rng.int(max − min + 1)
+   */
+  private pickBuilding(): { row: BuildingRow; floors: number } {
+    const stageNo = stageRow(this.cfg.stages, this.stage.stage).stage; // 마지막 행을 넘으면 마지막 행 (repeat_last)
+    const pool = (this.cfg.stages.pool ?? []).filter((r) => r.stage === stageNo);
+    if (pool.length === 0) return { row: buildingForStage(this.cfg, this.stage.stage), floors: 1 };
+    let pick = pool[0]!;
+    if (pool.length > 1) {
+      const total = pool.reduce((s, r) => s + r.weight, 0);
+      let roll = this.rng.int(total);
+      for (const r of pool) {
+        if (roll < r.weight) {
+          pick = r;
+          break;
+        }
+        roll -= r.weight;
+      }
+    }
+    const floors = pick.floors_max > pick.floors_min ? pick.floors_min + this.rng.int(pick.floors_max - pick.floors_min + 1) : pick.floors_min;
+    const row = this.cfg.buildings.rows.find((x) => x.building_id === pick.building_id);
+    if (!row) throw new Error(`stage_pool building_id ${pick.building_id} 없음 (검증을 먼저 통과해야 함)`);
+    return { row, floors: Math.max(1, floors) };
+  }
+
+  /** M8 다음 건물까지 — spawn_delay_s × (1 ± 흔들기) · 연달아 확률이면 double_delay_s (난수 = 키가 0보다 클 때만 · 흔들기 → 연달아 순) */
+  private nextSpawnDelay(): number {
+    const bb = this.cfg.battle.building;
+    let d = bb.spawn_delay_s;
+    const j = bb.spawn_jitter_ratio ?? 0;
+    if (j > 0) d = Math.round(d * (1 + (this.rng.float() * 2 - 1) * j) * 1e6) / 1e6;
+    const dp = bb.double_pct ?? 0;
+    if (dp > 0 && this.rng.int(100) < dp) d = bb.double_delay_s ?? d;
+    return d;
   }
 
   // ── M7 ─────────────────────────────────────────────────
@@ -915,7 +967,10 @@ export class BattleSim {
 
 
   private spawnBuilding(): void {
-    const row = buildingForStage(this.cfg, this.stage.stage);
+    const { row, floors } = this.pickBuilding();
+    // M8 층 HP = floor(HP ÷ N) · 나머지 = 1층 (합 = HP — H-62)
+    const per = Math.floor(row.hp / floors);
+    const floorHp = Array.from({ length: floors }, (_, i) => (i === 0 ? row.hp - per * (floors - 1) : per));
     const b: BuildingState = {
       id: this.nextBuildingId++,
       buildingId: row.building_id,
@@ -931,9 +986,12 @@ export class BattleSim {
       lingerTimer: 0,
       defendN: 0,
       pauseLeft: 0,
+      floors,
+      floorHp,
+      floorMax: [...floorHp],
     };
     this.building = b;
-    this.events.push({ type: 'spawn', buildingId: b.id, hp: b.hp });
+    this.events.push({ type: 'spawn', buildingId: b.id, hp: b.hp, floors, floorHp: [...floorHp] });
   }
 
   private destroyBuilding(b: BuildingState): void {
@@ -958,7 +1016,7 @@ export class BattleSim {
     if (this.stage.destroyed >= this.stage.toClear) {
       this.clearStage();
     } else {
-      this.spawnTimer = this.cfg.battle.building.spawn_delay_s;
+      this.spawnTimer = this.nextSpawnDelay(); // M8 흔들기 · 연달아
     }
   }
 

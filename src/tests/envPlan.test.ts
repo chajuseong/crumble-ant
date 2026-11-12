@@ -39,13 +39,22 @@ describe('M6 건물 · 배경 그림 계획', () => {
 
   it('켬 + 파일 다 있음 = building_id마다 그림 · 하늘 · 띠 · 링 · 먼지', () => {
     const p = resolveEnvPlan(data, true, all);
-    expect(p.buildings.b1).toEqual({ artId: 'house', file: 'building_house.png', pivotY: 0.996, drawW: 1, tint: null, debris: 'debris_house.png' });
+    expect(p.buildings.b1).toEqual({ artId: 'house', file: 'building_house.png', pivotY: 0.996, drawW: 1, tint: null, debris: 'debris_house.png', cutRoof: 0.35, floors: null });
     expect(p.buildings.b2).toMatchObject({ file: 'building_house.png', tint: 0xffc8a8, debris: 'debris.png' }); // 건물별 파편 빈칸 = 공용
     expect(p.buildings.b4).toBeNull(); // art_id 빈칸 = 도형
     expect(p.sky).toBe('sky.png');
     expect(p.strip).toEqual({ file: 'ground_strip.png', groundRatio: 0.24, burrowX: 0.887, popupY: null }); // 키 없음 = 일개미 줄 높이 (지금 자리)
     expect([p.ring, p.dust]).toEqual(['shock_ring.png', 'dust.png']);
     expect(p.missing).toEqual([]);
+  });
+
+  it('M8 쌓기 조각 3장 다 있으면 floors · 하나라도 없으면 null (자르기) · 자르기 비율', () => {
+    const d: EnvData = { ...data, art: data.art.map((r) => (r.art_id === 'house' ? { ...r, cut_roof_ratio: 0.4, floor_base_file: 'house_floor_base.png', floor_mid_file: 'house_floor_mid.png', floor_roof_file: 'house_floor_roof.png' } : r)) };
+    const files = new Set(neededEnvFiles(d));
+    expect([...files]).toEqual(expect.arrayContaining(['house_floor_base.png', 'house_floor_mid.png', 'house_floor_roof.png']));
+    expect(resolveEnvPlan(d, true, files).buildings.b1).toMatchObject({ cutRoof: 0.4, floors: { base: 'house_floor_base.png', mid: 'house_floor_mid.png', roof: 'house_floor_roof.png' } });
+    const lack = new Set([...files].filter((f) => f !== 'house_floor_mid.png'));
+    expect(resolveEnvPlan(d, true, lack).buildings.b1!.floors).toBeNull();
   });
 
   it('H-49 strip_popup_y 있으면 "+N" 높이 = 그 값 (그림 켬일 때만) · 끔이면 띠 계획 자체가 없음', () => {

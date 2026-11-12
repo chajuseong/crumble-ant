@@ -239,7 +239,9 @@ export class BattleScene extends Phaser.Scene {
 
   private buildingArt(buildingId: string): BuildingArt | null {
     const a = this.envPlan?.buildings[buildingId];
-    return a ? { key: artTextureKey(a.file), pivotY: a.pivotY, drawW: a.drawW, tint: a.tint } : null;
+    return a
+      ? { key: artTextureKey(a.file), pivotY: a.pivotY, drawW: a.drawW, tint: a.tint, cutRoof: a.cutRoof, floorKeys: a.floors ? { base: artTextureKey(a.floors.base), mid: artTextureKey(a.floors.mid), roof: artTextureKey(a.floors.roof) } : null }
+      : null;
   }
 
   private createBuildingView(): void {
@@ -247,10 +249,11 @@ export class BattleScene extends Phaser.Scene {
     if (!b) return;
     const bw = this.cfg.battle.building.width_ratio * this.L.width;
     const bh = this.cfg.battle.building.height_ratio * this.L.battle.height;
-    this.buildingView = new BuildingView(this, this.L.width / 2, battleToScreenY(this.L, b.y), bw, bh, b.id, b.maxHp, this.buildingArt(b.buildingId));
+    // M8 층: 남은 층만 다시 그림 ([ART] 바꿀 때)
+    this.buildingView = new BuildingView(this, this.L.width / 2, battleToScreenY(this.L, b.y), bw, bh, b.id, b.maxHp, this.buildingArt(b.buildingId), b.floorMax.slice(b.floors - b.floorHp.length));
     this.buildingView.root.setDepth(DEPTH.building);
     this.buildingView.setCrackSteps(FX.crack.steps);
-    this.buildingView.setHp(b.hp, b.maxHp);
+    this.syncBuildingHp(b);
     this.buildingViewId = b.id;
     this.buildingViewRow = b.buildingId;
   }
@@ -591,7 +594,7 @@ export class BattleScene extends Phaser.Scene {
           const b = this.sim.building!;
           const bw = this.cfg.battle.building.width_ratio * this.L.width;
           const bh = this.cfg.battle.building.height_ratio * this.L.battle.height;
-          this.buildingView = new BuildingView(this, this.L.width / 2, battleToScreenY(this.L, b.y), bw, bh, b.id, b.maxHp, this.buildingArt(b.buildingId));
+          this.buildingView = new BuildingView(this, this.L.width / 2, battleToScreenY(this.L, b.y), bw, bh, b.id, b.maxHp, this.buildingArt(b.buildingId), e.floorHp);
           this.buildingView.root.setDepth(DEPTH.building);
           this.buildingViewId = b.id;
           this.buildingViewRow = b.buildingId;
@@ -658,7 +661,8 @@ export class BattleScene extends Phaser.Scene {
           if (this.buildingView && b) {
             this.buildingView.setCrackSteps(FX.crack.steps);
             this.buildingView.shake(this.px(FX.building_shake.px), FX.building_shake.ms);
-            this.buildingView.setHp(e.hpLeft, b.maxHp);
+            if (this.buildingView.layered) this.buildingView.setFloorHp(e.floorHpLeft, b.floorMax[b.floors - b.floorHp.length] ?? b.maxHp); // M8 지금 층
+            else this.buildingView.setHp(e.hpLeft, b.maxHp);
             if (on.flash) this.fxCount += 1 + Number(this.buildingView.flash(FX.flash.alpha, FX.flash.ms)); // B
           }
           const y = this.ant.root.y - this.cfg.battle.ant.height_ratio * this.L.battle.height;
@@ -674,6 +678,9 @@ export class BattleScene extends Phaser.Scene {
           if (on.sfx && this.sfx.created) { if (final) this.sfx.final(); else if (fin) this.sfx.finisher(); else if (hitSoundTurn(e.combo, this.speed)) this.sfx.hit(e.combo); this.fxCount += 1; } // G · A' 마무리 "쾅"
           break;
         }
+        case 'floorBreak':
+          this.floorBreakFx();
+          break;
         case 'destroy':
           if (this.buildingView) this.destroyDust(this.buildingView.root.x, this.buildingView.bottomY); // M6 먼지
           this.burstDebris(e.debrisReward);
@@ -877,6 +884,36 @@ export class BattleScene extends Phaser.Scene {
     this.alert = null;
     this.zoneGlow?.destroy();
     this.zoneGlow = null;
+  }
+
+  /** M8 HP 바 = core 값 (층 건물 = 지금 층 · 아니면 건물 전체) */
+  private syncBuildingHp(b: NonNullable<BattleSim['building']>): void {
+    const v = this.buildingView;
+    if (!v) return;
+    if (v.layered) v.setFloorHp(b.floorHp[0] ?? 0, b.floorMax[b.floors - b.floorHp.length] ?? b.maxHp);
+    else v.setHp(b.hp, b.maxHp);
+  }
+
+  /** M8 층 깨짐 — 그 층 조각이 튀고 (파편 그림 재사용 · 일개미 안 주워 감) · 작은 흔들림 · 위층 털썩 · HP 바 = 다음 층 */
+  private floorBreakFx(): void {
+    const v = this.buildingView;
+    const b = this.sim.building;
+    if (!v || !b) return;
+    const F = FX.floor_break;
+    const fh = v.breakFloor(F.drop_ms);
+    this.syncBuildingHp(b);
+    this.shake(F.camera_ms, F.camera_intensity);
+    const art = this.debrisArt();
+    for (let i = 0; i < F.chunk_count; i++) {
+      const size = this.px(Phaser.Math.Between(36, 64));
+      const x = v.root.x + Phaser.Math.FloatBetween(-0.45, 0.45) * v.w;
+      const y = v.bottomY - Phaser.Math.FloatBetween(0.2, 0.8) * fh;
+      const o = (art ? this.debrisImage(art, x, y, size) : this.add.rectangle(x, y, size, size * 0.8, v.color).setStrokeStyle(this.px(4), COLOR.buildingDark)).setDepth(DEPTH.fx - 1);
+      const dir = x < v.root.x ? -1 : 1;
+      this.tweens.add({ targets: o, x: x + dir * this.px(Phaser.Math.Between(120, 260)), y: y + this.px(Phaser.Math.Between(160, 320)), angle: dir * Phaser.Math.Between(90, 240), alpha: 0, duration: 520, ease: 'Quad.easeIn', onComplete: () => o.destroy() });
+      this.fxCount += 1;
+    }
+    if (this.fxOn.sfx && this.sfx.created) this.sfx.hit(1);
   }
 
   /** M7-E (H-72) 받쳐! 과녁 손가락 안내 — 이 브라우저에서 처음 defend.hint_count번만 (키 · 문구가 없으면 안 함) */
