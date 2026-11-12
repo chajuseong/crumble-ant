@@ -6,7 +6,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 
 // 있어야 하는 JSON (build_data.mjs SHEETS의 out과 같아야 함)
-export const REQUIRED = ["buildings", "stages", "game_config", "ui_strings", "fx_config", "art_config", "ant_parts", "ant_mounts", "weapons", "ant_loadout", "upgrades", "building_art"];
+export const REQUIRED = ["buildings", "stages", "game_config", "ui_strings", "fx_config", "art_config", "ant_parts", "ant_mounts", "weapons", "ant_loadout", "upgrades", "building_art", "stage_pool"];
 
 // M3 아트 — 파츠 이름 · 파일 이름 규칙 (docs/art.md §3)
 export const ART_PARTS = ["body", "head_normal", "head_hit", "head_down", "arm", "leg"];
@@ -96,6 +96,10 @@ const CONFIG_KEYS = [
   ["battle.building.spawn_bottom_ratio", "num", { gt: 0 }],
   ["battle.building.spawn_delay_s", "num", { min: 0 }],
   ["battle.building.landed_linger_s", "num", { min: 0 }],
+  // M8 나오는 간격 흔들기 · 연달아 (I-25 · H-62) — 0 = 끔
+  ["battle.building.spawn_jitter_ratio", "num", { min: 0, max: 0.9 }],
+  ["battle.building.double_pct", "int", { min: 0, max: 100 }],
+  ["battle.building.double_delay_s", "num", { min: 0 }],
   ["stage.beyond_last_row", "str", { oneOf: ["repeat_last"] }],
   ["input.strip_tap_slop_ratio", "num", { gt: 0, max: 1 }],
   ["input.strip_tap_max_ms", "num", { gt: 0 }],
@@ -175,6 +179,8 @@ const FX_KEYS = [
   // M7-E 반동 · 손가락 안내 (I-32 · H-72)
   ["defend.lift_ms", "int", { min: 0 }], ["defend.recoil_squash", "num", { gt: 0, max: 1 }], ["defend.recoil_ms", "int", { min: 0 }], ["defend.hint_count", "int", { min: 0 }],
   ["targets_x1.toast_ms", "int", { gt: 0 }], // H-76
+  // M8 층 깨짐 (H-62)
+  ["floor_break.drop_ms", "int", { min: 0 }], ["floor_break.camera_ms", "int", { min: 0 }], ["floor_break.camera_intensity", "num", { min: 0, max: 0.1 }], ["floor_break.chunk_count", "int", { min: 0 }],
 ];
 
 // ui_strings 필수 키 (view가 읽는 것)
@@ -273,6 +279,12 @@ export function validateAll(data) {
       checkValue(`${w}.draw_w`, r.draw_w, "num", { gt: 0, max: 2 }, errors);
       if (r.tint !== null && !HEX.test(String(r.tint))) errors.push(`${w}.tint: 비우거나 #rrggbb (${JSON.stringify(r.tint)})`);
       if (r.debris_file !== null && !/^debris_[a-z0-9_]+\.png$/.test(String(r.debris_file))) errors.push(`${w}.debris_file: 비우거나 debris_<이름>.png (${JSON.stringify(r.debris_file)})`);
+      // M8 자르기 · 쌓기 (H-62)
+      checkValue(`${w}.cut_roof_ratio`, r.cut_roof_ratio, "num", { gt: 0, max: 0.9 }, errors);
+      const fl = ["floor_base_file", "floor_mid_file", "floor_roof_file"];
+      for (const k of fl) if (r[k] !== null && r[k] !== undefined && !/^[a-z0-9_]+_floor_[a-z0-9_]+\.png$/.test(String(r[k]))) errors.push(`${w}.${k}: 비우거나 <이름>_floor_<층>.png (${JSON.stringify(r[k])})`);
+      const filled = fl.filter((k) => typeof r[k] === "string").length;
+      if (filled !== 0 && filled !== 3) errors.push(`${w}: 쌓기 파일 3칸은 다 채우거나 다 비움 (지금 ${filled}칸)`);
     });
   }
 
@@ -307,6 +319,30 @@ export function validateAll(data) {
       if (!ids.has(r.building_id)) errors.push(`${w}.building_id: buildings에 없음 (FK ${JSON.stringify(r.building_id)})`);
       checkValue(`${w}.buildings_to_clear`, r.buildings_to_clear, "int", { min: 1 }, errors);
     });
+  }
+
+  // stage_pool (M8 — I-25 · H-62) — stage FK · building_id FK · 비중 ≥ 1 · 층수 1 ~ 6 · 스테이지마다 1행 이상 · 같은 (stage, building) 한 번
+  if ("stage_pool" in data) {
+    const rows = data.stage_pool;
+    const stageNos = new Set(Array.isArray(data.stages) ? data.stages.map((r) => r.stage) : []);
+    if (!Array.isArray(rows)) errors.push("stage_pool: 표여야 함");
+    else {
+      const seen = new Set(), has = new Set();
+      rows.forEach((r, i) => {
+        const w = `stage_pool[${i}]`;
+        if (!stageNos.has(r.stage)) errors.push(`${w}.stage: stages에 없음 (FK ${JSON.stringify(r.stage)})`);
+        if (!ids.has(r.building_id)) errors.push(`${w}.building_id: buildings에 없음 (FK ${JSON.stringify(r.building_id)})`);
+        const key = `${r.stage}/${r.building_id}`;
+        if (seen.has(key)) errors.push(`${w}: 같은 스테이지 · 건물이 두 번 (${key})`);
+        seen.add(key);
+        has.add(r.stage);
+        checkValue(`${w}.weight`, r.weight, "int", { min: 1 }, errors);
+        checkValue(`${w}.floors_min`, r.floors_min, "int", { min: 1, max: 6 }, errors);
+        checkValue(`${w}.floors_max`, r.floors_max, "int", { min: 1, max: 6 }, errors);
+        if (Number.isInteger(r.floors_min) && Number.isInteger(r.floors_max) && r.floors_min > r.floors_max) errors.push(`${w}: floors_min ≤ floors_max여야 함`);
+      });
+      for (const st of stageNos) if (!has.has(st)) errors.push(`stage_pool: 스테이지 ${st} 행 없음 (스테이지마다 1행 이상)`);
+    }
   }
 
   // game_config
@@ -508,7 +544,7 @@ export function artFileIssues(data, root = "art/game") {
     ...(Array.isArray(data.ant_parts) ? data.ant_parts.map((r) => r.file) : []),
     ...(Array.isArray(data.weapons) ? data.weapons.map((r) => r.file) : []),
     ...["impact_file", "sky_file", "strip_file", "ring_file", "dust_file", "debris_file"].filter((k) => typeof a[k] === "string").map((k) => a[k]),
-    ...(Array.isArray(data.building_art) ? data.building_art.flatMap((r) => [r.file, r.debris_file].filter((f) => typeof f === "string")) : []),
+    ...(Array.isArray(data.building_art) ? data.building_art.flatMap((r) => [r.file, r.debris_file, r.floor_base_file, r.floor_mid_file, r.floor_roof_file].filter((f) => typeof f === "string")) : []),
   ];
   if (!fs.existsSync(root)) {
     if (need.length) out.warnings.push(`${root} 폴더 없음 — 그림 ${need.length}개는 아트 납품 뒤 (그때까지 게임은 도형으로 그림)`);

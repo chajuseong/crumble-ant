@@ -1,6 +1,7 @@
 # 와르르 개미 — 개발 기준 문서 (단일 기준)
 
-> 문서 버전: v0.28 (2026-11-12) — I-33 · H-78 받쳐! 과녁 확률 70 (체인도 chance_pct · 안 나온 점프 = 체인 건너뜀) · 난수 순서 한 줄
+> 문서 버전: v0.29 (2026-11-12) — **M8 층 건물 + 섞어 나오기 데이터 (꺼진 채)** (I-25 · H-62): stage_pool 시트 (스테이지마다 지금 건물 · 1층) · spawn_jitter_ratio · double_pct · double_delay_s · building_art cut_roof_ratio · floor_*_file (주택 쌓기 F-09) · fx floor_break.* · 이벤트 floorBreak · 규칙 · 연출 · 완료 조건
+> v0.28 (2026-11-12) — I-33 · H-78 받쳐! 과녁 확률 70 (체인도 chance_pct · 안 나온 점프 = 체인 건너뜀) · 난수 순서 한 줄
 > v0.27 (2026-11-11) — H-76 "과녁은 ×1에서만" 토스트: toast.targets_x1 · fx targets_x1.toast_ms (배속이 max_speed를 넘는 순간 · 처음 켤 때)
 > v0.26 (2026-11-11) — **M7-E C 켬** (H-73): 체력 30 · 강화 7종 · action defend · tap_route state · 힘 0.12 · 반동 1.5 (새 키) · 과녁 자리 dx 0.3 · 운반 6 · 0.2 · fx lift_ms · recoil_* · hint_count · art_config 받쳐! 그림 3 · 문구 2 · **받치기 반동 규칙 (I-32 — "같이 올라감" 대체)** · B · B2 다르게 한 점 · 측정 표 · M7-E A · B · B2 머지 기록
 > v0.25 (2026-11-10) — M7-E 체력 + 받치기 데이터 (꺼진 채): targets.action · tap_route · battle.defend.* · economy.carry_ants · carry_interval_s · upgrades.per_level_add 칸 (강화 3행 = C) · fx defend.* · ring.plate_alpha · 문구 10 · 이벤트 defend · deposit index · count · 치트 `?cheat` · 완료 조건 (I-27 · I-28 · H-66 · H-67 · H-69 · I-30) · M7-D C 머지 기록
@@ -77,6 +78,21 @@ art/production/ (원본) · art/game/ (게임용) — 아트가 들어올 때 �
 | buildings_to_clear | int | 클리어에 필요한 파괴 수 (착지한 건물은 안 셈 — H-01 #5) | 3 |
 
 - 마지막 행을 넘는 스테이지 = 마지막 행 반복 (`game_config` `stage.beyond_last_row` = `repeat_last`, H-01 #12)
+- **M8**: 실제로 떨어지는 건물 · 층수 = 아래 `stage_pool` (`stages.building_id`는 풀에 그 스테이지 행이 없을 때만 — 검증이 막음)
+
+### 3-2b. `stages.xlsx` › stage_pool → `stage_pool.json` (표 · **M8** — I-25 · H-62 · core가 읽음)
+| Column명 | 데이터 타입 | 설명 | 예시 데이터 |
+|---|---|---|---|
+| stage | int (FK → stages.stage) | 스테이지 | 3 |
+| building_id | string (FK → buildings.building_id) | 이 스테이지에 나올 수 있는 건물 | `bld_villa` |
+| weight | int (≥ 1) | 뽑힐 비중 (스테이지 안 합으로 나눔) | 3 |
+| floors_min · floors_max | int (1 ~ 6 · min ≤ max) | 층수 범위 (같으면 고정) | 2 · 3 |
+
+- 건물이 생길 때마다 **시드 난수**: 건물 1번 (그 스테이지 행이 2개 이상일 때만) · 층수 1번 (min < max일 때만) → **고를 게 없으면 안 뽑음 = 난수 순서 그대로**
+- 행 순서 = `building_id` 순 (시트 순서 · 객체 키 순서에 안 기댐) · 누적 비중 `rng.int(합)` (정수)
+- 검증: FK 2개 · 비중 ≥ 1 · 층수 1 ~ 6 · min ≤ max · 스테이지마다 1행 이상 · 같은 (스테이지, 건물) 한 번
+- **A = 꺼진 채**: 스테이지마다 1행 = 지금 `stages.building_id` · 비중 1 · 1층 → 지금 그대로. 값 = **C 측정** (`measure --seeds` 시드 5개 평균 — H-79)
+- **층 건물 규칙 (H-62)**: 층 N개 · 층 HP = `floor(건물 HP ÷ N)` · 나머지 = 1층 (합 = 건물 HP) · 타격 = 맨 아래층부터 · 층 HP 0 = `floorBreak` (그 층만) · **넘친 데미지 = 버림** · 마지막 층 (지붕) 0 = `destroy` (지금 그대로) · 착지 데미지 = `ceil(남은 층 HP 합 × landing_damage_coeff)` · core는 밑면 y만 (판정 · 낙하 · 착지 그대로) · 잔해 = 파괴 때 한 번 (경제 그대로) · 과녁 · 링 = 건물 단위 (체인 = 지금 규칙) · N = 1이면 지금 그대로
 
 ### 3-3. `config.xlsx` › game_config → `game_config.json` (키-값)
 | Column명 (key) | 데이터 타입 | 설명 | 예시 데이터 |
@@ -127,7 +143,7 @@ art/production/ (원본) · art/game/ (게임용) — 아트가 들어올 때 �
 | battle.defend.recoil_fall_mult | float (> 0) | **I-32 (H-73)** 반동 — 받친 뒤 개미 하강 속도 배수. 없으면 1 | 1.5 [가정 — 폰 확인] |
 | (규칙) 받치기 반동 | — | **I-32 · H-73** (H-69 "개미 같이 올라감 · 매달림 연장" 대체): **손** = 매달려 있으면 바로 받치기 + 반동 (매달림 끝 · 하강 × `recoil_fall_mult` — 그 점프 타격 끝) · **닿기 전에 맞힘** = 닿는 순간 1타 친 뒤 받치기 + 반동 · **끝내 못 닿고 정점** = 그 자리에서 받침 (B) · **자동** = 난수는 매달림 시작 (순서 그대로) · 받침은 **매달림이 끝날 때** (치고 내려오며 — 손으로 받친 매달림은 자동 없음) · **체인** = 같은 건물에서 다음 점프 과녁 = n + 1 · 놓침 · 빗나감 · 건물 바뀜 = 끝 · **3 / 3 = 그 순간 마무리 1타 (`perfect_bonus_strikes`) → 받치기 + 반동** | — |
 | (규칙) 개미 착지 = 과녁 끝 | — | **H-61** 묶음 · 체인 공통 — 개미가 땅에 닿으면 남은 과녁 즉시 끝 ("착지했는데 때림" 고침 · 키 아님) | — |
-| battle.rng_seed | int (1 ~ 2³²−1) | **M7** core 시드 난수 (xorshift32) 시작값. 뽑는 순서 고정: 도움닫기 시작마다 1번 (기회) · 과녁 묶음마다 확률 1번 + 개수 1번 + 위치 시도 · **I-33 체인 = 닿기 직전 등장 때 확률 1번 (`chance_pct` < 100일 때만)** → 받치기 과녁 흔들기 x · y (나올 때) · **M7-E** 매달림 시작마다 자동 받치기 1번 (자동 % > 0일 때만). 세이브에 난수 상태 안 넣음 [프로토만] | 20261107 |
+| battle.rng_seed | int (1 ~ 2³²−1) | **M7** core 시드 난수 (xorshift32) 시작값. 뽑는 순서 고정: 도움닫기 시작마다 1번 (기회) · 과녁 묶음마다 확률 1번 + 개수 1번 + 위치 시도 · **I-33 체인 = 닿기 직전 등장 때 확률 1번 (`chance_pct` < 100일 때만)** → 받치기 과녁 흔들기 x · y (나올 때) · **M7-E** 매달림 시작마다 자동 받치기 1번 (자동 % > 0일 때만) · **M8** 건물 생성마다 건물 1번 (풀 2행 이상일 때) · 층수 1번 (min < max일 때) · 다음 건물까지 흔들기 1번 (`spawn_jitter_ratio` > 0) · 연달아 1번 (`double_pct` > 0) — 고를 게 없으면 안 뽑음. 세이브에 난수 상태 안 넣음 [프로토만] | 20261107 |
 | battle.arm_damage | int[] (4개) | 팔 1 ~ 4 슬롯 1타 데미지 (장비 회차에 표로) | 10,10,10,10 |
 | battle.strike_interval_s | float | 매달려 있는 동안 팔 타격 간격 | 0.12 |
 | battle.strike_interval_min_s | float | 공격속도 강화 하한 — 간격이 이보다 짧아지지 않음 (M4 · 지금 표 최대 Lv = 0.067초라 안 닿는 안전값) | 0.06 |
@@ -138,6 +154,8 @@ art/production/ (원본) · art/game/ (게임용) — 아트가 들어올 때 �
 | battle.building.spawn_bottom_ratio | float | 건물이 나타나는 높이 (밑면) | 1.0 |
 | battle.building.spawn_delay_s | float | 다음 건물까지 | 0.6 |
 | battle.building.landed_linger_s | float | 착지한 건물이 남는 시간 (깔린 동안 탭 무시) | 0.6 |
+| battle.building.spawn_jitter_ratio | float (0 ~ 0.9) | **M8 (I-25 · H-62)** 다음 건물까지 = `spawn_delay_s` × (1 ± 이 값) — 시드 난수 1번 (0이면 안 뽑음). 0 = 끔 (지금 그대로) → C 측정 | 0 |
+| battle.building.double_pct · double_delay_s | int (0 ~ 100) · float | **M8** 이 확률로 다음 건물이 짧은 간격 (`double_delay_s`)으로 연달아 — 리듬 깨기 · 한 번에 한 채 그대로 · 시드 난수 1번 (0이면 안 뽑음). 0 = 끔 → C 측정 | 0 · 0.15 [가정] |
 | stage.beyond_last_row | string | 표 끝 넘으면 처리 — `repeat_last`만 | repeat_last |
 | input.strip_tap_slop_ratio · strip_tap_max_ms | float · int | 띠 탭 판정 (거리 · 시간) | 0.015 · 350 |
 | input.strip_swipe_min_dy_ratio · strip_swipe_max_ms | float · int | 띠 아래 스와이프 판정 | 0.03 · 700 |
@@ -207,6 +225,7 @@ px = 1080폭 기준 (view가 프레임 폭에 비례해 줄임) · ms = 밀리�
 | ring.plate_alpha | float (0 ~ 1) | **M7-E (H-66 메모)** 링 뒤 진한 받침 — 밝은 하늘 위 노랑 링 대비 (L-05) | 0.45 [가정] |
 | defend.lift_ms · recoil_squash · recoil_ms · hint_count | int · float · int · int | **M7-E C (I-32 · H-72)** 받친 건물이 올라가는 그림 시간 (ease-out — core는 바로) · 개미 반동 찌그러짐 세로 배율 (가로 = 2 − 값) · 돌아오는 시간 · 받쳐! 손가락 안내 + "눌러!" 횟수 (이 브라우저에서 처음 N번). 키가 없으면 바로 · 찌그러짐 없음 · 안내 없음 | 250 · 0.7 · 180 · 3 [가정] |
 | targets_x1.toast_ms | int (> 0) | **H-76** "과녁은 ×1에서만" 토스트 머무는 시간 (나타남 0.12 · 사라짐 0.3초는 토스트 그대로) | 1500 |
+| floor_break.drop_ms · camera_ms · camera_intensity · chunk_count | int · int · float · int | **M8 (H-62)** 층 깨짐 = 작은 와르르 — 위층이 한 칸 털썩 내려앉는 시간 (그림만) · 흔들림 시간 · 세기 (파괴보다 작게) · 조각 수 (파편 그림 재사용 · 일개미 안 주워 감) · 지붕 = 지금 파괴 연출 | 120 · 90 · 0.005 · 4 [가정] |
 | impact.push_px · push_ms | float · int | 건물 **그림만** 위로 밀렸다 돌아옴 (core 건물 y 그대로 · 히트스톱 중에도 진행 — H-27 Q5). 마무리 = × star_scale | 8 · 90 |
 
 ### 3-5. `art.xlsx` → 아트 배치 (M3 — view만 읽음 · 규격과 맞추는 법 = `docs/art.md`)
@@ -241,6 +260,8 @@ pivot · socket · grip = `art/game` 납품본 측정값 · draw_h · anchor · 
 | | pivot_y | float | 밑면 y (0 ~ 1 · 기준점 x = 가운데). **그림 밑면 = core 건물 밑면** (치는 곳 · 깔리는 곳) — `npm run art:pivots` | 0.996 |
 | | draw_w | float | 그림 폭 ÷ 건물 폭 (`width_ratio`) · 세로는 비율대로 (위로 341 ~ 387px — 판정은 밑면만이라 결과 그대로, H-42 Q3) | 1.0 |
 | | tint? · debris_file? | string | 곱하기 색 `#rrggbb` (같은 그림 다시 쓸 때) · 건물별 파편 `debris_<이름>.png` (`art/game/fx/building_debris/` — 빈칸 = 공용 debris_file) | #b8c4ff · debris_office.png |
+| | cut_roof_ratio | float (0 ~ 0.9] | **M8 자르기** — 층 조각 파일이 없을 때 그림 1장을 층수만큼 가로로 나눔 · 지붕 칸 = 그림 높이 × 이 값 · 나머지를 아래층들이 같게 (그림 1장 높이 고정) | 0.35 [가정] |
+| | floor_base_file? · floor_mid_file? · floor_roof_file? | string (3칸 다 / 다 빈칸) | **M8 쌓기 (F-09)** — `art/game/buildings/floors/` 조각 · 1층 + 중간 × (N − 2) + 지붕 → **층수만큼 키가 커짐** (720폭 그림 기준 1층 230 · 중간 230 · 지붕 362px — 3층 = 822 · 6층 = 1,512) · 다 비우면 자르기 · 키 큰 건물 HUD 가림 [프로토만] | house: `house_floor_base.png` · `house_floor_mid.png` · `house_floor_roof.png` |
 
 ### 3-6. `upgrades.xlsx` › upgrades → `upgrades.json` (표 · M4 — core가 읽음)
 | Column명 | 데이터 타입 | 설명 | 예시 데이터 |
@@ -311,11 +332,12 @@ pivot · socket · grip = `art/game` 납품본 측정값 · draw_h · anchor · 
 | stageStart | stage · reason (init / advance / repeat / retreat / restart / challenge) | 스테이지 시작 |
 | stageClear | stage · wasChallenge | 파괴 수가 buildings_to_clear에 닿았을 때 |
 | autoAdvance | on | auto_advance가 바뀔 때 |
-| spawn | seq · building_id · hp | 건물 생성 (seq = 화면에 나온 순번) |
+| spawn | seq · building_id · hp · **floors · floorHp** (M8) | 건물 생성 (seq = 화면에 나온 순번) · M8: 층수 · 층마다 HP (아래층부터 · 합 = hp) |
 | jump | kind (auto / strong / **perfect** — I-24 링 PERFECT) · apex | 점프 시작 |
-| strike | arm (1 ~ 4) · damage · hpLeft · **combo** · **source** (M7: auto · target · bonus) | 팔 1타. combo = 같은 건물에서 이어진 연타 수 (1부터). 마지막 타격 뒤 `battle.combo_window_s` 안에 다음 타격이면 +1, 아니면 1. 건물 파괴 · 착지 · 스테이지 시작 때 0 (M2 · H-10) |
-| destroy | seq · y · debrisReward | 건물 HP 0 |
-| land | seq · damage · antHp | 건물 착지 — damage = ceil(남은 HP × 계수) (정수화 시점) |
+| strike | arm (1 ~ 4) · damage · hpLeft · **combo** · **source** (M7: auto · target · bonus) · **floorHpLeft** (M8 — 맨 아래층 남은 HP) | 팔 1타. combo = 같은 건물에서 이어진 연타 수 (1부터). 마지막 타격 뒤 `battle.combo_window_s` 안에 다음 타격이면 +1, 아니면 1. 건물 파괴 · 착지 · 스테이지 시작 때 0 (M2 · H-10) |
+| destroy | seq · y · debrisReward | 건물 HP 0 (M8: 지붕 층 HP 0) |
+| **floorBreak** (M8) | seq · floor (1부터 · 아래층부터) · floorsLeft · hpLeft | 맨 아래층 HP 0 → 그 층만 와르르 (지붕 아님) · 넘친 데미지 버림 · 뒤이어 위층 내려앉음 (그림만) |
+| land | seq · damage · antHp | 건물 착지 — damage = ceil(남은 HP × 계수) (정수화 시점 · M8: 남은 층 HP 합) |
 | antDown | stage | 개미 HP 0 |
 | tapIgnored | reason (airborne / cooldown / down / pinned / **noChance** / **noBuilding** — M7) | 탭을 무시할 때 (M7: 기회 없음 · 건물 없음 · 위쪽 빈 곳) |
 | **windupStart** (M5) | — | 도움닫기 시작 (지면 · 건물이 떨어지는 중 · `windup_s` > 0). 남은 시간 = `ant.windupLeft`. 깔리면 (land) 취소 · 다음 건물이 떨어지면 처음부터. 스테이지 시작 · 후퇴 · 재시작 · [도전] · 기절 회복 뒤 첫 점프에도 (H-34) |
@@ -382,6 +404,8 @@ pivot · socket · grip = `art/game` 납품본 측정값 · draw_h · anchor · 
 | **M7-E** 자동 받치기 | defend (auto true) | 받치기 × 0.5 | 같은 연출을 작게 · 글자 없음 · 먼지만 | `fx_config` defend.auto_scale |
 | **M7-E** 링 대비 (H-66 메모) | timingChance | — | 흰 링 → **진한 받침 위 노랑 링** · "!" = 머리 옆 (더듬이 피함) · depth = HP 바 위 (×2 겹침) | `fx_config` ring.plate_alpha |
 | **M7-E** "과녁 ×1" 안내 | (배속 > `targets.max_speed`) · 넘는 순간 · 처음 켤 때 | 토스트 0.12 + 1.5 + 0.3초 | 배속 버튼 아래 노랑 글자 + 진한 받침 (H-72) · **넘는 순간 · 저장된 배속으로 켤 때 전투 구역 위쪽 토스트 "과녁은 ×1에서만" (H-76 — 작은 글자는 HUD 오른쪽 위라 못 봄)** | `hud.targets_x1` · `toast.targets_x1` · `fx_config` targets_x1.toast_ms |
+| **M8** 층 건물 그림 | spawn (floors) | — | 층 조각 파일 3칸 있으면 **쌓기** (1층 + 중간 × (N − 2) + 지붕 · 키 커짐) · 없으면 **자르기** (그림 1장을 N칸 · 지붕 = `cut_roof_ratio`) · 금 = 맨 아래층 안에만 · HP 바 = 지금 층 HP + 층 칸 (□□■) | `building_art` cut_roof_ratio · floor_*_file |
+| **M8** 층 깨짐 | floorBreak | 흔들림 0.09초 · 내려앉음 0.12초 | 그 층 조각이 떨어져 나감 (파편 그림 재사용 · 일개미 안 주워 감) · 작은 흔들림 · 위층이 한 칸 털썩 · 층마다 작게 — 지붕 (destroy) = 지금 파괴 연출 크게 | `fx_config` floor_break.* |
 | **M7-E** 운반 개미마다 +N | deposit (index · count) | 운반 팝업 0.8초 | 개미마다 "+N" · HUD 잔해 톡 (I-30) · 조각 수 = core count · 배경 행렬 = 빈손 그대로 · 소리 = 이번엔 안 함 (제안만) | `economy.carry_*` · `strip.popup_*` |
 | **M7** [FX] 토글 | ([FX] 패널) | — | "M7 과녁 · 타이밍 원" — 끄면 그림만 안 보임 (판정은 그대로 — 테스트용) | — |
 | **M3-E** 배속 버튼 · 가벼운 연출 | (HUD 오른쪽 아래 [×1]) · 배속 ≥ 2 | — | 누를 때마다 ×1 → ×1.5 → ×2 → ×3 → ×1. ×2 이상: 일반 타격 멈춤 · 흔들림 끔 · 일반 타격음 3타에 1번 · 공격 모션 최소 33ms | `speed.levels` · `fx_config` speed_fx.* · motion.strike.min_wall_ms · `hud.speed` |
@@ -423,3 +447,4 @@ pivot · socket · grip = `art/game` 납품본 측정값 · draw_h · anchor · 
 | M7 | 터치 개편 — 강점프 = 줄어드는 링 · 터치 과녁 건물 단위 (I-23 · H-51 · H-56 · I-24) | ① 키 끔 (`mode` tap · `count_max` 0) = M6 measure · `--upgrades` **그대로** (diff 0) ② 테스트 (core): 같은 시드 + 같은 입력 = 같은 이벤트 · 링 등급 (perfect · good · early) · 첫 탭만 · 기회 도움닫기 실제 시간 (×1 · ×3 같음) · 아래 / 위 구역 · 과녁 닿기 직전 등장 · 건물 단위 끝 (수명 · 파괴 · 착지) · 추가 타 · miss_limit · perfect · PERFECT 높이 자름 ③ **×1 자동만 = 키 켜도 그대로** (ring_s + good_s = windup_s) ④ view: 링 · 과녁 화면 컷 (390 · ×1 · ×3) · [FX] 끔 = 그림 없음 · 실제 탭 ⑤ smoke ✅ (C 켬) ⑥ C `measure --touch`: **예측 모델 σ 0.08 GOOD 이상 ×1 · ×2 · ×3 모두 50 ~ 80%** · **반응 모델 과녁 ≥ 40%** · **연타 강점프 0 · PERFECT 0** · ×2 · ×3 자동 진행 변화 (기록) ⑦ 이 문서 §3 · §4 · §5 · §7 | A `1140975` (PR #65) · B `9ecc01a` (PR #66) · 링 키 `7c7c274` (PR #68) · 링 `de81232` (PR #69) |
 | M7-D | 터치 다듬기 — 체인 과녁 · 링 보이게 (I-26 · H-61) | ① A · B = 지금 그대로 (measure · `--upgrades` diff 0 · `mode` building · ring 0.4 → 슬로 1.0) ② 테스트: 체인 (닿기 직전 · 1개씩 · 버팀 · 빗나감 / 시간 끝 = 끝 · 다 맞힘 = PERFECT) · `chain_max_speed` 넘으면 묶음 · **`max_speed` 넘으면 과녁 없음** · **땅에서 과녁 0개** · 계산 슬로 = 게임 결과 그대로 · ×1 · ×3 실제 시간 ③ C `--touch` (H-64): **링 GOOD 이상 ×1 · ×2 · ×3 50 ~ 80%** (σ 0.08) · **체인 ×1 1번째 ≥ 45%** · **PERFECT 묶음 > 0** · 연타 0 · ×2 · ×3 = 과녁 없음 (링만) · 손 ÷ 자동 기록 (~ 7.6배) ④ 화면 컷 (×1 링 몸 · "!" · 체인 · ×2 링만) · smoke ⑤ 이 문서 §3 · §4 · §5 · §7 | A `a65fb71` (PR #78) · B `78d98bb` (PR #79) · 테스트 `5abdcea` (PR #83) · C `dda3848` (PR #84) |
 | M7-E | 체력 + 받치기 (반동) · 과녁 "받쳐!" · 운반 개미마다 돈 (I-27 · I-28 · H-66 · H-67 · H-69 · I-30 · I-32 · H-72 · H-73) | ① A · B · B2 · B3 = 지금 그대로 (measure · `--upgrades` · `--touch` diff 0) ② 테스트 (core): 받치기 (lift 식 · 감쇠 · 건물당 상한 · `lift_max_y` · 낙하 멈춤) · **반동** (하강 × `recoil_fall_mult` · 그 점프 과녁 하나) · **체인 점프 넘김** (1 → 2 → 3 / 3 · 놓침 = 1부터 · PERFECT = 마무리 1타 → 받치기) · 닿기 전 = 1타 뒤 · 못 닿고 정점 · 자동 = 매달림 끝 (타격 뒤 · 손으로 받친 매달림은 없음) · 탭 길 state · 체력 강화 · 운반 (합 = R · 시각) · 치트 · 세이브 왕복 · **테스트 = 시트 값과 상관없게** (C 켜도 그대로) ③ **C 측정 (H-73 — ✅)**: 자동 stage 8 **22.4 / 24.0분** ✅ (가장 싼 것 / 공격 우선 · 20 ~ 27) · lift 손 192px · 자동 124px ✅ · 손 stage 8 7.2분 = **손 ÷ 자동 3.1배** ✅ · **수동 > 자동 = 진행 · 후퇴로** (후퇴 손 1 · 자동 13) ✅ — **손 60분 잔해 95,650 = 자동 +9%** (B 176,640에서 줄어듦 — 받치면 그 점프 타격 끝 · H-73 ①) · 체인 ×1 1 / 2 / 3번째 **56 / 56 / 53%** ✅ (≥ 45 · ≥ 40) · 연타 강점프 0 · 과녁 연타 0 / 270 ✅ · 헛점프 29% (받치기 없을 때 34%) · 아슬 2% · 맞으며 깬 판 9 ~ 11% (기록만 → M8) · 단일 강화 퇴보 0건 · 받치기 1번 = 건물 공중 약 +1.4초 ④ 화면 컷 (실제 플레이 순서 — L-04): 새로 시작 → 첫 과녁 (약 6초 · 손가락 "눌러!" · 1 / 3) · 받친 순간 (건물 올라감 · 개미 반동) · ×2 "과녁 ×1" · 그림 사본을 넣으면 그림 과녁 · smoke ⑤ 이 문서 §3 · §4 · §5 · §7 | A `aa70930` (PR #91) · B `49f0967` (PR #93) · B2 `6f296a3` (PR #98) |
+| M8 | 층 건물 + 섞어 나오기 (I-25 · H-62) | ① A · B = 지금 그대로 (풀 = 지금 건물 · 1층 · 흔들기 · 연달아 0 → measure · `--upgrades` · `--touch` · `--defend` diff 0) ② 테스트 (core): 층 HP 나눔 (합 = HP · 나머지 1층) · 아래층부터 · 넘친 데미지 버림 · floorBreak · 지붕 = destroy · 착지 = 남은 층 합 · 풀 비중 · 층수 범위 · 고를 게 없으면 안 뽑음 · 흔들기 범위 · 연달아 · 같은 시드 = 같은 결과 ③ C 측정 (**시드 5개 평균 + 가장 느린 시드** — H-79 `measure --seeds`): 자동 stage 8 20 ~ 27분 (두 정책) · 손 ÷ 자동 · 체인 · **아슬아슬 (맞으며 깬 판) 다시 잼 (H-67)** · 층수 분포 · 층당 타수 · 버려진 데미지 (`--floors`) ④ 화면 컷 (실제 플레이 순서 — 쌓기 주택 · 자르기 · 층 깨짐 · 위층 내려앉음 · HP 바 층 칸 · 키 큰 건물 HUD) · smoke ⑤ 이 문서 §3 · §4 · §5 · §7 | — |

@@ -5,7 +5,11 @@
     "pivot_y": 0.996,
     "draw_w": 1,
     "tint": null,
-    "debris_file": "debris_house.png"
+    "debris_file": "debris_house.png",
+    "cut_roof_ratio": 0.35,
+    "floor_base_file": "house_floor_base.png",
+    "floor_mid_file": "house_floor_mid.png",
+    "floor_roof_file": "house_floor_roof.png"
   },
   {
     "art_id": "bakery",
@@ -13,7 +17,11 @@
     "pivot_y": 0.996,
     "draw_w": 1,
     "tint": null,
-    "debris_file": "debris_bakery.png"
+    "debris_file": "debris_bakery.png",
+    "cut_roof_ratio": 0.35,
+    "floor_base_file": null,
+    "floor_mid_file": null,
+    "floor_roof_file": null
   },
   {
     "art_id": "factory",
@@ -21,7 +29,11 @@
     "pivot_y": 0.996,
     "draw_w": 1,
     "tint": null,
-    "debris_file": "debris_factory.png"
+    "debris_file": "debris_factory.png",
+    "cut_roof_ratio": 0.35,
+    "floor_base_file": null,
+    "floor_mid_file": null,
+    "floor_roof_file": null
   },
   {
     "art_id": "office",
@@ -29,7 +41,11 @@
     "pivot_y": 0.996,
     "draw_w": 1,
     "tint": null,
-    "debris_file": "debris_office.png"
+    "debris_file": "debris_office.png",
+    "cut_roof_ratio": 0.35,
+    "floor_base_file": null,
+    "floor_mid_file": null,
+    "floor_roof_file": null
   },
   {
     "art_id": "apartment",
@@ -37,7 +53,11 @@
     "pivot_y": 0.996,
     "draw_w": 1,
     "tint": null,
-    "debris_file": "debris_apartment.png"
+    "debris_file": "debris_apartment.png",
+    "cut_roof_ratio": 0.35,
+    "floor_base_file": null,
+    "floor_mid_file": null,
+    "floor_roof_file": null
   },
   {
     "art_id": "townhall",
@@ -45,7 +65,11 @@
     "pivot_y": 0.996,
     "draw_w": 1,
     "tint": null,
-    "debris_file": "debris_townhall.png"
+    "debris_file": "debris_townhall.png",
+    "cut_roof_ratio": 0.35,
+    "floor_base_file": null,
+    "floor_mid_file": null,
+    "floor_roof_file": null
   },
   {
     "art_id": "office_b",
@@ -53,7 +77,11 @@
     "pivot_y": 0.996,
     "draw_w": 1,
     "tint": "#b8c4ff",
-    "debris_file": "debris_office.png"
+    "debris_file": "debris_office.png",
+    "cut_roof_ratio": 0.35,
+    "floor_base_file": null,
+    "floor_mid_file": null,
+    "floor_roof_file": null
   },
   {
     "art_id": "townhall_b",
@@ -61,6 +89,10 @@
     "pivot_y": 0.996,
     "draw_w": 1,
     "tint": "#ffc8a8",
-    "debris_file": "debris_townhall.png"
+    "debris_file": "debris_townhall.png",
+    "cut_roof_ratio": 0.35,
+    "floor_base_file": null,
+    "floor_mid_file": null,
+    "floor_roof_file": null
   }
 ]
