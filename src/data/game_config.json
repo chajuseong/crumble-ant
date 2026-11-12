@@ -41,7 +41,7 @@
       "tap_max_y": 0.5
     },
     "targets": {
-      "chance_pct": 100,
+      "chance_pct": 70,
       "count_min": 2,
       "count_max": 3,
       "life_s": 1.2,

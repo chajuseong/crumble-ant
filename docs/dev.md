@@ -1,6 +1,7 @@
 # 와르르 개미 — 개발 기준 문서 (단일 기준)
 
-> 문서 버전: v0.27 (2026-11-11) — H-76 "과녁은 ×1에서만" 토스트: toast.targets_x1 · fx targets_x1.toast_ms (배속이 max_speed를 넘는 순간 · 처음 켤 때)
+> 문서 버전: v0.28 (2026-11-12) — I-33 · H-78 받쳐! 과녁 확률 70 (체인도 chance_pct · 안 나온 점프 = 체인 건너뜀) · 난수 순서 한 줄
+> v0.27 (2026-11-11) — H-76 "과녁은 ×1에서만" 토스트: toast.targets_x1 · fx targets_x1.toast_ms (배속이 max_speed를 넘는 순간 · 처음 켤 때)
 > v0.26 (2026-11-11) — **M7-E C 켬** (H-73): 체력 30 · 강화 7종 · action defend · tap_route state · 힘 0.12 · 반동 1.5 (새 키) · 과녁 자리 dx 0.3 · 운반 6 · 0.2 · fx lift_ms · recoil_* · hint_count · art_config 받쳐! 그림 3 · 문구 2 · **받치기 반동 규칙 (I-32 — "같이 올라감" 대체)** · B · B2 다르게 한 점 · 측정 표 · M7-E A · B · B2 머지 기록
 > v0.25 (2026-11-10) — M7-E 체력 + 받치기 데이터 (꺼진 채): targets.action · tap_route · battle.defend.* · economy.carry_ants · carry_interval_s · upgrades.per_level_add 칸 (강화 3행 = C) · fx defend.* · ring.plate_alpha · 문구 10 · 이벤트 defend · deposit index · count · 치트 `?cheat` · 완료 조건 (I-27 · I-28 · H-66 · H-67 · H-69 · I-30) · M7-D C 머지 기록
 > v0.24 (2026-11-09) — M7-D C 켬 (H-64): targets.mode chain · chain_life 0.7 · 0 · chain_max_speed 1.0 · **targets.max_speed 1.0 (새 키 — ×1.5 이상 과녁 없음 = 링만)** · ring_s 0.6 · 문구 "완벽 점프!" · "점프!" · 완료 조건 고침 · 측정 표
@@ -103,7 +104,7 @@ art/production/ (원본) · art/game/ (게임용) — 아트가 들어올 때 �
 | (계산) 기회 슬로 | — | **H-61** 링 기회 도움닫기 동안 게임 시간 × `windup_s ÷ (ring_s + good_s)` (키 없음 — 기회 도움닫기 = 게임 시간으로 정확히 `windup_s` → 게임 결과 그대로 · 실제 시간만 늘어남). ring 0.4 = 1.0 (슬로 없음) · **0.6 = 0.714 (C)** | — |
 | battle.strong_timing.perfect_s | float | **I-24** PERFECT 폭 ± (실제 초) ≤ good_s. 측정 (겹침 ± σ 0.08초): PERFECT 48 / 47 / 36% · GOOD 이상 73 / 71 / 62% (×1 / ×2 / ×3) | 0.05 |
 | battle.strong_timing.tap_max_y | float | **H-54 ③** 이 높이 (전투 구역 비율) **아래 탭 = 타이밍만 · 위 = 과녁만** (엉뚱한 탭이 기회를 날리지 않게) · 과녁은 이 높이 + 0.05 위에만 (`action` strike). **M7-E `tap_route` state면 "과녁 없을 때 위쪽 탭 무시"로만** (H-69 — H-54 ③ 바뀜) | 0.5 |
-| battle.targets.chance_pct · count_min · count_max | int | **M7** 매달림마다 과녁 묶음 확률 (%) · 과녁 수 (`count_max` 0 = 끔 → **C 2 · 3**) | 100 · 2 · 3 |
+| battle.targets.chance_pct · count_min · count_max | int | **M7** 매달림마다 과녁 확률 (%) · 과녁 수 (`count_max` 0 = 끔 → **C 2 · 3**). **I-33 체인도 읽음** — 닿기 직전 등장 때 난수 1번 (100이면 안 뽑음) · 안 나온 점프 = 체인 건너뜀 (받치기 체인 순서는 같은 건물 동안 그대로 · 건물이 바뀌면 1부터). **H-78 대표 70** — 측정 (`--defend --chance` · 시드 3개 평균): 100 / 70 / 50 = 자동 st 8 23.4 / 23.3 / 22.4분 · 손 st 8 6.9 / 7.4 / 7.0분 · 후퇴 0.7 / 1.0 / 1.3 · 잔해 96,260 / 103,880 / 106,850 · PERFECT 164 / 92 / 46 · 체인 셋째 53 / 53 / 51% | 70 · 2 · 3 |
 | battle.targets.life_s | float | **M7** 과녁 수명 — **실제 시간** (core는 게임 시간 `life_s × 배속`으로 셈 — `setTimeScale`) | 1.2 |
 | battle.targets.radius_ratio · min_dist_ratio | float | **M7** 판정 반지름 · 과녁끼리 최소 거리 ÷ 전투 구역 폭 (그림 지름 96px = 0.067 → 판정 조금 넓게) | 0.08 · 0.22 |
 | battle.targets.miss_limit · perfect_bonus_strikes | int | **M7** 빈 곳 탭 이 횟수면 그 묶음 끝 (연타 · 매크로 막기) · 다 맞히면 보너스 타 (재화 아님) | 2 · 1 |
@@ -126,7 +127,7 @@ art/production/ (원본) · art/game/ (게임용) — 아트가 들어올 때 �
 | battle.defend.recoil_fall_mult | float (> 0) | **I-32 (H-73)** 반동 — 받친 뒤 개미 하강 속도 배수. 없으면 1 | 1.5 [가정 — 폰 확인] |
 | (규칙) 받치기 반동 | — | **I-32 · H-73** (H-69 "개미 같이 올라감 · 매달림 연장" 대체): **손** = 매달려 있으면 바로 받치기 + 반동 (매달림 끝 · 하강 × `recoil_fall_mult` — 그 점프 타격 끝) · **닿기 전에 맞힘** = 닿는 순간 1타 친 뒤 받치기 + 반동 · **끝내 못 닿고 정점** = 그 자리에서 받침 (B) · **자동** = 난수는 매달림 시작 (순서 그대로) · 받침은 **매달림이 끝날 때** (치고 내려오며 — 손으로 받친 매달림은 자동 없음) · **체인** = 같은 건물에서 다음 점프 과녁 = n + 1 · 놓침 · 빗나감 · 건물 바뀜 = 끝 · **3 / 3 = 그 순간 마무리 1타 (`perfect_bonus_strikes`) → 받치기 + 반동** | — |
 | (규칙) 개미 착지 = 과녁 끝 | — | **H-61** 묶음 · 체인 공통 — 개미가 땅에 닿으면 남은 과녁 즉시 끝 ("착지했는데 때림" 고침 · 키 아님) | — |
-| battle.rng_seed | int (1 ~ 2³²−1) | **M7** core 시드 난수 (xorshift32) 시작값. 뽑는 순서 고정: 도움닫기 시작마다 1번 (기회) · 과녁 묶음마다 개수 1번 + 위치 시도 · **M7-E** 매달림 시작마다 자동 받치기 1번 (자동 % > 0일 때만) · 받치기 과녁 흔들기 x · y. 세이브에 난수 상태 안 넣음 [프로토만] | 20261107 |
+| battle.rng_seed | int (1 ~ 2³²−1) | **M7** core 시드 난수 (xorshift32) 시작값. 뽑는 순서 고정: 도움닫기 시작마다 1번 (기회) · 과녁 묶음마다 확률 1번 + 개수 1번 + 위치 시도 · **I-33 체인 = 닿기 직전 등장 때 확률 1번 (`chance_pct` < 100일 때만)** → 받치기 과녁 흔들기 x · y (나올 때) · **M7-E** 매달림 시작마다 자동 받치기 1번 (자동 % > 0일 때만). 세이브에 난수 상태 안 넣음 [프로토만] | 20261107 |
 | battle.arm_damage | int[] (4개) | 팔 1 ~ 4 슬롯 1타 데미지 (장비 회차에 표로) | 10,10,10,10 |
 | battle.strike_interval_s | float | 매달려 있는 동안 팔 타격 간격 | 0.12 |
 | battle.strike_interval_min_s | float | 공격속도 강화 하한 — 간격이 이보다 짧아지지 않음 (M4 · 지금 표 최대 Lv = 0.067초라 안 닿는 안전값) | 0.06 |
