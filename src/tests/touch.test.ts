@@ -159,6 +159,7 @@ describe('M7 터치 과녁', () => {
     const sim = new BattleSim(targets());
     const s = spawn(sim);
     const hp = sim.building!.hp;
+    const floorHp = sim.building!.floorHp[0]!; // M8 층 건물 — 넘친 데미지 버림 (시트 풀 · 층수와 상관없이)
     const combo = sim.combo;
     const arm = sim.ant.nextArm;
     const t = s.targets[0]!;
@@ -167,7 +168,7 @@ describe('M7 터치 과녁', () => {
     expect(ev[0]).toEqual({ type: 'targetHit', id: t.id });
     const st = ev.find((e) => e.type === 'strike') as Extract<BattleEvent, { type: 'strike' }>;
     expect(st).toMatchObject({ source: 'target', arm: arm + 1, combo: combo + 1 });
-    expect(sim.building!.hp).toBe(hp - st.damage);
+    expect(sim.building!.hp).toBe(hp - Math.min(st.damage, floorHp));
   });
 
   it('빈 곳 탭 2번 = 묶음 끝 (missLimit) · 탭 하나 = 과녁 하나', () => {
