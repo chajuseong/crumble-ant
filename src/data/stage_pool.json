@@ -2,6 +2,13 @@
   {
     "stage": 1,
     "building_id": "bld_hut",
+    "weight": 3,
+    "floors_min": 1,
+    "floors_max": 4
+  },
+  {
+    "stage": 1,
+    "building_id": "bld_house",
     "weight": 1,
     "floors_min": 1,
     "floors_max": 4
@@ -9,6 +16,13 @@
   {
     "stage": 2,
     "building_id": "bld_house",
+    "weight": 3,
+    "floors_min": 1,
+    "floors_max": 4
+  },
+  {
+    "stage": 2,
+    "building_id": "bld_villa",
     "weight": 1,
     "floors_min": 1,
     "floors_max": 4
@@ -16,6 +30,13 @@
   {
     "stage": 3,
     "building_id": "bld_villa",
+    "weight": 3,
+    "floors_min": 1,
+    "floors_max": 4
+  },
+  {
+    "stage": 3,
+    "building_id": "bld_shop",
     "weight": 1,
     "floors_min": 1,
     "floors_max": 4
@@ -23,6 +44,13 @@
   {
     "stage": 4,
     "building_id": "bld_shop",
+    "weight": 3,
+    "floors_min": 1,
+    "floors_max": 4
+  },
+  {
+    "stage": 4,
+    "building_id": "bld_school",
     "weight": 1,
     "floors_min": 1,
     "floors_max": 4
@@ -30,6 +58,13 @@
   {
     "stage": 5,
     "building_id": "bld_school",
+    "weight": 3,
+    "floors_min": 1,
+    "floors_max": 4
+  },
+  {
+    "stage": 5,
+    "building_id": "bld_apt",
     "weight": 1,
     "floors_min": 1,
     "floors_max": 4
@@ -37,6 +72,13 @@
   {
     "stage": 6,
     "building_id": "bld_apt",
+    "weight": 3,
+    "floors_min": 1,
+    "floors_max": 4
+  },
+  {
+    "stage": 6,
+    "building_id": "bld_hospital",
     "weight": 1,
     "floors_min": 1,
     "floors_max": 4
@@ -44,6 +86,13 @@
   {
     "stage": 7,
     "building_id": "bld_hospital",
+    "weight": 3,
+    "floors_min": 1,
+    "floors_max": 4
+  },
+  {
+    "stage": 7,
+    "building_id": "bld_tower",
     "weight": 1,
     "floors_min": 1,
     "floors_max": 4
@@ -51,6 +100,13 @@
   {
     "stage": 8,
     "building_id": "bld_tower",
+    "weight": 3,
+    "floors_min": 1,
+    "floors_max": 4
+  },
+  {
+    "stage": 8,
+    "building_id": "bld_hospital",
     "weight": 1,
     "floors_min": 1,
     "floors_max": 4
