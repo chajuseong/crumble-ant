@@ -90,8 +90,8 @@
       "spawn_bottom_ratio": 1,
       "spawn_delay_s": 0.6,
       "landed_linger_s": 0.6,
-      "spawn_jitter_ratio": 0,
-      "double_pct": 0,
+      "spawn_jitter_ratio": 0.4,
+      "double_pct": 15,
       "double_delay_s": 0.15
     },
     "strike_interval_min_s": 0.06
