@@ -181,6 +181,13 @@ const FX_KEYS = [
   ["targets_x1.toast_ms", "int", { gt: 0 }], // H-76
   // M8 층 깨짐 (H-62)
   ["floor_break.drop_ms", "int", { min: 0 }], ["floor_break.camera_ms", "int", { min: 0 }], ["floor_break.camera_intensity", "num", { min: 0, max: 0.1 }], ["floor_break.chunk_count", "int", { min: 0 }],
+  // M8-D 층 손맛 (H-85)
+  ["floor_break.hitstop_ms", "int", { min: 0 }], ["floor_break.scale_per_floor", "num", { min: 0 }],
+  ["floor_break.slab_spread_px", "num", { min: 0 }], ["floor_break.slab_spin_deg", "num", { min: 0, max: 360 }], ["floor_break.slab_fall_ms", "int", { gt: 0 }],
+  ["floor_break.squash", "num", { gt: 0, max: 1 }], ["floor_break.squash_ms", "int", { min: 0 }], ["floor_break.bounce_px", "num", { min: 0 }], ["floor_break.bounce_ms", "int", { min: 0 }],
+  ["floor_break.dust_count", "int", { min: 0 }], ["floor_break.dust_px", "num", { gt: 0 }],
+  ["floor_break.pip_flash_ms", "int", { min: 0 }], ["floor_break.pip_pop_scale", "num", { gt: 0 }],
+  ["floor_break.crack_at_pct", "pctDesc"], ["floor_break.crack_lines", "int", { min: 1 }],
 ];
 
 // ui_strings 필수 키 (view가 읽는 것)
@@ -234,6 +241,11 @@ function checkValue(where, v, kind, o = {}, errors) {
       if (v[0] !== 1) errors.push(`${where}: 첫 값 = 1 (기본 ×1) (${v[0]})`);
       if (v.some((x, i) => x <= 0 || (i > 0 && x <= v[i - 1]))) errors.push(`${where}: 0보다 크고 오름차순 (${v.join(",")})`);
       return;
+    case "pctDesc":
+      // M8-D 층 금 단계: 정수 1개 이상 · 1 ~ 99 · 내림차순 (50,25 = 50% 이하 1단계 · 25% 이하 2단계)
+      if (!Array.isArray(v) || v.length === 0 || !v.every(Number.isInteger)) return errors.push(`${where}: 정수 1개 이상 (쉼표)`);
+      if (v.some((x, i) => x < 1 || x > 99 || (i > 0 && x >= v[i - 1]))) errors.push(`${where}: 1 ~ 99 · 내림차순 (${v.join(",")})`);
+      return;
     case "bool": if (typeof v !== "boolean") errors.push(`${where}: TRUE/FALSE여야 함 (${JSON.stringify(v)})`); return;
     case "str":
       if (typeof v !== "string" || v === "") return errors.push(`${where}: 빈 문자열 불가`);
@@ -285,6 +297,8 @@ export function validateAll(data) {
       for (const k of fl) if (r[k] !== null && r[k] !== undefined && !/^[a-z0-9_]+_floor_[a-z0-9_]+\.png$/.test(String(r[k]))) errors.push(`${w}.${k}: 비우거나 <이름>_floor_<층>.png (${JSON.stringify(r[k])})`);
       const filled = fl.filter((k) => typeof r[k] === "string").length;
       if (filled !== 0 && filled !== 3) errors.push(`${w}: 쌓기 파일 3칸은 다 채우거나 다 비움 (지금 ${filled}칸)`);
+      // M8-D 층 깨짐 파편 (H-85) — 빈칸 = debris_file
+      if (r.floor_debris_file !== null && r.floor_debris_file !== undefined && !/^debris_[a-z0-9_]+\.png$/.test(String(r.floor_debris_file))) errors.push(`${w}.floor_debris_file: 비우거나 debris_<이름>.png (${JSON.stringify(r.floor_debris_file)})`);
     });
   }
 
@@ -371,6 +385,15 @@ export function validateAll(data) {
       const st = f.motion?.strike;
       if (st && isNum(st.pull_ratio) && isNum(st.thrust_ratio) && st.pull_ratio + st.thrust_ratio > 1 + 1e-9)
         errors.push(`fx_config.motion.strike: pull_ratio + thrust_ratio ≤ 1이어야 함 (나머지 = 복귀, 지금 ${st.pull_ratio + st.thrust_ratio})`);
+      // M8-D (H-85) 가장 센 층 깨짐 (지붕 바로 아래층 · stage_pool 최대 층수) < 파괴 — 흔들림 · 히트스톱
+      const fb = f.floor_break;
+      const pool = Array.isArray(data.stage_pool) ? data.stage_pool : [];
+      const maxFloors = pool.reduce((m, r) => (Number.isInteger(r.floors_max) ? Math.max(m, r.floors_max) : m), 1);
+      if (fb && maxFloors >= 2 && [fb.scale_per_floor, fb.camera_intensity, fb.hitstop_ms, f.camera?.final_intensity, f.hitstop?.final_ms].every(isNum)) {
+        const mult = 1 + fb.scale_per_floor * (maxFloors - 2);
+        if (!(fb.camera_intensity * mult < f.camera.final_intensity)) errors.push(`fx_config.floor_break: 가장 센 층 (${maxFloors - 1}층) 흔들림 ${+(fb.camera_intensity * mult).toFixed(4)} < 파괴 camera.final_intensity ${f.camera.final_intensity}이어야 함`);
+        if (!(fb.hitstop_ms * mult < f.hitstop.final_ms)) errors.push(`fx_config.floor_break: 가장 센 층 (${maxFloors - 1}층) 히트스톱 ${Math.round(fb.hitstop_ms * mult)} < 마지막 일격 hitstop.final_ms ${f.hitstop.final_ms}이어야 함`);
+      }
     }
   }
 
@@ -544,7 +567,7 @@ export function artFileIssues(data, root = "art/game") {
     ...(Array.isArray(data.ant_parts) ? data.ant_parts.map((r) => r.file) : []),
     ...(Array.isArray(data.weapons) ? data.weapons.map((r) => r.file) : []),
     ...["impact_file", "sky_file", "strip_file", "ring_file", "dust_file", "debris_file"].filter((k) => typeof a[k] === "string").map((k) => a[k]),
-    ...(Array.isArray(data.building_art) ? data.building_art.flatMap((r) => [r.file, r.debris_file, r.floor_base_file, r.floor_mid_file, r.floor_roof_file].filter((f) => typeof f === "string")) : []),
+    ...(Array.isArray(data.building_art) ? data.building_art.flatMap((r) => [r.file, r.debris_file, r.floor_base_file, r.floor_mid_file, r.floor_roof_file, r.floor_debris_file].filter((f) => typeof f === "string")) : []),
   ];
   if (!fs.existsSync(root)) {
     if (need.length) out.warnings.push(`${root} 폴더 없음 — 그림 ${need.length}개는 아트 납품 뒤 (그때까지 게임은 도형으로 그림)`);

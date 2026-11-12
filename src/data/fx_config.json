@@ -185,9 +185,27 @@
     "toast_ms": 1500
   },
   "floor_break": {
-    "drop_ms": 120,
-    "camera_ms": 90,
+    "drop_ms": 110,
+    "camera_ms": 120,
     "camera_intensity": 0.005,
-    "chunk_count": 4
+    "chunk_count": 6,
+    "hitstop_ms": 50,
+    "scale_per_floor": 0.3,
+    "slab_spread_px": 140,
+    "slab_spin_deg": 28,
+    "slab_fall_ms": 480,
+    "squash": 0.86,
+    "squash_ms": 80,
+    "bounce_px": 22,
+    "bounce_ms": 160,
+    "dust_count": 3,
+    "dust_px": 150,
+    "pip_flash_ms": 260,
+    "pip_pop_scale": 1.8,
+    "crack_at_pct": [
+      50,
+      25
+    ],
+    "crack_lines": 3
   }
 }
