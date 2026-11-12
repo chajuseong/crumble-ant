@@ -123,13 +123,46 @@ describe('M8 섞어 나오기 · 간격 (H-62 ② ④)', () => {
       c.battle.strong_jump.mode = 'timing'; // 링 기회 난수가 섞여 돌게
       c.battle.building.spawn_jitter_ratio = 0;
       c.battle.building.double_pct = 0;
+      // 시트와 상관없이 풀 = 스테이지마다 지금 건물 1행 · 1층 (C에서 시트가 켜져도 그대로)
+      c.stages.pool = c.stages.rows.map((r) => ({ stage: r.stage, building_id: r.building_id, weight: 1, floors_min: 1, floors_max: 1 }));
     };
     expect(run(makeConfig(base))).toBe(run(makeConfig((c) => { base(c); delete c.stages.pool; })));
   });
 
+  it('건물 순서 = 따로 난수 — 터치 키를 켜고 꺼도 · 손으로 쳐도 같은 시드면 같은 건물 · 층수', () => {
+    const pool = (c: GameConfig) => {
+      c.stages.pool = c.stages.rows.map((r) => ({ stage: r.stage, building_id: r.building_id, weight: 1, floors_min: 1, floors_max: 3 }));
+      c.battle.building.spawn_jitter_ratio = 0.4;
+      c.battle.building.double_pct = 15;
+      c.battle.ant.max_hp = 1e9;
+    };
+    const spawns = (c: GameConfig, tap: boolean) => {
+      const sim = new BattleSim(c);
+      const out: string[] = [];
+      for (let i = 0; i < 120 * 120; i++) {
+        sim.update(1 / 120);
+        for (const e of sim.drainEvents()) if (e.type === 'spawn') out.push(`${sim.building!.buildingId}:${e.floors}`);
+        if (tap && sim.targets.length > 0) sim.tapBattle(sim.targets[0]!.x, sim.targets[0]!.y);
+      }
+      return out.slice(0, 12);
+    };
+    const on = spawns(makeConfig(pool), false);
+    expect(on.length).toBe(12);
+    expect(spawns(makeConfig((c) => { pool(c); c.battle.targets!.count_max = 0; c.battle.defend!.auto_pct = 0; c.battle.strong_jump.mode = 'tap'; }), false)).toEqual(on);
+    // 손으로 치면 스테이지가 더 빨리 넘어가 건물 종류는 달라질 수 있음 → 뽑은 층수 순서가 같은지 (스테이지마다 범위 같음)
+    const floorsOnly = (xs: string[]) => xs.map((x) => x.split(':')[1]);
+    // (간격 흔들기 · 연달아는 스테이지 시작 때 안 뽑아서 손 · 자동 횟수가 다름 → 이 비교만 끔)
+    const noGap = (c: GameConfig) => { pool(c); c.battle.building.spawn_jitter_ratio = 0; c.battle.building.double_pct = 0; };
+    const hand = floorsOnly(spawns(makeConfig(noGap), true));
+    const auto = floorsOnly(spawns(makeConfig(noGap), false));
+    const n = Math.min(hand.length, auto.length); // 같은 시간에 나온 건물 수는 다를 수 있음 → 앞에서부터 같은 순서인지
+    expect(n).toBeGreaterThan(8);
+    expect(hand.slice(0, n)).toEqual(auto.slice(0, n));
+  });
+
   it('흔들기 = spawn_delay_s × (1 ± j) 안 · 0이면 그대로 · 연달아 100% = double_delay_s', () => {
     const d = makeConfig().battle.building.spawn_delay_s;
-    const jit = new BattleSim(makeConfig((c) => { c.battle.building.spawn_jitter_ratio = 0.4; }));
+    const jit = new BattleSim(makeConfig((c) => { c.battle.building.spawn_jitter_ratio = 0.4; c.battle.building.double_pct = 0; }));
     const ds = Array.from({ length: 200 }, () => inner(jit).nextSpawnDelay());
     expect(Math.min(...ds)).toBeGreaterThanOrEqual(d * 0.6 - 1e-6);
     expect(Math.max(...ds)).toBeLessThanOrEqual(d * 1.4 + 1e-6);

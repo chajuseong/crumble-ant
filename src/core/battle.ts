@@ -193,6 +193,11 @@ export class BattleSim {
   // ── M7 터치 개편 (I-23 · H-51) ──
   /** 시드 난수 — 뽑는 순서: 도움닫기 시작마다 1번 (mode timing) · 매달림 시작마다 확률 1번 + 개수 1번 + 위치 시도 (count_max > 0) */
   private readonly rng: Rng;
+  /**
+   * M8 건물 생성 난수 (풀 · 층수 · 간격 흔들기 · 연달아) — 따로 둠: 터치 · 자동 받치기 난수와 섞이지 않게
+   * (손으로 칠 때 · 자동일 때 · 터치 키를 켜고 끌 때 같은 시드면 같은 건물 순서). 시작값 = rng_seed ^ 0x5bd1e995 (C#: uint xor)
+   */
+  private readonly spawnRng: Rng;
   /** 배속 (view가 알려 줌) — 과녁 수명 · 타이밍 창을 실제 시간으로 맞출 때만 씀. 자동 결과에는 영향 없음 */
   private timeScale = 1;
   /** 지금 살아 있는 과녁 · 남은 수명 (게임 초) · 이번 묶음 빈 곳 탭 수 */
@@ -211,6 +216,7 @@ export class BattleSim {
     this.cfg = cfg;
     const b = cfg.battle;
     this.rng = new Rng(b.rng_seed ?? 1);
+    this.spawnRng = new Rng(((b.rng_seed ?? 1) ^ 0x5bd1e995) >>> 0);
     this.levels = { ...initialLevels(cfg), ...(start?.levels ?? {}) };
     this.stats = deriveStats(cfg, this.levels);
     this.wallet = start ? start.debris : cfg.economy.start_debris;
@@ -657,7 +663,7 @@ export class BattleSim {
     let pick = pool[0]!;
     if (pool.length > 1) {
       const total = pool.reduce((s, r) => s + r.weight, 0);
-      let roll = this.rng.int(total);
+      let roll = this.spawnRng.int(total);
       for (const r of pool) {
         if (roll < r.weight) {
           pick = r;
@@ -666,7 +672,7 @@ export class BattleSim {
         roll -= r.weight;
       }
     }
-    const floors = pick.floors_max > pick.floors_min ? pick.floors_min + this.rng.int(pick.floors_max - pick.floors_min + 1) : pick.floors_min;
+    const floors = pick.floors_max > pick.floors_min ? pick.floors_min + this.spawnRng.int(pick.floors_max - pick.floors_min + 1) : pick.floors_min;
     const row = this.cfg.buildings.rows.find((x) => x.building_id === pick.building_id);
     if (!row) throw new Error(`stage_pool building_id ${pick.building_id} 없음 (검증을 먼저 통과해야 함)`);
     return { row, floors: Math.max(1, floors) };
@@ -677,9 +683,9 @@ export class BattleSim {
     const bb = this.cfg.battle.building;
     let d = bb.spawn_delay_s;
     const j = bb.spawn_jitter_ratio ?? 0;
-    if (j > 0) d = Math.round(d * (1 + (this.rng.float() * 2 - 1) * j) * 1e6) / 1e6;
+    if (j > 0) d = Math.round(d * (1 + (this.spawnRng.float() * 2 - 1) * j) * 1e6) / 1e6;
     const dp = bb.double_pct ?? 0;
-    if (dp > 0 && this.rng.int(100) < dp) d = bb.double_delay_s ?? d;
+    if (dp > 0 && this.spawnRng.int(100) < dp) d = bb.double_delay_s ?? d;
     return d;
   }
 
