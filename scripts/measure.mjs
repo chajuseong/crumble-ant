@@ -10,6 +10,8 @@
 //       npm run measure -- --defend --sweep   + 받치는 힘 0.02 ~ 0.08 × 자동 받치기 비용 쓸기 (C 고르는 표 — H-69)
 //       npm run measure -- --defend --chance  + 받쳐! 과녁 확률 targets.chance_pct 100 · 70 · 50 표 (I-33)
 //       npm run measure -- --defend --seeds 5 + 시드 N개 (core battle.rng_seed) 평균 · 최소 · 최대 — 범위 판정 (H-79: 평균 + 가장 느린 시드)
+//       npm run measure -- --floors    M8 층 건물 + 섞어 나오기 (I-25 · H-62) — 층수 분포 · 층당 타수 · 버려진 데미지 · 자동 진행 (시드 5개)
+//                                      데이터가 꺼져 있으면 (풀 = 1층 · 간격 0) 측정만 후보 (스테이지마다 1 ~ 3층 · 흔들기 0.4 · 연달아 15%)로 켜서 잼
 // core(TypeScript)는 Vite로 불러온다 — 따로 빌드 도구를 늘리지 않음
 import fs from "node:fs";
 import path from "node:path";
@@ -22,7 +24,7 @@ try {
   const { buildingForStage, validateConfig } = await server.ssrLoadModule("/src/core/config.ts");
   const { fromData } = await server.ssrLoadModule("/src/core/data.ts");
   const read = (f) => JSON.parse(fs.readFileSync(path.join("src/data", `${f}.json`), "utf-8"));
-  const config = fromData({ buildings: read("buildings"), stages: read("stages"), game_config: read("game_config"), ui_strings: read("ui_strings"), upgrades: read("upgrades") });
+  const config = fromData({ buildings: read("buildings"), stages: read("stages"), game_config: read("game_config"), ui_strings: read("ui_strings"), upgrades: read("upgrades"), stage_pool: read("stage_pool") });
   const errors = validateConfig(config);
   if (errors.length) throw new Error(`데이터 오류:\n${errors.join("\n")}`);
 
@@ -388,6 +390,62 @@ try {
         console.log(`  ${push} | ${autoBase} | ${f(a.first[8])} · ${a.earned} · ${a.retreats} | ${f(b.first[8])} · ${b.earned} · ${b.retreats} | ${Math.round(push * PX)}`);
       }
     }
+  }
+
+  if (process.argv.includes("--floors")) {
+    // M8 (H-62 ⑦) — 자동만 (가장 싼 강화 바로 · 사면 [도전]) · 층 통계는 이벤트로 셈
+    const off = (config.stages.pool ?? []).every((r) => r.floors_max <= 1) && !(config.battle.building.spawn_jitter_ratio > 0) && !(config.battle.building.double_pct > 0);
+    const cand = (base) => {
+      const c = structuredClone(base);
+      if (off) {
+        c.stages.pool = c.stages.rows.map((r) => ({ stage: r.stage, building_id: r.building_id, weight: 1, floors_min: 1, floors_max: 3 }));
+        Object.assign(c.battle.building, { spawn_jitter_ratio: 0.4, double_pct: 15, double_delay_s: c.battle.building.double_delay_s ?? 0.15 });
+      }
+      return c;
+    };
+    const run = (c, minutes = 60) => {
+      const sim = new BattleSim(structuredClone(c), 1);
+      const rows = c.upgrades.rows, first = {};
+      const r = { earned: 0, floors: {}, strikes: 0, floorsBroken: 0, waste: 0, dealt: 0, spawns: 0, lands: 0, destroys: 0, retreats: 0, clears: 0, clearsHit: 0, gaps: [] };
+      let cur = null, landsSince = 0, lastEnd = null;
+      for (let i = 0; i < minutes * 60 * 120; i++) {
+        sim.update(1 / 120);
+        for (const e of sim.drainEvents()) {
+          if (e.type === "spawn") { r.spawns++; r.floors[e.floors] = (r.floors[e.floors] ?? 0) + 1; cur = { hp: e.floorHp[0] }; if (lastEnd !== null) r.gaps.push(sim.time - lastEnd); }
+          else if (e.type === "strike" && cur) { r.strikes++; const dealt = cur.hp - e.floorHpLeft; r.dealt += dealt; r.waste += e.damage - dealt; cur.hp = e.floorHpLeft; }
+          else if (e.type === "floorBreak") { r.floorsBroken++; cur = { hp: sim.building?.floorHp[0] ?? 0 }; }
+          else if (e.type === "destroy") { r.destroys++; cur = null; lastEnd = sim.time; }
+          else if (e.type === "land") { r.lands++; landsSince++; cur = null; lastEnd = sim.time + c.battle.building.landed_linger_s; }
+          else if (e.type === "deposit") r.earned += e.amount;
+          else if (e.type === "stageStart") { landsSince = 0; if (e.reason === "retreat") r.retreats++; }
+          else if (e.type === "stageClear") { r.clears++; if (landsSince > 0) r.clearsHit++; if (!(e.stage in first)) first[e.stage] = sim.time / 60; }
+        }
+        let bought = false;
+        for (;;) {
+          const can = rows.filter((x) => sim.levels[x.upgrade_id] < x.max_level).map((x) => ({ id: x.upgrade_id, cost: upgradeCost(x, sim.levels[x.upgrade_id]) })).filter((x) => x.cost <= sim.wallet).sort((a, b) => a.cost - b.cost || (a.id < b.id ? -1 : 1));
+          if (!can.length || sim.buyUpgrade(can[0].id) !== "ok") break;
+          bought = true;
+        }
+        if (bought && sim.challengeAvailable) sim.challenge();
+      }
+      return { ...r, first };
+    };
+    const f1 = (x) => (x === undefined ? "—" : x.toFixed(1));
+    const c1 = cand(config);
+    const pl = c1.stages.pool ?? [];
+    console.log(`\nM8 층 건물 측정 — ${off ? "데이터 꺼짐 → 후보 (스테이지마다 지금 건물 1 ~ 3층 · 흔들기 0.4 · 연달아 15% · " + c1.battle.building.double_delay_s + "초)" : "지금 데이터"} · 풀 ${pl.length}행 · 자동만 60분 · 가장 싼 것`);
+    const base = run(config), on1 = run(c1);
+    const line = (name, x) => `  ${name} | stage 6 / 7 / 8 ${[6, 7, 8].map((s2) => f1(x.first[s2])).join(" / ")} | 잔해 ${x.earned} | 후퇴 ${x.retreats} · 맞으며 깬 판 ${Math.round((x.clearsHit / Math.max(1, x.clears)) * 100)}%`;
+    console.log(line("지금 데이터", base));
+    console.log(line(off ? "후보 켬" : "(같음)", on1));
+    const tot = Object.values(on1.floors).reduce((a, b) => a + b, 0);
+    console.log(`  층수 분포 ${Object.keys(on1.floors).sort().map((k) => `${k}층 ${Math.round((on1.floors[k] / tot) * 100)}%`).join(" · ")} · 깨진 층 ${on1.floorsBroken} · 층당 타수 ${(on1.strikes / Math.max(1, on1.floorsBroken + on1.destroys)).toFixed(1)} · 버려진 데미지 ${Math.round((on1.waste / Math.max(1, on1.waste + on1.dealt)) * 100)}% · 착지 ${on1.lands} / 파괴 ${on1.destroys}`);
+    const gs = on1.gaps;
+    if (gs.length) console.log(`  건물 사이 간격 (끝 → 다음 등장 · 게임 초) 평균 ${(gs.reduce((a, b) => a + b, 0) / gs.length).toFixed(2)} · 최소 ${Math.min(...gs).toFixed(2)} · 최대 ${Math.max(...gs).toFixed(2)}`);
+    const seeds = [c1.battle.rng_seed ?? 1, 7, 12345, 99, 4242];
+    const rs = seeds.map((sd) => { const c = structuredClone(c1); c.battle.rng_seed = sd; return run(c); });
+    const v = rs.map((x) => x.first[8] ?? 60);
+    console.log(`  시드 5개 — 자동 stage 8 평균 ${(v.reduce((a, b) => a + b, 0) / v.length).toFixed(1)} (${Math.min(...v).toFixed(1)} ~ ${Math.max(...v).toFixed(1)})분 · 맞으며 깬 판 평균 ${Math.round(rs.reduce((a, x) => a + x.clearsHit / Math.max(1, x.clears), 0) / rs.length * 100)}%`);
   }
 } finally {
   await server.close();

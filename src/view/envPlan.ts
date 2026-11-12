@@ -28,6 +28,11 @@ export interface BuildingArtRow {
   draw_w: number;
   tint: string | null;
   debris_file: string | null;
+  /** M8 자르기 지붕 칸 비율 · 쌓기 조각 (3칸 다 있을 때만) */
+  cut_roof_ratio?: number;
+  floor_base_file?: string | null;
+  floor_mid_file?: string | null;
+  floor_roof_file?: string | null;
 }
 export interface EnvData {
   config: EnvConfig;
@@ -47,6 +52,10 @@ export interface BuildingArtPlan {
   tint: number | null;
   /** 파편 그림 (건물별 → 공용) · null = 도형 조각 */
   debris: string | null;
+  /** M8 자르기 지붕 칸 비율 (층 2개 이상일 때) */
+  cutRoof: number;
+  /** M8 쌓기 조각 (3장 다 읽었을 때만 — 아니면 null = 자르기) */
+  floors: { base: string; mid: string; roof: string } | null;
 }
 
 export interface EnvPlan {
@@ -68,7 +77,7 @@ export function neededEnvFiles(data: EnvData = ENV_DATA): string[] {
   const c = data.config;
   const used = new Set(data.buildings.map((b) => b.art_id).filter((x): x is string => !!x));
   const files = [c.sky_file, c.strip_file, c.ring_file, c.dust_file, c.debris_file];
-  for (const r of data.art) if (used.has(r.art_id)) files.push(r.file, r.debris_file);
+  for (const r of data.art) if (used.has(r.art_id)) files.push(r.file, r.debris_file, r.floor_base_file ?? null, r.floor_mid_file ?? null, r.floor_roof_file ?? null);
   const out: string[] = [];
   for (const f of files) if (f && !out.includes(f)) out.push(f);
   return out;
@@ -92,8 +101,14 @@ export function resolveEnvPlan(data: EnvData, on: boolean, available: ReadonlySe
   for (const b of data.buildings) {
     const row = b.art_id ? data.art.find((r) => r.art_id === b.art_id) : undefined;
     const file = row ? pick(row.file) : null;
+    // M8 쌓기 = 조각 3장 다 있을 때만 (하나라도 없으면 자르기)
+    const fb = row ? pick(row.floor_base_file ?? null) : null;
+    const fm = row ? pick(row.floor_mid_file ?? null) : null;
+    const fr = row ? pick(row.floor_roof_file ?? null) : null;
     plan.buildings[b.building_id] =
-      row && file ? { artId: row.art_id, file, pivotY: row.pivot_y, drawW: row.draw_w, tint: hexTint(row.tint), debris: pick(row.debris_file) ?? common } : null;
+      row && file
+        ? { artId: row.art_id, file, pivotY: row.pivot_y, drawW: row.draw_w, tint: hexTint(row.tint), debris: pick(row.debris_file) ?? common, cutRoof: row.cut_roof_ratio ?? 0.35, floors: fb && fm && fr ? { base: fb, mid: fm, roof: fr } : null }
+        : null;
   }
   plan.sky = pick(c.sky_file);
   const strip = pick(c.strip_file);
