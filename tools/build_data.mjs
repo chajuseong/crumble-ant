@@ -21,6 +21,7 @@ const SHEETS = [
   { sheet: "ant_loadout", kind: "table", out: "ant_loadout" },
   { sheet: "upgrades", kind: "table", out: "upgrades" },
   { sheet: "building_art", kind: "table", out: "building_art" },
+  { sheet: "stage_pool", kind: "table", out: "stage_pool" }, // M8 (I-25 · H-62)
 ];
 
 const IN = process.argv[2] || "design/tables";

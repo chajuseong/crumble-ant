@@ -183,5 +183,11 @@
   },
   "targets_x1": {
     "toast_ms": 1500
+  },
+  "floor_break": {
+    "drop_ms": 120,
+    "camera_ms": 90,
+    "camera_intensity": 0.005,
+    "chunk_count": 4
   }
 }
