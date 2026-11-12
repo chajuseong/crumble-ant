@@ -9,6 +9,7 @@
 //                                      데이터가 꺼져 있으면 (action strike) 측정만 C 후보 (체력 30 · 강화 3행 · defend · state · 운반 6 · 힘 0.12 · 반동 1.5 — H-73)로 켜서 잼
 //       npm run measure -- --defend --sweep   + 받치는 힘 0.02 ~ 0.08 × 자동 받치기 비용 쓸기 (C 고르는 표 — H-69)
 //       npm run measure -- --defend --chance  + 받쳐! 과녁 확률 targets.chance_pct 100 · 70 · 50 표 (I-33)
+//       npm run measure -- --defend --seeds 5 + 시드 N개 (core battle.rng_seed) 평균 · 최소 · 최대 — 범위 판정 (H-79: 평균 + 가장 느린 시드)
 // core(TypeScript)는 Vite로 불러온다 — 따로 빌드 도구를 늘리지 않음
 import fs from "node:fs";
 import path from "node:path";
@@ -350,6 +351,20 @@ try {
     console.log(`  손 ÷ 자동 (stage 8) ${aC.first[8] && hC.first[8] ? (aC.first[8] / hC.first[8]).toFixed(1) + "배" : "—"} · 손 체인 1 / 2 / 3번째 ${[0, 1, 2].map((k) => pc(hC.posHit[k], hC.pos[k])).join(" / ")} · PERFECT ${hC.batch} · 끝 Lv 자동 ${aC.lv} · 손 ${hC.lv}`);
     const m = play(c0, { mash: true, minutes: 10 });
     console.log(`② 연타 (10분 · 0.1초마다 아무 데나) — 과녁 맞힘 ${m.tHit} / ${m.tAll} · 체인 2번째 이상 ${m.posHit[1] + m.posHit[2]} · PERFECT ${m.batch} · 강점프 ${m.strong} (맞힘 = 우연히 과녁 반지름 안)`);
+    const si = process.argv.indexOf("--seeds");
+    if (si >= 0) {
+      // H-79 범위 판정 = 시드 N개 평균 (+ 가장 느린 시드). 시드 목록 고정 (첫 값 = 지금 데이터 rng_seed)
+      const n = Math.max(1, Math.min(10, Number(process.argv[si + 1]) || 5));
+      const seeds = [c0.battle.rng_seed ?? 1, 7, 12345, 99, 4242, 31337, 2024, 555, 8080, 1001].slice(0, n);
+      const runs = seeds.map((sd) => { const c = structuredClone(c0); c.battle.rng_seed = sd; return { a: play(c), b: play(c, { policy: "attack" }), h: play(c, { hand: true }) }; });
+      const st = (xs, d = 1) => { const v = xs.map((x) => x ?? 60); const m = v.reduce((p, q) => p + q, 0) / v.length; return `${m.toFixed(d)} (${Math.min(...v).toFixed(d)} ~ ${Math.max(...v).toFixed(d)})`; };
+      console.log(`④ 시드 ${n}개 (${seeds.join(" · ")}) — 평균 (최소 ~ 최대) · 60분 · ×1 · 못 깨면 60분으로 셈`);
+      console.log(`  자동 · 가장 싼 것 stage 8 ${st(runs.map((r) => r.a.first[8]))}분 · 후퇴 ${st(runs.map((r) => r.a.retreats))} · 잔해 ${st(runs.map((r) => r.a.earned), 0)}`);
+      console.log(`  자동 · 공격 우선 stage 8 ${st(runs.map((r) => r.b.first[8]))}분 · 후퇴 ${st(runs.map((r) => r.b.retreats))}`);
+      console.log(`  손 stage 8 ${st(runs.map((r) => r.h.first[8]))}분 · 후퇴 ${st(runs.map((r) => r.h.retreats))} · 잔해 ${st(runs.map((r) => r.h.earned), 0)} · PERFECT ${st(runs.map((r) => r.h.batch), 0)} · 체인 셋째 ${st(runs.map((r) => (r.h.posHit[2] / Math.max(1, r.h.pos[2])) * 100), 0)}%`);
+      console.log(`  손 ÷ 자동 ${st(runs.map((r) => (r.a.first[8] ?? 60) / (r.h.first[8] ?? 60)))}배 · 맞으며 깬 판 손 ${st(runs.map((r) => (r.h.clearsHit / Math.max(1, r.h.clears)) * 100), 0)}% · 자동 ${st(runs.map((r) => (r.a.clearsHit / Math.max(1, r.a.clears)) * 100), 0)}%`);
+      console.log(`  가장 느린 시드 (자동 두 정책 중 늦은 쪽) = ${seeds[runs.map((r) => Math.max(r.a.first[8] ?? 60, r.b.first[8] ?? 60)).reduce((bi, v, i, arr) => (v > arr[bi] ? i : bi), 0)]}`);
+    }
     if (process.argv.includes("--chance")) {
       // I-33 받쳐! 과녁 확률 — 자동은 과녁을 안 누름 (자동 칸은 난수 순서만 바뀜)
       console.log("③ 과녁 확률 (60분 · ×1) — chance | 자동 stage 8 · 후퇴 | 손 stage 8 · 후퇴 · 잔해 | 손 ÷ 자동 | 3 / 3 (PERFECT) · 체인 1 / 2 / 3번째 | 맞으며 깬 판 손 / 자동 | 과녁 나온 점프 (링 기회 점프 / 나머지)");
