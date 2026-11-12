@@ -131,27 +131,38 @@ try {
     }
     console.log(`60분 끝 (자동): Lv ${a.levels} · 남은 잔해 ${a.wallet} · 번 잔해 ${a.earned}`);
     // 단일 강화 Lv 0 ~ max: 스테이지 3 ~ 8 자동 파괴율이 내려가는 경우 (H-17 · I-13 — 0건이어야 함)
+    // H-82 기준: 건물 100채 × 시드 5개 평균 · 앞 Lv보다 3%p 넘게 내려가면 퇴보 (층 · 간격이 무작위라 한 채가 크게 흔들림 — 20채 · 시드 1개는 잡음만 잡음)
+    const REG_N = 100, REG_SEEDS = [config.battle.rng_seed ?? 1, 7, 12345, 99, 4242], REG_TOL = 3;
     const bad = [];
+    let checks = 0;
     for (const r of rows) {
       const prev = {};
       for (let lv = 0; lv <= r.max_level; lv++) {
         for (let st = 3; st <= config.stages.rows.length; st++) {
-          const cfg = structuredClone(config);
-          cfg.battle.ant.max_hp = 1e12;
-          cfg.stages.rows = cfg.stages.rows.map((x) => ({ ...x, buildings_to_clear: 1e9 }));
-          const sim = new BattleSim(cfg, st, { stage: st, autoAdvance: true, debris: 0, levels: { [r.upgrade_id]: lv } });
-          let d = 0, l = 0;
-          for (let t = 0; t < 3600 && d + l < 20; t += 1 / 60) {
-            sim.update(1 / 60);
-            for (const e of sim.drainEvents()) { if (e.type === "destroy") d++; else if (e.type === "land") l++; }
+          let sum = 0;
+          for (const seed of REG_SEEDS) {
+            const cfg = structuredClone(config);
+            cfg.battle.ant.max_hp = 1e12;
+            cfg.battle.rng_seed = seed;
+            cfg.stages.rows = cfg.stages.rows.map((x) => ({ ...x, buildings_to_clear: 1e9 }));
+            const sim = new BattleSim(cfg, st, { stage: st, autoAdvance: true, debris: 0, levels: { [r.upgrade_id]: lv } });
+            let d = 0, l = 0;
+            for (let t = 0; t < 7200 && d + l < REG_N; t += 1 / 60) {
+              sim.update(1 / 60);
+              for (const e of sim.drainEvents()) { if (e.type === "destroy") d++; else if (e.type === "land") l++; }
+            }
+            sum += d / Math.max(1, d + l);
           }
-          const rate = d / (d + l);
-          if (prev[st] !== undefined && rate < prev[st] - 1e-9) bad.push(`${r.upgrade_id} Lv${lv} 스테이지 ${st}: ${(prev[st] * 100).toFixed(0)}% → ${(rate * 100).toFixed(0)}%`);
+          const rate = Math.round((sum / REG_SEEDS.length) * 1000) / 10; // % (소수 1자리)
+          if (prev[st] !== undefined) {
+            checks++;
+            if (rate < prev[st] - REG_TOL) bad.push(`${r.upgrade_id} Lv${lv} 스테이지 ${st}: ${prev[st].toFixed(1)}% → ${rate.toFixed(1)}%`);
+          }
           prev[st] = rate;
         }
       }
     }
-    console.log(`단일 강화 퇴보: ${bad.length ? bad.join(" · ") : "0건"}`);
+    console.log(`단일 강화 퇴보 (건물 ${REG_N}채 × 시드 ${REG_SEEDS.length}개 평균 · ${REG_TOL}%p 넘게 내려감 · 비교 ${checks}곳): ${bad.length ? bad.join(" · ") : "0건"}`);
   }
 
   if (process.argv.includes("--touch")) {
