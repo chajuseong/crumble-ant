@@ -39,7 +39,7 @@ describe('M6 건물 · 배경 그림 계획', () => {
 
   it('켬 + 파일 다 있음 = building_id마다 그림 · 하늘 · 띠 · 링 · 먼지', () => {
     const p = resolveEnvPlan(data, true, all);
-    expect(p.buildings.b1).toEqual({ artId: 'house', file: 'building_house.png', pivotY: 0.996, drawW: 1, tint: null, debris: 'debris_house.png', cutRoof: 0.35, floors: null });
+    expect(p.buildings.b1).toEqual({ artId: 'house', file: 'building_house.png', pivotY: 0.996, drawW: 1, tint: null, debris: 'debris_house.png', cutRoof: 0.35, floors: null, floorDebris: 'debris_house.png' }); // M8-D 층 파편 빈칸 = 건물 파편
     expect(p.buildings.b2).toMatchObject({ file: 'building_house.png', tint: 0xffc8a8, debris: 'debris.png' }); // 건물별 파편 빈칸 = 공용
     expect(p.buildings.b4).toBeNull(); // art_id 빈칸 = 도형
     expect(p.sky).toBe('sky.png');
@@ -83,6 +83,18 @@ describe('M6 건물 · 배경 그림 계획', () => {
     expect(resolveEnvPlan(data, true, noOwn).buildings.b1?.debris).toBe('debris.png');
     const none = new Set([...noOwn].filter((f) => f !== 'debris.png'));
     expect(resolveEnvPlan(data, true, none).buildings.b1?.debris).toBeNull();
+  });
+
+  it('M8-D 층 깨짐 파편 = floor_debris_file → 건물 파편 → 공용 → 도형 (null) · 읽을 파일에 들어감', () => {
+    const d: EnvData = { ...data, art: data.art.map((r) => (r.art_id === 'house' ? { ...r, floor_debris_file: 'debris_house_wall.png' } : r)) };
+    const files = new Set(neededEnvFiles(d));
+    expect(files.has('debris_house_wall.png')).toBe(true);
+    expect(resolveEnvPlan(d, true, files).buildings.b1).toMatchObject({ debris: 'debris_house.png', floorDebris: 'debris_house_wall.png' }); // 지붕 깨짐 = 건물 파편 그대로
+    expect(resolveEnvPlan(d, true, files).buildings.b2).toMatchObject({ debris: 'debris.png', floorDebris: 'debris.png' }); // 빈칸 → 공용
+    const noWall = new Set([...files].filter((f) => f !== 'debris_house_wall.png'));
+    expect(resolveEnvPlan(d, true, noWall).buildings.b1).toMatchObject({ floorDebris: 'debris_house.png' }); // 파일 없음 → 건물 파편
+    const none = new Set([...files].filter((f) => !f.startsWith('debris')));
+    expect(resolveEnvPlan(d, true, none).buildings.b1).toMatchObject({ debris: null, floorDebris: null }); // 다 없음 → 도형
   });
 
   it('읽을 파일 = 쓰는 art_id만 · 중복 없음 · 빈칸 빼고', () => {

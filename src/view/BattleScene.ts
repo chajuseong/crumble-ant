@@ -17,6 +17,7 @@ import { FX, type FxToggles, loadToggles } from './fx';
 import { createFxPanel } from './fxPanel';
 import { createCheatPanel } from './cheatPanel';
 import { HitstopClock } from './hitstop';
+import { floorHitstopMs, floorScale, floorShake } from './floorFeel';
 import { dropsChunks, hitstopMs, impactScale, type StrikeKind, strikeKind } from './hitFeel';
 import { hitSoundTurn, lightFx, loadSpeed, nextSpeed, saveSpeed } from './speed';
 import { SaveWriter } from './saveStore';
@@ -251,6 +252,7 @@ export class BattleScene extends Phaser.Scene {
     const bh = this.cfg.battle.building.height_ratio * this.L.battle.height;
     // M8 층: 남은 층만 다시 그림 ([ART] 바꿀 때)
     this.buildingView = new BuildingView(this, this.L.width / 2, battleToScreenY(this.L, b.y), bw, bh, b.id, b.maxHp, this.buildingArt(b.buildingId), b.floorMax.slice(b.floors - b.floorHp.length));
+    this.buildingView.pxScale = this.scaleK;
     this.buildingView.root.setDepth(DEPTH.building);
     this.buildingView.setCrackSteps(FX.crack.steps);
     this.syncBuildingHp(b);
@@ -595,6 +597,7 @@ export class BattleScene extends Phaser.Scene {
           const bw = this.cfg.battle.building.width_ratio * this.L.width;
           const bh = this.cfg.battle.building.height_ratio * this.L.battle.height;
           this.buildingView = new BuildingView(this, this.L.width / 2, battleToScreenY(this.L, b.y), bw, bh, b.id, b.maxHp, this.buildingArt(b.buildingId), e.floorHp);
+          this.buildingView.pxScale = this.scaleK;
           this.buildingView.root.setDepth(DEPTH.building);
           this.buildingViewId = b.id;
           this.buildingViewRow = b.buildingId;
@@ -679,7 +682,7 @@ export class BattleScene extends Phaser.Scene {
           break;
         }
         case 'floorBreak':
-          this.floorBreakFx();
+          this.floorBreakFx(e.floor);
           break;
         case 'destroy':
           if (this.buildingView) this.destroyDust(this.buildingView.root.x, this.buildingView.bottomY); // M6 먼지
@@ -894,26 +897,73 @@ export class BattleScene extends Phaser.Scene {
     else v.setHp(b.hp, b.maxHp);
   }
 
-  /** M8 층 깨짐 — 그 층 조각이 튀고 (파편 그림 재사용 · 일개미 안 주워 감) · 작은 흔들림 · 위층 털썩 · HP 바 = 다음 층 */
-  private floorBreakFx(): void {
+  /**
+   * M8-D 층 깨짐 (H-85) — 깨진 층 = 판 2조각이 좌우로 벌어지며 돌아 바닥까지 → 닿으면 파편 (벽 조각) · 먼지 · 위층 털썩 (buildingView)
+   * 세기 = 층 순서 (floorFeel — core floor만) → 흔들림 · 히트스톱 (배속 상관없이) · 벌어짐. 지붕 = destroy (지금 파괴 연출)
+   */
+  private floorBreakFx(floor: number): void {
     const v = this.buildingView;
     const b = this.sim.building;
     if (!v || !b) return;
     const F = FX.floor_break;
-    const fh = v.breakFloor(F.drop_ms);
+    const k = floorScale(floor);
+    const slabs = v.breakFloor();
     this.syncBuildingHp(b);
-    this.shake(F.camera_ms, F.camera_intensity);
-    const art = this.debrisArt();
-    for (let i = 0; i < F.chunk_count; i++) {
+    this.shake(F.camera_ms, floorShake(floor));
+    if (this.fxOn.hitstop) this.hitstop.add(floorHitstopMs(floor), FX.hitstop.max_ms);
+    if (slabs) {
+      const groundY = this.L.groundY;
+      const per = [Math.ceil(F.chunk_count / 2), Math.floor(F.chunk_count / 2)];
+      slabs.halves.forEach((half, i) => {
+        const sx = i === 0 ? -1 : 1;
+        half.setDepth(DEPTH.building);
+        this.tweens.add({
+          targets: half,
+          x: half.x + sx * this.px(F.slab_spread_px) * k,
+          y: Math.max(half.y, groundY - slabs.h * 0.25),
+          angle: sx * F.slab_spin_deg,
+          duration: F.slab_fall_ms,
+          ease: 'Quad.easeIn',
+          onComplete: () => {
+            this.floorLandFx(half.x, groundY, per[i]!, v.w);
+            this.tweens.add({ targets: half, alpha: 0, duration: 140, onComplete: () => half.destroy(true) });
+          },
+        });
+        this.fxCount += 1;
+      });
+      this.time.delayedCall(F.drop_ms, () => this.seamDust(v));
+    }
+    const text = hasText('fx.floor_break'); // H-85 ① 글자 = 문구가 있을 때만 (지금 없음 — 층 칸 번쩍만)
+    if (text) this.plateText(v.bottomY - this.px(260), t('fx.floor_break', { n: floor }), FX.perfect.text_px);
+    if (this.fxOn.sfx && this.sfx.created) this.sfx.hit(1);
+  }
+
+  /** M8-D 판이 바닥에 닿음 — 파편 (벽 조각 → 건물 파편 → 도형 · 일개미 안 주워 감) */
+  private floorLandFx(x: number, y: number, n: number, w: number): void {
+    const art = this.floorDebrisArt();
+    for (let i = 0; i < n; i++) {
       const size = this.px(Phaser.Math.Between(36, 64));
-      const x = v.root.x + Phaser.Math.FloatBetween(-0.45, 0.45) * v.w;
-      const y = v.bottomY - Phaser.Math.FloatBetween(0.2, 0.8) * fh;
-      const o = (art ? this.debrisImage(art, x, y, size) : this.add.rectangle(x, y, size, size * 0.8, v.color).setStrokeStyle(this.px(4), COLOR.buildingDark)).setDepth(DEPTH.fx - 1);
-      const dir = x < v.root.x ? -1 : 1;
-      this.tweens.add({ targets: o, x: x + dir * this.px(Phaser.Math.Between(120, 260)), y: y + this.px(Phaser.Math.Between(160, 320)), angle: dir * Phaser.Math.Between(90, 240), alpha: 0, duration: 520, ease: 'Quad.easeIn', onComplete: () => o.destroy() });
+      const px = x + Phaser.Math.FloatBetween(-0.25, 0.25) * w;
+      const o = (art ? this.debrisImage(art, px, y, size) : this.add.rectangle(px, y, size, size * 0.8, this.buildingView?.color ?? 0xcccccc).setStrokeStyle(this.px(4), COLOR.buildingDark)).setDepth(DEPTH.fx - 1);
+      const dir = px < x ? -1 : 1;
+      this.tweens.add({ targets: o, x: px + dir * this.px(Phaser.Math.Between(60, 200)), y: y - this.px(Phaser.Math.Between(60, 180)), angle: dir * Phaser.Math.Between(90, 240), alpha: 0, duration: 520, ease: 'Quad.easeOut', onComplete: () => o.destroy() });
       this.fxCount += 1;
     }
-    if (this.fxOn.sfx && this.sfx.created) this.sfx.hit(1);
+  }
+
+  /** M8-D 층 이음매 먼지 — 새 맨 아래층 밑면을 따라 가로로 (dust_file 재사용 · 없으면 안 함) */
+  private seamDust(v: BuildingView): void {
+    const file = this.envPlan.dust;
+    if (!file || !this.fxOn.envFx || !v.root.active) return;
+    const F = FX.floor_break;
+    for (let i = 0; i < F.dust_count; i++) {
+      const x = v.root.x + (F.dust_count > 1 ? i / (F.dust_count - 1) - 0.5 : 0) * v.w * 0.9;
+      const o = this.add.image(x, v.bottomY, artTextureKey(file)).setDepth(DEPTH.fx - 1).setFlipX(i % 2 === 1);
+      const sc = this.px(F.dust_px) / o.width;
+      o.setScale(sc * 0.5);
+      this.tweens.add({ targets: o, x: x + (x < v.root.x ? -1 : 1) * this.px(F.dust_px) * 0.4, scale: sc, alpha: { from: 0.85, to: 0 }, duration: 420, ease: 'Quad.easeOut', onComplete: () => o.destroy() });
+      this.fxCount += 1;
+    }
   }
 
   /** M7-E (H-72) 받쳐! 과녁 손가락 안내 — 이 브라우저에서 처음 defend.hint_count번만 (키 · 문구가 없으면 안 함) */
@@ -1104,6 +1154,13 @@ export class BattleScene extends Phaser.Scene {
     if (!this.fxOn.envFx) return null;
     const a = this.buildingViewRow ? this.envPlan.buildings[this.buildingViewRow] : null;
     return a?.debris ? { key: artTextureKey(a.debris), tint: a.tint } : null;
+  }
+
+  /** M8-D 층 깨짐 파편 그림 (building_art floor_debris_file → 건물 파편 · 끔 · 그림 없음 = null) */
+  private floorDebrisArt(): { key: string; tint: number | null } | null {
+    if (!this.fxOn.envFx) return null;
+    const a = this.buildingViewRow ? this.envPlan.buildings[this.buildingViewRow] : null;
+    return a?.floorDebris ? { key: artTextureKey(a.floorDebris), tint: a.tint } : null;
   }
 
   /** 파편 그림 한 조각 — 폭 = 도형 조각 크기 × size_mult · 좌우 뒤집기 (반복 티 줄이기) · 7 · 8은 건물 색 그대로 곱하기 */
