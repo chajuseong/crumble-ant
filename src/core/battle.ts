@@ -760,6 +760,10 @@ export class BattleSim {
   private startChain(b: BuildingState): void {
     if (this.targets.length > 0) this.endTargets('hangEnd');
     if (!this.targetsAllowed || (this.cfg.battle.targets?.count_max ?? 0) <= 0) return; // count_max 0 = 끔 (묶음과 같음)
+    // I-33 체인도 targets.chance_pct — 매달림마다 (닿기 직전 등장 때) 난수 1번 · 100 이상이면 안 뽑음 (난수 순서 = 지금 그대로)
+    // 안 나온 점프 = 체인 건너뜀 (받치기 체인 순서 chainCarry는 같은 건물 동안 그대로)
+    const chance = this.cfg.battle.targets?.chance_pct ?? 100;
+    if (chance < 100 && this.rng.int(100) >= chance) return;
     this.targetsChain = true;
     this.chainIndex = this.defendOn && this.chainBuildingId === b.id ? this.chainCarry : 0; // I-32 받치기 체인 = 점프를 넘어 이어짐
     this.chainPrev = null;

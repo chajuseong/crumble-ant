@@ -228,6 +228,67 @@ describe('M7-E 받치기 (I-28) · 반동 (I-32 · H-73)', () => {
   });
 });
 
+describe('I-33 받쳐! 과녁 확률 (체인도 targets.chance_pct)', () => {
+  /** 떨어지는 건물에 닿은 점프마다: 과녁이 나왔는가 · 나왔으면 체인 순서 */
+  const jumps = (sim: BattleSim, seconds: number, tap: boolean) => {
+    const out: { target: boolean; n: number | null; building: number }[] = [];
+    let cur: { target: boolean; n: number | null; building: number } | null = null;
+    for (let i = 0; i < seconds * 120; i++) {
+      sim.update(1 / 120);
+      for (const e of sim.drainEvents()) {
+        if (e.type === 'jump') { if (cur) out.push(cur); cur = { target: false, n: null, building: sim.building?.id ?? -1 }; }
+        if (e.type === 'targetsSpawn' && cur) { cur.target = true; cur.n = sim.chainStep?.n ?? null; }
+      }
+      if (tap && sim.targets.length > 0 && sim.ant.contact) sim.tapBattle(sim.targets[0]!.x, sim.targets[0]!.y);
+    }
+    return out;
+  };
+
+  it('100 = 닿는 점프마다 과녁 (난수 안 뽑음 — 지금 그대로)', () => {
+    const sim = new BattleSim(defendCfg((c) => { c.battle.targets!.chance_pct = 100; }));
+    const js = jumps(sim, 40, false).filter((j) => j.target);
+    expect(js.length).toBeGreaterThan(5);
+    const all = new BattleSim(defendCfg((c) => { c.battle.targets!.chance_pct = 100; }));
+    let contacts = 0, spawns = 0, was = false;
+    for (let i = 0; i < 40 * 120; i++) {
+      all.update(1 / 120);
+      const ev = all.drainEvents();
+      spawns += ev.filter((e) => e.type === 'targetsSpawn').length;
+      if (all.ant.contact && !was) contacts++;
+      was = all.ant.contact;
+    }
+    expect(spawns).toBeGreaterThanOrEqual(contacts); // 닿기 직전마다 나옴 (닿지 못한 아슬아슬 점프에도 나올 수 있음)
+  });
+
+  it('50 = 안 나온 점프가 있음 · 그 뒤에도 같은 건물이면 체인 이어짐 (건너뜀)', () => {
+    const sim = new BattleSim(defendCfg((c) => { c.battle.targets!.chance_pct = 50; c.battle.targets!.count_max = 9; c.battle.defend!.max_per_building = 99; }));
+    const js = jumps(sim, 120, true).filter((j) => j.building > 0);
+    const skipped = js.filter((j) => !j.target).length;
+    expect(skipped).toBeGreaterThan(0);
+    // 같은 건물 안에서: 과녁 없는 점프를 사이에 둔 다음 과녁 순서 = 앞 과녁 + 1 (맞혔으니)
+    let found = 0;
+    for (let i = 0; i + 2 < js.length; i++) {
+      const a = js[i]!, gap = js[i + 1]!, b = js[i + 2]!;
+      if (a.target && !gap.target && b.target && a.building === b.building && gap.building === a.building && a.n !== null && b.n !== null && a.n < 9) {
+        expect(b.n).toBe(a.n + 1);
+        found++;
+      }
+    }
+    expect(found).toBeGreaterThan(0);
+  });
+
+  it('건물이 바뀌면 체인 끊김 (다음 건물 첫 과녁 = 1)', () => {
+    const sim = new BattleSim(defendCfg((c) => { c.battle.targets!.chance_pct = 50; }));
+    hitAtContact(sim);
+    sim.tapBattle(sim.targets[0]?.x ?? 0.5, sim.targets[0]?.y ?? 0.5);
+    const first = sim.building!.id;
+    sim.building!.hp = 1; // 다음 타격에 부서짐
+    until(sim, (e) => e.some((x) => x.type === 'destroy'), 30);
+    until(sim, (e) => e.some((x) => x.type === 'targetsSpawn') && (sim.building?.id ?? first) !== first, 60);
+    expect(sim.chainStep!.n).toBe(1);
+  });
+});
+
 describe('M7-E 탭 길 (H-69)', () => {
   it('state: 과녁 있으면 아래 절반 탭도 과녁 (빗나가면 체인 끝) · 없으면 위 = 무시 · 아래 = 링', () => {
     const cfg = defendCfg((c) => { c.battle.strong_jump.mode = 'timing'; });

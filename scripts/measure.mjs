@@ -8,6 +8,7 @@
 //       npm run measure -- --defend    M7-E 체력 + 받치기 (I-27 · I-28 · H-69) — 자동 2정책 (가장 싼 것 · 공격 우선) · 손 · 연타 / 후퇴 · 쓰러짐 · 아슬 · 받치기 손 · 자동
 //                                      데이터가 꺼져 있으면 (action strike) 측정만 C 후보 (체력 30 · 강화 3행 · defend · state · 운반 6 · 힘 0.12 · 반동 1.5 — H-73)로 켜서 잼
 //       npm run measure -- --defend --sweep   + 받치는 힘 0.02 ~ 0.08 × 자동 받치기 비용 쓸기 (C 고르는 표 — H-69)
+//       npm run measure -- --defend --chance  + 받쳐! 과녁 확률 targets.chance_pct 100 · 70 · 50 표 (I-33)
 // core(TypeScript)는 Vite로 불러온다 — 따로 빌드 도구를 늘리지 않음
 import fs from "node:fs";
 import path from "node:path";
@@ -280,8 +281,8 @@ try {
     const play = (cfg, { policy = "cheap", hand = false, mash = false, minutes = 60 } = {}) => {
       const sim = new BattleSim(structuredClone(cfg), 1);
       const rows = cfg.upgrades.rows, first = {}, plan = [], perDown = [];
-      const r = { earned: 0, retreats: 0, downs: 0, lands: 0, destroyed: 0, low: 0, clears: 0, clearsHit: 0, spawned: 0, dHand: 0, dAuto: 0, lHand: 0, lAuto: 0, seq: 0, pos: [0, 0, 0, 0], posHit: [0, 0, 0, 0], batch: 0, tHit: 0, tAll: 0, strong: 0, jumpsB: 0, whiff: 0 };
-      let landsSince = 0, wall = 0, jumpB = false, touched = false;
+      const r = { earned: 0, retreats: 0, downs: 0, lands: 0, destroyed: 0, low: 0, clears: 0, clearsHit: 0, spawned: 0, dHand: 0, dAuto: 0, lHand: 0, lAuto: 0, seq: 0, pos: [0, 0, 0, 0], posHit: [0, 0, 0, 0], batch: 0, tHit: 0, tAll: 0, strong: 0, jumpsB: 0, whiff: 0, ringJ: 0, ringT: 0, plainJ: 0, plainT: 0 };
+      let landsSince = 0, wall = 0, jumpB = false, touched = false, ringNext = false, jRing = false, jTgt = false;
       const handle = (ev) => { for (const e of ev) {
         if (e.type === "deposit") r.earned += e.amount;
         else if (e.type === "spawn") r.spawned++;
@@ -297,13 +298,17 @@ try {
         else if (e.type === "jump") {
           if (e.kind !== "auto") r.strong++;
           if (jumpB && !touched) r.whiff++; // 헛점프 = 떨어지는 건물이 있었는데 그 점프에 한 번도 안 닿음 (lift가 너무 커서 등)
+          if (jumpB) { if (jRing) { r.ringJ++; if (jTgt) r.ringT++; } else { r.plainJ++; if (jTgt) r.plainT++; } } // I-33 링 기회 점프에 과녁이 몰리는지
           jumpB = sim.building?.state === "falling"; touched = false; if (jumpB) r.jumpsB++;
+          jRing = ringNext; ringNext = false; jTgt = false;
         }
         else if (e.type === "targetsSpawn") {
+          jTgt = true;
           r.tAll += e.targets.length; r.pos[Math.min(r.seq, 3)]++;
           if (hand) for (const t of e.targets) plan.push({ at: wall + Math.max(0.15, 0.42 + 0.1 * gauss()), x: t.x, y: t.y, target: t.id, p: Math.min(r.seq, 3) });
         }
-        else if (e.type === "timingChance" && hand) plan.push({ at: wall + Math.max(0.3 + 0.08 * gauss(), cfg.battle.strong_timing.ring_s + 0.06 * gauss()), x: 0.5, y: 0.1, chance: true });
+        if (e.type === "timingChance") ringNext = true;
+        if (e.type === "timingChance" && hand) plan.push({ at: wall + Math.max(0.3 + 0.08 * gauss(), cfg.battle.strong_timing.ring_s + 0.06 * gauss()), x: 0.5, y: 0.1, chance: true });
       } };
       for (let i = 0; i < minutes * 60 * 120; i++) {
         wall += 1 / 120; sim.update(1 / 120); if (sim.ant.contact) touched = true; handle(sim.drainEvents());
@@ -345,6 +350,22 @@ try {
     console.log(`  손 ÷ 자동 (stage 8) ${aC.first[8] && hC.first[8] ? (aC.first[8] / hC.first[8]).toFixed(1) + "배" : "—"} · 손 체인 1 / 2 / 3번째 ${[0, 1, 2].map((k) => pc(hC.posHit[k], hC.pos[k])).join(" / ")} · PERFECT ${hC.batch} · 끝 Lv 자동 ${aC.lv} · 손 ${hC.lv}`);
     const m = play(c0, { mash: true, minutes: 10 });
     console.log(`② 연타 (10분 · 0.1초마다 아무 데나) — 과녁 맞힘 ${m.tHit} / ${m.tAll} · 체인 2번째 이상 ${m.posHit[1] + m.posHit[2]} · PERFECT ${m.batch} · 강점프 ${m.strong} (맞힘 = 우연히 과녁 반지름 안)`);
+    if (process.argv.includes("--chance")) {
+      // I-33 받쳐! 과녁 확률 — 자동은 과녁을 안 누름 (자동 칸은 난수 순서만 바뀜)
+      console.log("③ 과녁 확률 (60분 · ×1) — chance | 자동 stage 8 · 후퇴 | 손 stage 8 · 후퇴 · 잔해 | 손 ÷ 자동 | 3 / 3 (PERFECT) · 체인 1 / 2 / 3번째 | 맞으며 깬 판 손 / 자동 | 과녁 나온 점프 (링 기회 점프 / 나머지)");
+      for (const chance of [100, 70, 50]) {
+        const c = structuredClone(c0); c.battle.targets.chance_pct = chance;
+        const a = play(c), h = play(c, { hand: true });
+        console.log(`  ${chance} | ${f(a.first[8])} · ${a.retreats} | ${f(h.first[8])} · ${h.retreats} · ${h.earned} | ${a.first[8] && h.first[8] ? (a.first[8] / h.first[8]).toFixed(1) + "배" : "—"} | ${h.batch} · ${[0, 1, 2].map((k) => pc(h.posHit[k], h.pos[k])).join(" / ")} | ${pc(h.clearsHit, h.clears)} / ${pc(a.clearsHit, a.clears)} | ${pc(h.ringT, h.ringJ)} / ${pc(h.plainT, h.plainJ)}`);
+      }
+      // 시드 3개 평균 (확률을 바꾸면 같은 시드 난수의 다른 뽑기 — 자동 받치기 · 링 — 순서가 밀려 자동 칸도 흔들림)
+      console.log("   시드 3개 평균 — chance | 자동 stage 8 | 손 stage 8 · 후퇴 · 잔해 | PERFECT | 체인 셋째");
+      const avg = (xs) => xs.reduce((p, q) => p + q, 0) / xs.length;
+      for (const chance of [100, 70, 50]) {
+        const rows = [20261107, 7, 12345].map((sd) => { const c = structuredClone(c0); c.battle.targets.chance_pct = chance; c.battle.rng_seed = sd; return { a: play(c), h: play(c, { hand: true }) }; });
+        console.log(`  ${chance} | ${avg(rows.map((r) => r.a.first[8] ?? 60)).toFixed(1)} | ${avg(rows.map((r) => r.h.first[8] ?? 60)).toFixed(1)} · ${avg(rows.map((r) => r.h.retreats)).toFixed(1)} · ${Math.round(avg(rows.map((r) => r.h.earned)))} | ${Math.round(avg(rows.map((r) => r.h.batch)))} | ${Math.round(avg(rows.map((r) => (r.h.posHit[2] / Math.max(1, r.h.pos[2])) * 100)))}%`);
+      }
+    }
     if (process.argv.includes("--sweep")) {
       console.log("③ 쓸기 (60분 · 자동) — 힘 | 자동 받치기 비용 | 가장 싼 것 stage 8 · 잔해 · 후퇴 | 공격 우선 stage 8 · 잔해 · 후퇴 | lift (px) — 힘 0.08 ~ 0.15 (H-73 ④)");
       for (const push of [0.08, 0.12, 0.15]) for (const autoBase of [80, 160, 320]) {
