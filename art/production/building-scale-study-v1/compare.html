@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="ko">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>와르르 개미 · 건물 크기 비교</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#262432;color:#fff6e9;font:16px/1.5 system-ui,sans-serif}main{max-width:1060px;margin:auto;padding:20px}h1{font-size:1.5rem;margin:0 0 8px}p{margin:8px 0 16px;color:#e8dccc}.controls{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}.controls button{border:2px solid #f4bf61;background:#4a3a38;color:white;padding:9px 14px;border-radius:10px;font-weight:700;cursor:pointer}.controls button[aria-pressed=true]{background:#f4bf61;color:#362519}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.item{text-align:center;background:#39333a;border-radius:14px;padding:10px}.item h2{font-size:1rem;margin:4px 0 8px}.item canvas{display:block;width:100%;height:auto;border-radius:9px;background:#9cdbf6}.item p{font-size:.84rem;margin:8px 0 2px}small{color:#e8dccc}@media(max-width:680px){.grid{grid-template-columns:1fr}.item{max-width:390px;margin:auto;width:100%}}
+</style>
+<main><h1>건물을 더 거대하게</h1><p>같은 화면과 개미를 기준으로 건물 그림의 너비만 비교하는 정지 시안입니다. 게임 화면 캡처나 실제 판정은 아닙니다.</p>
+<div class="controls" aria-label="건물 종류"><button type="button" data-kind="single" aria-pressed="true">기존 주택</button><button type="button" data-kind="floors" aria-pressed="false">층 주택 · 중간층 2장</button></div>
+<div class="grid"><section class="item"><h2>현재 건물 폭 기준 · 50%</h2><canvas width="360" height="780" data-scale="0.5"></canvas><p>현재 데이터의 그림 폭 비율</p></section><section class="item"><h2>확대 A · 폭 75%</h2><canvas width="360" height="780" data-scale="0.75"></canvas><p>개미와 건물의 크기 차이를 키움</p></section><section class="item"><h2>확대 B · 폭 90%</h2><canvas width="360" height="780" data-scale="0.9"></canvas><p>화면을 크게 채우는 압도감</p></section></div>
+<p><small>세 화면에서 개미 크기와 바닥 위치는 같습니다. 표시된 HUD·배치와 개미 조립은 설명용이며 실제 게임의 픽셀 단위 재현이 아닙니다. 층 시안은 원본 전체 이미지를 축소한 정지 그림입니다. 실제 적용에는 HP 바·과녁·충돌 판정과 HUD 가림을 확인해야 합니다.</small></p></main>
+<script>
+const paths={sky:'../../game/env/sky.png',ground:'../../game/env/ground_strip.png',single:'../../game/buildings/building_house.png',floors:'../floor-buildings-v1/house_floors_preview.png',head:'../../game/ant/ant_black_head_normal.png',body:'../../game/ant/ant_black_body.png',arm:'../../game/ant/ant_black_arm.png',leg:'../../game/ant/ant_black_leg.png',weapon:'../../game/weapons/weapon_hammer.png'};
+const imgs={};let kind='single';
+function load(key,path){return new Promise((resolve,reject)=>{const im=new Image();im.onload=()=>{imgs[key]=im;resolve()};im.onerror=()=>reject(new Error(path));im.src=path})}
+function img(c,key,x,y,w,h){c.drawImage(imgs[key],x,y,w,h)}
+function draw(canvas){const c=canvas.getContext('2d'),W=360,H=780,scale=Number(canvas.dataset.scale);c.clearRect(0,0,W,H);img(c,'sky',0,0,W,H);c.fillStyle='#fff4dc';c.fillRect(0,0,W,48);c.fillStyle='#be554a';c.font='bold 16px system-ui';c.fillText('♥ ♥ ♥',16,30);c.fillStyle='#bc8550';c.fillRect(184,18,155,12);c.fillStyle='#f4c249';c.fillRect(184,18,100,12);
+const b=imgs[kind],bw=W*scale,bh=bw*b.height/b.width,bottom=535;img(c,kind,(W-bw)/2,bottom-bh,bw,bh);
+img(c,'ground',0,674,W,78);c.fillStyle='#bb7b4d';c.fillRect(0,751,W,29);
+// 파츠 조립의 상대 크기를 보는 설명용 개미 (실제 좌표 아님)
+img(c,'leg',158,615,17,39);img(c,'leg',185,615,17,39);img(c,'arm',140,562,20,67);img(c,'arm',201,562,20,67);img(c,'arm',151,569,18,63);img(c,'arm',191,569,18,63);img(c,'body',156,579,50,64);img(c,'head',151,535,60,64);img(c,'weapon',132,523,25,53);c.fillStyle='#ffcf47';c.beginPath();c.arc(145,535,10,0,Math.PI*2);c.fill()}
+Promise.all(Object.entries(paths).map(([k,p])=>load(k,p))).then(()=>{function render(){document.querySelectorAll('canvas').forEach(draw)}document.querySelectorAll('[data-kind]').forEach(b=>b.addEventListener('click',()=>{kind=b.dataset.kind;document.querySelectorAll('[data-kind]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));render()}));render()}).catch(e=>{document.querySelector('main').insertAdjacentText('beforeend','이미지를 불러오지 못했습니다: '+e.message)});
+</script></html>
