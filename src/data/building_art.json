@@ -9,7 +9,8 @@
     "cut_roof_ratio": 0.35,
     "floor_base_file": "house_floor_base.png",
     "floor_mid_file": "house_floor_mid.png",
-    "floor_roof_file": "house_floor_roof.png"
+    "floor_roof_file": "house_floor_roof.png",
+    "floor_debris_file": "debris_house_wall.png"
   },
   {
     "art_id": "bakery",
@@ -21,7 +22,8 @@
     "cut_roof_ratio": 0.35,
     "floor_base_file": null,
     "floor_mid_file": null,
-    "floor_roof_file": null
+    "floor_roof_file": null,
+    "floor_debris_file": null
   },
   {
     "art_id": "factory",
@@ -33,7 +35,8 @@
     "cut_roof_ratio": 0.35,
     "floor_base_file": null,
     "floor_mid_file": null,
-    "floor_roof_file": null
+    "floor_roof_file": null,
+    "floor_debris_file": null
   },
   {
     "art_id": "office",
@@ -45,7 +48,8 @@
     "cut_roof_ratio": 0.35,
     "floor_base_file": null,
     "floor_mid_file": null,
-    "floor_roof_file": null
+    "floor_roof_file": null,
+    "floor_debris_file": null
   },
   {
     "art_id": "apartment",
@@ -57,7 +61,8 @@
     "cut_roof_ratio": 0.35,
     "floor_base_file": null,
     "floor_mid_file": null,
-    "floor_roof_file": null
+    "floor_roof_file": null,
+    "floor_debris_file": null
   },
   {
     "art_id": "townhall",
@@ -69,7 +74,8 @@
     "cut_roof_ratio": 0.35,
     "floor_base_file": null,
     "floor_mid_file": null,
-    "floor_roof_file": null
+    "floor_roof_file": null,
+    "floor_debris_file": null
   },
   {
     "art_id": "office_b",
@@ -81,7 +87,8 @@
     "cut_roof_ratio": 0.35,
     "floor_base_file": null,
     "floor_mid_file": null,
-    "floor_roof_file": null
+    "floor_roof_file": null,
+    "floor_debris_file": null
   },
   {
     "art_id": "townhall_b",
@@ -93,6 +100,7 @@
     "cut_roof_ratio": 0.35,
     "floor_base_file": null,
     "floor_mid_file": null,
-    "floor_roof_file": null
+    "floor_roof_file": null,
+    "floor_debris_file": null
   }
 ]
