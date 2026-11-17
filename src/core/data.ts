@@ -44,6 +44,8 @@ export function fromData(raw: RawGameData): GameConfig {
       ...(typeof battle.rng_seed === 'number' ? { rng_seed: battle.rng_seed } : {}),
       // M7-E 받치기 (I-28) — 없으면 받치기 없음
       ...(typeof battle.defend === 'object' && battle.defend !== null ? { defend: o(battle.defend) as unknown as NonNullable<GameConfig['battle']['defend']> } : {}),
+      // M8-W 줄줄이 웨이브 (H-88) — 없으면 끔
+      ...(typeof battle.wave === 'object' && battle.wave !== null ? { wave: o(battle.wave) as unknown as NonNullable<GameConfig['battle']['wave']> } : {}),
     },
     buildings: { rows: Array.isArray(raw.buildings) ? raw.buildings : [] },
     stages: {

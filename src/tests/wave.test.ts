@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { type BattleEvent, type BuildingState, BattleSim } from '../core/battle';
 import type { GameConfig, StageRow } from '../core/config';
+import { RAW_DATA } from '../view/gameData';
 import { makeConfig } from './helpers';
 
 /** M8-W 줄줄이 웨이브 (I-35 · H-88 — docs/dev.md §3-2 규칙 · §4) */
@@ -149,6 +150,16 @@ describe('M8-W 받치기 무게 합침 (H-88 ②)', () => {
     expect(on.lift).toBeCloseTo((off.lift * off.w) / (on.w + 0.25 * on.above), 5);
     expect(on.lift).toBeLessThan(off.lift);
     expect(on.gapOk).toBe(true);
+  });
+});
+
+describe('M8-W 데이터 읽기', () => {
+  it('game_config battle.wave · stages wave_* 칸이 GameConfig로 들어옴 (시트 값 그대로)', () => {
+    const c = makeConfig();
+    const g = (RAW_DATA.game_config as { battle: { wave: Record<string, unknown> } }).battle.wave;
+    expect(c.battle.wave).toEqual(g);
+    const raw = RAW_DATA.stages as unknown as StageRow[];
+    expect(c.stages.rows.map((r) => [r.wave_min, r.wave_max, r.wave_gap, r.wave_rest_s])).toEqual(raw.map((r) => [r.wave_min, r.wave_max, r.wave_gap, r.wave_rest_s]));
   });
 });
 
