@@ -96,8 +96,8 @@
     },
     "strike_interval_min_s": 0.06,
     "wave": {
-      "weight_coef": 0,
-      "chain_bonus_pct": 0,
+      "weight_coef": 0.25,
+      "chain_bonus_pct": 10,
       "chain_bonus_cap_pct": 50,
       "land_ends_wave": true
     }
