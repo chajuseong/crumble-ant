@@ -75,6 +75,7 @@ export class BuildingView {
   readonly color: number;
   private readonly cracks: Phaser.GameObjects.Graphics;
   private readonly hpBar: Phaser.GameObjects.Rectangle;
+  private readonly hpBack: Phaser.GameObjects.Rectangle;
   private readonly hpText: Phaser.GameObjects.Text;
   readonly w: number;
   private readonly h: number;
@@ -146,7 +147,8 @@ export class BuildingView {
     const barW = w * 0.86;
     const barH = h * 0.1;
     const barY = -h * 0.12;
-    this.root.add(scene.add.rectangle(0, barY, barW, barH, COLOR.hpBack).setStrokeStyle(4, COLOR.buildingDark));
+    this.hpBack = scene.add.rectangle(0, barY, barW, barH, COLOR.hpBack).setStrokeStyle(4, COLOR.buildingDark);
+    this.root.add(this.hpBack);
     this.hpBar = scene.add.rectangle(-barW / 2, barY, barW, barH, COLOR.hpLow).setOrigin(0, 0.5);
     this.root.add(this.hpBar);
     this.hpText = scene.add
@@ -275,6 +277,13 @@ export class BuildingView {
       g.fillStyle(on ? COLOR.hpLow : COLOR.hpBack, 1).fillRect(x, this.pipY - s / 2, s, s);
       g.lineStyle(3, COLOR.buildingDark, 1).strokeRect(x, this.pipY - s / 2, s, s);
     }
+  }
+
+  /** M8-W 줄 위 건물 = HP 바 숨김 (층 칸만) · 맨 아래가 되면 다시 보임 */
+  setHpVisible(on: boolean): void {
+    this.hpBar.setVisible(on);
+    this.hpBack.setVisible(on);
+    this.hpText.setVisible(on);
   }
 
   /** M8 층 건물인가 */
