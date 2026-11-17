@@ -18,7 +18,7 @@ const inner = (sim: BattleSim) => sim as unknown as Inner;
 /** 스테이지 1 = 웨이브 칸 · 풀 = 지금 건물 1층 고정 · 과녁 · 링 · 자동 받치기 없이 (판정만) */
 const cfgWave = (wave: Partial<StageRow>, extra?: (c: GameConfig) => void) =>
   makeConfig((c) => {
-    Object.assign(c.stages.rows[0]!, { buildings_to_clear: 20, ...wave });
+    Object.assign(c.stages.rows[0]!, { buildings_to_clear: 20, wave_min: null, wave_max: null, wave_gap: 0, wave_rest_s: null, ...wave }); // 시트 값과 상관없이
     c.stages.pool = c.stages.rows.map((r) => ({ stage: r.stage, building_id: r.building_id, weight: 1, floors_min: 1, floors_max: 1 }));
     c.battle.wave = { weight_coef: 0, chain_bonus_pct: 10, chain_bonus_cap_pct: 50, land_ends_wave: true };
     c.battle.targets!.count_max = 0;

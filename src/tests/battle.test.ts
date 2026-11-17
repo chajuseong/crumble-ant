@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BattleSim, type BattleEvent } from '../core/battle';
-import { has, makeConfig, run, runUntil } from './helpers';
+import { has, makeConfig, run, runUntil, wavesOff } from './helpers';
 
 /** 아주 약한 건물 / 아주 센 건물 config */
 const easy = () =>
@@ -83,7 +83,7 @@ describe('건물 낙하 → 자동 점프 → 팔 4슬롯 순차 타격', () => 
   });
 
   it('건물 수치는 건물 테이블에서 온다 (hp · fall_speed · weight · debris_reward)', () => {
-    const cfg = makeConfig();
+    const cfg = makeConfig(wavesOff); // 웨이브 크기 난수가 먼저 → 시트와 상관없이 한 채씩
     const sim = new BattleSim(cfg, 2);
     runUntil(sim, has('spawn'), 5);
     const row = cfg.buildings.rows.find((b) => b.building_id === cfg.stages.rows[1]!.building_id)!;
@@ -117,6 +117,7 @@ describe('파괴 실패 → 착지 → 개미 피격', () => {
       c.buildings.rows[0]!.hp = 500;
       c.battle.arms = c.battle.arms.map((a) => ({ ...a, damage: 0 }));
       c.battle.ant.max_hp = 1_000_000;
+      wavesOff(c); // 한 채씩 (웨이브면 시작 때 spawn이 여러 번)
     });
     const sim = new BattleSim(cfg);
     const ev = runUntil(sim, (e) => e.filter((x) => x.type === 'spawn').length >= 2, 60);
