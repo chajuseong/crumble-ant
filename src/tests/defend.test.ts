@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { type BattleEvent, BattleSim } from '../core/battle';
 import type { GameConfig, UpgradeRow } from '../core/config';
 import { makeSave, parseSave } from '../core/save';
-import { makeConfig } from './helpers';
+import { makeConfig, wavesOff } from './helpers';
 
 /** M7-E 체력 + 받치기 · 탭 길 · 운반 개미마다 돈 · 치트 (I-27 · I-28 · H-66 · H-67 · H-69 · I-30 — docs/dev.md §3-3 · §4) */
 type Patch = (c: GameConfig) => void;
@@ -38,11 +38,13 @@ const defendCfg = (extra?: Patch) =>
     c.battle.targets!.action = 'defend';
     c.battle.targets!.tap_route = 'state';
     c.battle.defend!.recoil_fall_mult = RECOIL; // I-32 키는 C에서 — 테스트에서만 넣음
+    wavesOff(c); // M8-W 줄 무게 합침과 상관없이 (받치기 규칙만 — 무게 합 = wave.test.ts)
     extra?.(c);
   });
 const d0 = makeConfig().battle.defend!;
 /** 시트와 상관없이 꺼진 값 (A · B 시트 — C에서 시트가 켜져도 "꺼진 채" 검사는 그대로) */
 const offKeys: Patch = (c) => {
+  wavesOff(c);
   c.battle.targets!.action = 'strike';
   c.battle.targets!.tap_route = 'zone';
   c.battle.defend!.auto_pct = 0;

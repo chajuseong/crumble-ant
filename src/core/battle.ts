@@ -126,7 +126,12 @@ export type BattleEvent =
   | { type: 'strike'; arm: number; damage: number; buildingId: number; hpLeft: number; combo: number; source: StrikeSource; floorHpLeft: number }
   /** M8: 맨 아래층 HP 0 (지붕 아님) — floor = 깨진 층 (1부터 · 아래층부터) · 넘친 데미지는 버림 */
   | { type: 'floorBreak'; buildingId: number; floor: number; floorsLeft: number; hpLeft: number }
-  | { type: 'destroy'; buildingId: number; y: number; debrisReward: number }
+  /** M8-W (H-88): chain = 웨이브 안에서 착지 없이 연달아 깬 수 (1부터) · bonus = 연쇄 보너스 잔해 (debrisReward에 포함) */
+  | { type: 'destroy'; buildingId: number; y: number; debrisReward: number; chain: number; bonus: number }
+  /** M8-W 웨이브 시작 (2채 이상일 때만) — ids = 아래부터 (spawn 이벤트 뒤) */
+  | { type: 'waveStart'; count: number; ids: number[] }
+  /** M8-W 웨이브 끝 (2채 이상 웨이브만) — cleared = 다 깸 · landed = 맨 아래 착지 (land_ends_wave → vanished = 사라진 위 건물) */
+  | { type: 'waveEnd'; reason: 'cleared' | 'landed'; vanished: number[] }
   | { type: 'land'; buildingId: number; damage: number; antHp: number }
   | { type: 'antDown'; stage: number }
   | { type: 'tapIgnored'; reason: TapIgnoredReason }
@@ -187,6 +192,12 @@ export class BattleSim {
   readonly carrying: { at: number; amount: number; index: number; count: number }[] = [];
   private comboBuildingId = -1;
   private lastStrikeTime = -Infinity;
+  /** M8-W 줄 — 맨 아래 (`building`) 위로 쌓인 건물 (가까운 것부터) · 자리 = 아래 꼭대기 + gap (core가 매 스텝 맞춤) */
+  stack: BuildingState[] = [];
+  /** M8-W 이번 웨이브 건물 수 · 줄 간격 · 연쇄 (웨이브 안에서 착지 없이 연달아 깬 수) */
+  private waveCount = 1;
+  private waveGap = 0;
+  private waveChain = 0;
   private accumulator = 0;
   private nextBuildingId = 1;
   private events: BattleEvent[] = [];
@@ -422,10 +433,13 @@ export class BattleSim {
       bld.lingerTimer -= dt;
       if (bld.lingerTimer <= EPS) {
         this.building = null;
-        this.spawnTimer = this.nextSpawnDelay(); // M8 흔들기 · 연달아
+        const next = this.stack.shift(); // M8-W land_ends_wave 끔 = 줄이 이어짐
+        if (next) this.building = next;
+        else this.spawnTimer = this.restDelay();
       }
     }
 
+    this.restack(); // M8-W 위 건물 = 맨 아래 따라
     // 개미 이동
     const falling = this.building && this.building.state === 'falling' ? this.building : null;
     switch (a.phase) {
@@ -613,13 +627,16 @@ export class BattleSim {
   private defend(b: BuildingState, auto: boolean): void {
     const d = this.cfg.battle.defend;
     if (!d || b.state !== 'falling' || b.defendN >= d.max_per_building) return;
-    const weight = b.weight * this.cheat.weightMult;
+    const w = this.cfg.battle.wave;
+    const above = w && w.weight_coef > 0 && this.stack.length > 0 ? w.weight_coef * this.stack.reduce((t, u) => t + u.weight, 0) : 0; // M8-W 무게 합침 (H-88)
+    const weight = (b.weight + above) * this.cheat.weightMult;
     const raw = ((d.push_power * this.stats.pushPct) / 100 / weight) * Math.pow(1 - d.decay_pct / 100, b.defendN) * (auto ? d.auto_power_ratio : 1) * this.cheat.pushMult;
     const y = Math.max(b.y, Math.min(d.lift_max_y, b.y + raw));
     const lift = Math.round((y - b.y) * 1e6) / 1e6;
     b.defendN += 1;
     b.y = y;
     b.pauseLeft = d.push_s;
+    this.restack();
     this.events.push({ type: 'defend', buildingId: b.id, lift, auto, n: b.defendN });
     const a = this.ant;
     if (a.phase === 'rise') {
@@ -972,12 +989,38 @@ export class BattleSim {
   }
 
 
+  /**
+   * 건물 생성 = 웨이브 시작 (M8-W · H-88). 크기 = stages wave_min ~ wave_max (spawn 난수 1번 — min < max일 때만 · 남은 깰 수로 자름)
+   * → 아래부터 위로 건물 · 층수 (M8 순서 그대로) · 맨 아래 = building · 나머지 = stack. 칸 빈칸 = 1채 (지금 그대로)
+   */
   private spawnBuilding(): void {
+    const sr = stageRow(this.cfg.stages, this.stage.stage);
+    const min = sr.wave_min ?? 1;
+    const max = Math.max(min, sr.wave_max ?? min);
+    let n = min < max ? min + this.spawnRng.int(max - min + 1) : min;
+    n = Math.max(1, Math.min(n, this.stage.toClear - this.stage.destroyed));
+    this.waveCount = n;
+    this.waveGap = sr.wave_gap ?? 0;
+    this.waveChain = 0;
+    this.stack = [];
+    const ids: number[] = [];
+    for (let i = 0; i < n; i++) {
+      const b = this.makeBuilding();
+      ids.push(b.id);
+      if (i === 0) this.building = b;
+      else this.stack.push(b);
+      this.events.push({ type: 'spawn', buildingId: b.id, hp: b.hp, floors: b.floors, floorHp: [...b.floorHp] });
+    }
+    this.restack();
+    if (n >= 2) this.events.push({ type: 'waveStart', count: n, ids });
+  }
+
+  private makeBuilding(): BuildingState {
     const { row, floors } = this.pickBuilding();
     // M8 층 HP = floor(HP ÷ N) · 나머지 = 1층 (합 = HP — H-62)
     const per = Math.floor(row.hp / floors);
     const floorHp = Array.from({ length: floors }, (_, i) => (i === 0 ? row.hp - per * (floors - 1) : per));
-    const b: BuildingState = {
+    return {
       id: this.nextBuildingId++,
       buildingId: row.building_id,
       name: row.name,
@@ -996,21 +1039,42 @@ export class BattleSim {
       floorHp,
       floorMax: [...floorHp],
     };
-    this.building = b;
-    this.events.push({ type: 'spawn', buildingId: b.id, hp: b.hp, floors, floorHp: [...floorHp] });
+  }
+
+  /** M8-W 위 건물 자리 = 아래 꼭대기 (밑면 + 건물 키) + gap (정수화 시점 = 1e-6 반올림) · y > 1이어도 자르지 않음 (M9) */
+  private restack(): void {
+    const b = this.building;
+    if (!b || this.stack.length === 0) return;
+    const step = this.cfg.battle.building.height_ratio + this.waveGap;
+    let y = b.y;
+    for (const u of this.stack) {
+      y = Math.round((y + step) * 1e6) / 1e6;
+      u.y = y;
+    }
+  }
+
+  /** M8-W 웨이브 사이 쉼 — wave_rest_s (빈칸 = 지금 spawn_delay_s 흔들기 · 연달아) */
+  private restDelay(): number {
+    return stageRow(this.cfg.stages, this.stage.stage).wave_rest_s ?? this.nextSpawnDelay();
   }
 
   private destroyBuilding(b: BuildingState): void {
     this.resetCombo();
-    this.events.push({ type: 'destroy', buildingId: b.id, y: b.y, debrisReward: b.debrisReward });
+    // M8-W 연쇄 = 웨이브 안에서 착지 없이 연달아 깬 수 · 보너스 = floor(보상 × min(상한, % × (연쇄 − 1)) ÷ 100) (H-88)
+    this.waveChain += 1;
+    const w = this.cfg.battle.wave;
+    const pct = w ? Math.min(w.chain_bonus_cap_pct, w.chain_bonus_pct * (this.waveChain - 1)) : 0;
+    const bonus = pct > 0 ? Math.floor((b.debrisReward * pct) / 100) : 0;
+    const reward = b.debrisReward + bonus;
+    this.events.push({ type: 'destroy', buildingId: b.id, y: b.y, debrisReward: reward, chain: this.waveChain, bonus });
     // M4: 잔해는 운반 예약 → carry_delay_s 뒤 deposit (H-17 질문 2 — core가 도착 시각을 정함)
     // M7-E (I-30) 운반 개미 K마리로 나눔 — floor(R ÷ K) · 나머지 = 마지막 개미 (합 = R) · 개미 i 도착 = + i × 간격
-    if (b.debrisReward > 0) {
+    if (reward > 0) {
       const e = this.cfg.economy;
       const k = Math.max(1, Math.floor(e.carry_ants ?? 1));
-      const each = Math.floor(b.debrisReward / k);
+      const each = Math.floor(reward / k);
       for (let i = 0; i < k; i++) {
-        const amount = i === k - 1 ? b.debrisReward - each * (k - 1) : each;
+        const amount = i === k - 1 ? reward - each * (k - 1) : each;
         this.carrying.push({ at: this.time + e.carry_delay_s + i * (e.carry_interval_s ?? 0), amount, index: i, count: k });
       }
     }
@@ -1022,7 +1086,12 @@ export class BattleSim {
     if (this.stage.destroyed >= this.stage.toClear) {
       this.clearStage();
     } else {
-      this.spawnTimer = this.nextSpawnDelay(); // M8 흔들기 · 연달아
+      const next = this.stack.shift(); // M8-W 줄: 바로 다음이 맨 아래 (생성 대기 없음)
+      if (next) this.building = next;
+      else {
+        if (this.waveCount >= 2) this.events.push({ type: 'waveEnd', reason: 'cleared', vanished: [] });
+        this.spawnTimer = this.restDelay(); // M8 흔들기 · 연달아 (쉼 빈칸)
+      }
     }
   }
 
@@ -1032,6 +1101,13 @@ export class BattleSim {
     const bc = this.cfg.battle;
     b.state = 'landed';
     b.y = bc.ant.height_ratio;
+    // M8-W 착지 = 연쇄 끊김 · land_ends_wave → 그 웨이브 끝 (위 건물 사라짐 · 깬 수 아님 — H-88 ②)
+    this.waveChain = 0;
+    if (this.waveCount >= 2 && (bc.wave?.land_ends_wave || this.stack.length === 0)) {
+      const vanished = bc.wave?.land_ends_wave ? this.stack.map((u) => u.id) : [];
+      if (bc.wave?.land_ends_wave) this.stack = [];
+      this.events.push({ type: 'waveEnd', reason: 'landed', vanished });
+    }
     b.lingerTimer = bc.building.landed_linger_s;
     const damage = Math.ceil(b.hp * bc.landing_damage_coeff);
     if (!this.cheat.infiniteHp) a.hp = Math.max(0, a.hp - damage); // M7-E 치트 체력 무한
@@ -1083,6 +1159,9 @@ export class BattleSim {
     s.destroyed = 0;
     s.toClear = row.buildings_to_clear;
     this.building = null;
+    this.stack = []; // M8-W 후퇴 · 클리어 = 줄 비움
+    this.waveCount = 1;
+    this.waveChain = 0;
     this.spawnTimer = this.cfg.battle.building.spawn_delay_s;
     const a = this.ant;
     if (this.cfg.battle.ant.refill_hp_on_stage_start || a.hp <= 0) a.hp = a.maxHp;

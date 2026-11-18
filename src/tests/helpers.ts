@@ -4,6 +4,11 @@ import { RAW_DATA } from '../view/gameData';
 import { type BattleEvent, BattleSim } from '../core/battle';
 
 /** 실제 데이터(src/data) → GameConfig 깊은 복사 + 덮어쓰기 */
+/** M8-W 웨이브 끔 (시트 값과 상관없이 한 채씩 — 웨이브 밖 규칙만 보는 테스트) */
+export function wavesOff(c: GameConfig): void {
+  for (const r of c.stages.rows) Object.assign(r, { wave_min: null, wave_max: null, wave_gap: null, wave_rest_s: null });
+}
+
 export function makeConfig(patch?: (c: GameConfig) => void): GameConfig {
   const c = structuredClone(fromData(RAW_DATA));
   patch?.(c);

@@ -105,6 +105,8 @@ export interface BattleConfig {
   strike_interval_s: number;
   /** M4 공격속도 강화 하한 (없으면 0) */
   strike_interval_min_s?: number;
+  /** M8-W (H-88) */
+  wave?: WaveConfig;
   /** 연타가 이어지는 시간 (같은 건물 · 마지막 타격 뒤) — M2 D, 결과에는 영향 없음 */
   combo_window_s: number;
   arm_order_resets_each_jump: boolean;
@@ -146,6 +148,19 @@ export interface StageRow {
   /** FK → buildings.rows[].building_id */
   building_id: string;
   buildings_to_clear: number;
+  /** M8-W (H-88) 웨이브 건물 수 · 줄 간격 · 웨이브 사이 쉼 — null · 없음 = 끔 (1채 · gap 0 · 쉼 = spawn_delay_s) */
+  wave_min?: number | null;
+  wave_max?: number | null;
+  wave_gap?: number | null;
+  wave_rest_s?: number | null;
+}
+
+/** M8-W 줄줄이 웨이브 전역 (docs/dev.md §3-3 battle.wave.*) — 없으면 끔 */
+export interface WaveConfig {
+  weight_coef: number;
+  chain_bonus_pct: number;
+  chain_bonus_cap_pct: number;
+  land_ends_wave: boolean;
 }
 
 /** M8 stage_pool 한 행 (스테이지마다 나올 건물 · 비중 · 층수 — docs/dev.md §3-2b) */

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { type BattleEvent, type BuildingState, BattleSim } from '../core/battle';
 import type { GameConfig, StagePoolRow } from '../core/config';
-import { makeConfig } from './helpers';
+import { makeConfig, wavesOff } from './helpers';
 
 /** M8 층 건물 + 섞어 나오기 (I-25 · H-62 — docs/dev.md §3-2b · §4) */
 type Ev<T extends BattleEvent['type']> = Extract<BattleEvent, { type: T }>;
@@ -135,6 +135,7 @@ describe('M8 섞어 나오기 · 간격 (H-62 ② ④)', () => {
       c.battle.building.spawn_jitter_ratio = 0.4;
       c.battle.building.double_pct = 15;
       c.battle.ant.max_hp = 1e9;
+      wavesOff(c); // 웨이브 크기는 남은 깰 수로 잘려 손 · 자동이 갈림 → 이 비교는 한 채씩 (웨이브 난수 = wave.test.ts)
     };
     const spawns = (c: GameConfig, tap: boolean) => {
       const sim = new BattleSim(c);

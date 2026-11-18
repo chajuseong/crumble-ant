@@ -83,6 +83,9 @@ export class BattleScene extends Phaser.Scene {
   private ant!: AntView;
   private buildingView: BuildingView | null = null;
   private buildingViewId = -1;
+  /** M8-W 줄 위 건물 그림 (core stack 순서와 상관없이 id로 찾음 — 그리기만) */
+  private stackViews: { id: number; view: BuildingView }[] = [];
+  private waveMore: Phaser.GameObjects.Text | null = null;
   /** M6 지금 건물 뷰의 건물 테이블 PK (파괴 뒤에도 파편 그림을 고르려고 — core 값을 기억만) */
   private buildingViewRow: string | null = null;
   private strip!: StripView;
@@ -235,6 +238,9 @@ export class BattleScene extends Phaser.Scene {
     if (this.buildingView && this.sim.building) {
       this.removeBuildingView(false);
       this.createBuildingView();
+      // M8-W 줄 위 건물도 새 그림으로
+      this.clearStackViews();
+      for (const u of this.sim.stack) this.addStackView(u.id, u.floorMax.slice(u.floors - u.floorHp.length));
     }
   }
 
@@ -583,6 +589,7 @@ export class BattleScene extends Phaser.Scene {
         case 'stageStart':
           this.saver.request(this.time.now);
           this.removeBuildingView(false);
+          this.clearStackViews();
           if (e.reason === 'retreat') this.showToast(t('toast.retreat', { n: e.stage }), COLOR.hurt);
           else if (e.reason === 'restart') this.showToast(t('toast.restart'));
           else if (e.reason === 'challenge') this.showToast(t('toast.challenge', { n: e.stage }));
@@ -592,6 +599,10 @@ export class BattleScene extends Phaser.Scene {
           if (e.wasChallenge) this.showToast(t('toast.breakthrough'), COLOR.autoOn);
           break;
         case 'spawn': {
+          if (e.buildingId !== this.sim.building?.id) {
+            this.addStackView(e.buildingId, e.floorHp); // M8-W 줄 위 건물
+            break;
+          }
           this.removeBuildingView(false);
           const b = this.sim.building!;
           const bw = this.cfg.battle.building.width_ratio * this.L.width;
@@ -681,6 +692,13 @@ export class BattleScene extends Phaser.Scene {
           if (on.sfx && this.sfx.created) { if (final) this.sfx.final(); else if (fin) this.sfx.finisher(); else if (hitSoundTurn(e.combo, this.speed)) this.sfx.hit(e.combo); this.fxCount += 1; } // G · A' 마무리 "쾅"
           break;
         }
+        case 'waveStart':
+          if (hasText('fx.wave_warn')) this.plateText(this.L.battle.top + this.L.battle.height * 0.18, t('fx.wave_warn'), FX.wave.warn_px, FX.wave.warn_ms); // M8-W "우르르!"
+          this.shake(FX.camera.hit_ms, FX.camera.hit_intensity);
+          break;
+        case 'waveEnd':
+          for (const id of e.vanished) this.vanishStackView(id); // M8-W 착지로 웨이브 끝 — 위 건물 흩어지며 사라짐
+          break;
         case 'floorBreak':
           this.floorBreakFx(e.floor);
           break;
@@ -690,7 +708,10 @@ export class BattleScene extends Phaser.Scene {
           this.removeBuildingView(false);
           if (this.fxOn.shake) { this.shake(FX.camera.final_ms, FX.camera.final_intensity); this.fxCount += 1; } // C 크게
           else this.shake(FX.camera.destroy_ms, FX.camera.destroy_intensity); // M1
-          this.crumbleText(battleToScreenY(this.L, e.y) - this.px(140));
+          if (e.chain >= 2 && hasText('fx.wave_chain')) {
+            const W = FX.wave; // M8-W 연쇄 "와르르 ×N" (H-88 · 연쇄마다 커짐)
+            this.plateText(battleToScreenY(this.L, e.y) - this.px(140), t('fx.wave_chain', { n: e.chain }), W.chain_px * (1 + W.chain_grow * (e.chain - 2)), W.chain_ms);
+          } else this.crumbleText(battleToScreenY(this.L, e.y) - this.px(140));
           if (this.fxOn.sfx && this.sfx.created) { this.sfx.crumble(); this.fxCount += 1; } // G
           this.comboText?.setVisible(false);
           break;
@@ -723,6 +744,66 @@ export class BattleScene extends Phaser.Scene {
       if (!b || b.id !== this.buildingViewId) this.removeBuildingView(true);
       else this.buildingView.setY(battleToScreenY(L, b.y));
     }
+    // M8-W 맨 아래가 바뀜 (깨짐 · 줄 이어짐) → 줄 위 그림을 그대로 맨 아래로 (HP 바 보임)
+    if (!this.buildingView && b) {
+      const i = this.stackViews.findIndex((s) => s.id === b.id);
+      if (i >= 0) {
+        const v = this.stackViews.splice(i, 1)[0]!.view;
+        v.setHpVisible(true);
+        this.buildingView = v;
+        this.buildingViewId = b.id;
+        this.buildingViewRow = b.buildingId;
+        v.setY(battleToScreenY(L, b.y));
+        this.syncBuildingHp(b);
+      }
+    }
+    // 줄 위 건물 자리 = core y 그대로 · 화면 위 (y > 1)에 남은 수 = "▲ +N"
+    let above = 0;
+    for (const s of this.stackViews) {
+      const u = sim.stack.find((x) => x.id === s.id);
+      if (!u) continue;
+      s.view.setY(battleToScreenY(L, u.y));
+      if (u.y > 1) above += 1;
+    }
+    if (above > 0 && hasText('fx.wave_more')) {
+      if (!this.waveMore) {
+        this.waveMore = this.add
+          .text(L.width / 2, L.battle.top + this.px(18), '', { fontFamily: FONT, fontSize: `${Math.round(this.px(FX.wave.more_px))}px`, fontStyle: '900', color: '#ffe08a', stroke: COLOR.damageStroke, strokeThickness: this.px(10), backgroundColor: '#1b1a17aa', padding: { x: this.px(14), y: this.px(4) } })
+          .setOrigin(0.5, 0)
+          .setDepth(DEPTH.fx - 1);
+      }
+      this.waveMore.setText(t('fx.wave_more', { n: above })).setVisible(true);
+    } else this.waveMore?.setVisible(false);
+  }
+
+  /** M8-W 줄 위 건물 그림 (HP 바 숨김 · 층 칸만) */
+  private addStackView(id: number, floorHp: number[]): void {
+    const u = this.sim.stack.find((x) => x.id === id);
+    if (!u) return;
+    const bw = this.cfg.battle.building.width_ratio * this.L.width;
+    const bh = this.cfg.battle.building.height_ratio * this.L.battle.height;
+    const v = new BuildingView(this, this.L.width / 2, battleToScreenY(this.L, u.y), bw, bh, u.id, u.maxHp, this.buildingArt(u.buildingId), floorHp);
+    v.pxScale = this.scaleK;
+    v.root.setDepth(DEPTH.building);
+    v.setCrackSteps(FX.crack.steps);
+    v.setHpVisible(false);
+    this.stackViews.push({ id, view: v });
+  }
+
+  /** M8-W 착지로 웨이브 끝 — 좌우로 흩어지며 흐려짐 (잔해 없음) */
+  private vanishStackView(id: number): void {
+    const i = this.stackViews.findIndex((s) => s.id === id);
+    if (i < 0) return;
+    const v = this.stackViews.splice(i, 1)[0]!.view;
+    const dir = i % 2 === 0 ? -1 : 1;
+    this.tweens.add({ targets: v.root, x: v.root.x + dir * this.px(260), alpha: 0, angle: dir * 12, duration: FX.wave.vanish_ms, ease: 'Quad.easeIn', onComplete: () => v.destroy() });
+    this.fxCount += 1;
+  }
+
+  private clearStackViews(): void {
+    for (const s of this.stackViews) s.view.destroy();
+    this.stackViews = [];
+    this.waveMore?.setVisible(false);
   }
 
   private removeBuildingView(fade: boolean): void {
@@ -1104,7 +1185,7 @@ export class BattleScene extends Phaser.Scene {
   }
 
   /** "와르르!" · M7 "PERFECT!" — 받침 판 + 굵은 테두리 (L-05). 대비 끔 = M1 글자 */
-  private plateText(y: number, text: string, px: number): void {
+  private plateText(y: number, text: string, px: number, ms: number = FX.crumble_text.ms): void {
     const c = FX.crumble_text;
     if (!this.fxOn.contrast) {
       this.floatText(this.L.width / 2, y, text, '#ffe08a', this.px(px), 900, c.ms); // M1
@@ -1120,7 +1201,7 @@ export class BattleScene extends Phaser.Scene {
     plate.fillRoundedRect(-tx.width / 2 - pad, -tx.height / 2 - pad / 2, tx.width + pad * 2, tx.height + pad, this.px(28));
     const box = this.add.container(this.L.width / 2, y, [plate, tx]).setDepth(DEPTH.fx);
     this.fxCount += 1;
-    this.tweens.add({ targets: box, y: y - this.px(110), alpha: { from: 1, to: 0 }, scale: { from: 1.25, to: 1 }, duration: c.ms, ease: 'Quad.easeOut', onComplete: () => box.destroy(true) });
+    this.tweens.add({ targets: box, y: y - this.px(110), alpha: { from: 1, to: 0 }, scale: { from: 1.25, to: 1 }, duration: ms, ease: 'Quad.easeOut', onComplete: () => box.destroy(true) });
   }
 
   /** M2 D — "N HIT!" (2타부터 · 칠 때마다 튕김 · 마지막 타격 뒤 combo.ms 지나면 숨김) */
