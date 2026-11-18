@@ -100,6 +100,11 @@ const CONFIG_KEYS = [
   ["battle.building.spawn_jitter_ratio", "num", { min: 0, max: 0.9 }],
   ["battle.building.double_pct", "int", { min: 0, max: 100 }],
   ["battle.building.double_delay_s", "num", { min: 0 }],
+  // M8-W 줄줄이 웨이브 (I-35 · H-88) — 무게 0 · 보너스 0 = 끔
+  ["battle.wave.weight_coef", "num", { min: 0 }],
+  ["battle.wave.chain_bonus_pct", "int", { min: 0 }],
+  ["battle.wave.chain_bonus_cap_pct", "int", { min: 0 }],
+  ["battle.wave.land_ends_wave", "bool"],
   ["stage.beyond_last_row", "str", { oneOf: ["repeat_last"] }],
   ["input.strip_tap_slop_ratio", "num", { gt: 0, max: 1 }],
   ["input.strip_tap_max_ms", "num", { gt: 0 }],
@@ -179,6 +184,9 @@ const FX_KEYS = [
   // M7-E 반동 · 손가락 안내 (I-32 · H-72)
   ["defend.lift_ms", "int", { min: 0 }], ["defend.recoil_squash", "num", { gt: 0, max: 1 }], ["defend.recoil_ms", "int", { min: 0 }], ["defend.hint_count", "int", { min: 0 }],
   ["targets_x1.toast_ms", "int", { gt: 0 }], // H-76
+  // M8-W 웨이브 연출 (H-88)
+  ["wave.warn_px", "num", { gt: 0 }], ["wave.warn_ms", "int", { gt: 0 }], ["wave.chain_px", "num", { gt: 0 }], ["wave.chain_grow", "num", { min: 0 }],
+  ["wave.chain_ms", "int", { gt: 0 }], ["wave.vanish_ms", "int", { min: 0 }], ["wave.more_px", "num", { gt: 0 }],
   // M8 층 깨짐 (H-62)
   ["floor_break.drop_ms", "int", { min: 0 }], ["floor_break.camera_ms", "int", { min: 0 }], ["floor_break.camera_intensity", "num", { min: 0, max: 0.1 }], ["floor_break.chunk_count", "int", { min: 0 }],
   // M8-D 층 손맛 (H-85)
@@ -206,6 +214,7 @@ const UI_KEYS = [
   "fx.defend_target", "fx.defend_hold", "fx.defend_miss", "fx.chain_count",
   "upgrade.fx.max_hp", "upgrade.fx.push_power", "upgrade.fx.auto_defend", "upgrade.now.max_hp", "upgrade.now.push_power", "upgrade.now.auto_defend",
   "fx.defend_tap", "hud.targets_x1", "toast.targets_x1",
+  "fx.wave_warn", "fx.wave_chain", "fx.wave_more", // M8-W (H-88)
 ];
 
 // 강화 (M4 — I-12 · H-17). stat은 코드가 아는 것만 — 4종 = 각 1행 필수 · M7-E 3종 = 있으면 1행 (H-67 · I-28)
@@ -332,6 +341,14 @@ export function validateAll(data) {
       if (r.stage !== i + 1) errors.push(`${w}.stage: ${i + 1}이어야 함 (1부터 빈칸 없이, 지금 ${JSON.stringify(r.stage)})`);
       if (!ids.has(r.building_id)) errors.push(`${w}.building_id: buildings에 없음 (FK ${JSON.stringify(r.building_id)})`);
       checkValue(`${w}.buildings_to_clear`, r.buildings_to_clear, "int", { min: 1 }, errors);
+      // M8-W 웨이브 (H-88) — 빈칸 = 끔 (1채 · gap 0 · 쉼 = spawn_delay_s)
+      const opt = (k, kind, o) => r[k] !== null && r[k] !== undefined && checkValue(`${w}.${k}`, r[k], kind, o, errors);
+      opt("wave_min", "int", { min: 1 });
+      opt("wave_max", "int", { min: 1 });
+      if (Number.isInteger(r.wave_min) && Number.isInteger(r.wave_max) && r.wave_max < r.wave_min) errors.push(`${w}.wave_max: wave_min 이상이어야 함 (${r.wave_min} · ${r.wave_max})`);
+      if ((r.wave_max ?? null) !== null && (r.wave_min ?? null) === null) errors.push(`${w}.wave_min: wave_max가 있으면 채움`);
+      opt("wave_gap", "num", { min: 0 });
+      opt("wave_rest_s", "num", { min: 0 });
     });
   }
 

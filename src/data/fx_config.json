@@ -207,5 +207,14 @@
       25
     ],
     "crack_lines": 3
+  },
+  "wave": {
+    "warn_px": 120,
+    "warn_ms": 900,
+    "chain_px": 96,
+    "chain_grow": 0.12,
+    "chain_ms": 800,
+    "vanish_ms": 450,
+    "more_px": 56
   }
 }

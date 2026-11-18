@@ -2,41 +2,73 @@
   {
     "stage": 1,
     "building_id": "bld_hut",
-    "buildings_to_clear": 3
+    "buildings_to_clear": 3,
+    "wave_min": null,
+    "wave_max": null,
+    "wave_gap": null,
+    "wave_rest_s": null
   },
   {
     "stage": 2,
     "building_id": "bld_house",
-    "buildings_to_clear": 3
+    "buildings_to_clear": 3,
+    "wave_min": null,
+    "wave_max": null,
+    "wave_gap": null,
+    "wave_rest_s": null
   },
   {
     "stage": 3,
     "building_id": "bld_villa",
-    "buildings_to_clear": 4
+    "buildings_to_clear": 4,
+    "wave_min": null,
+    "wave_max": null,
+    "wave_gap": null,
+    "wave_rest_s": null
   },
   {
     "stage": 4,
     "building_id": "bld_shop",
-    "buildings_to_clear": 4
+    "buildings_to_clear": 4,
+    "wave_min": null,
+    "wave_max": null,
+    "wave_gap": null,
+    "wave_rest_s": null
   },
   {
     "stage": 5,
     "building_id": "bld_school",
-    "buildings_to_clear": 5
+    "buildings_to_clear": 5,
+    "wave_min": null,
+    "wave_max": null,
+    "wave_gap": null,
+    "wave_rest_s": null
   },
   {
     "stage": 6,
     "building_id": "bld_apt",
-    "buildings_to_clear": 5
+    "buildings_to_clear": 5,
+    "wave_min": null,
+    "wave_max": null,
+    "wave_gap": null,
+    "wave_rest_s": null
   },
   {
     "stage": 7,
     "building_id": "bld_hospital",
-    "buildings_to_clear": 5
+    "buildings_to_clear": 5,
+    "wave_min": null,
+    "wave_max": null,
+    "wave_gap": null,
+    "wave_rest_s": null
   },
   {
     "stage": 8,
     "building_id": "bld_tower",
-    "buildings_to_clear": 5
+    "buildings_to_clear": 5,
+    "wave_min": null,
+    "wave_max": null,
+    "wave_gap": null,
+    "wave_rest_s": null
   }
 ]

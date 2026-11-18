@@ -41,7 +41,10 @@
     "defend_hold": "버텨!",
     "defend_miss": "놓침",
     "chain_count": "{n} / {m}",
-    "defend_tap": "눌러!"
+    "defend_tap": "눌러!",
+    "wave_warn": "우르르!",
+    "wave_chain": "와르르 ×{n}",
+    "wave_more": "▲ +{n}"
   },
   "ant": {
     "down": "@ @ 기절!"
